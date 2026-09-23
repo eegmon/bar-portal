@@ -65,10 +65,14 @@ export default async function AdminDashboardPage() {
   let votingRights: any[] = [];
   let auditLogs: any[] = [];
   try {
-    const aRes = await db.execute("SELECT * FROM assemblies ORDER BY round_number DESC");
+    const aRes = await db.execute(
+      "SELECT * FROM assemblies ORDER BY round_number DESC",
+    );
     assemblies = aRes.rows;
 
-    const agRes = await db.execute("SELECT * FROM agendas ORDER BY agenda_order ASC, created_at ASC");
+    const agRes = await db.execute(
+      "SELECT * FROM agendas ORDER BY agenda_order ASC, created_at ASC",
+    );
     agendas = agRes.rows;
     const attRes = await db.execute(`
       SELECT aa.*, u.name as grantor_name, p.name as proxy_name
@@ -85,7 +89,9 @@ export default async function AdminDashboardPage() {
             ORDER BY r.updated_at DESC`,
     });
     votingRights = rightsRes.rows;
-    const logsRes = await db.execute("SELECT * FROM assembly_audit_logs ORDER BY created_at DESC");
+    const logsRes = await db.execute(
+      "SELECT * FROM assembly_audit_logs ORDER BY created_at DESC",
+    );
     auditLogs = logsRes.rows;
   } catch (err) {
     console.error("Admin assemblies fetch error:", err);
@@ -95,10 +101,14 @@ export default async function AdminDashboardPage() {
   let exams: any[] = [];
   let submissionsCount = 0;
   try {
-    const exRes = await db.execute("SELECT * FROM exams ORDER BY round_number DESC");
+    const exRes = await db.execute(
+      "SELECT * FROM exams ORDER BY round_number DESC",
+    );
     exams = exRes.rows;
 
-    const subRes = await db.execute("SELECT COUNT(*) as count FROM exam_submissions");
+    const subRes = await db.execute(
+      "SELECT COUNT(*) as count FROM exam_submissions",
+    );
     submissionsCount = (subRes.rows[0]?.count as number) || 0;
   } catch (err) {
     console.error("Admin exams fetch error:", err);
@@ -119,46 +129,124 @@ export default async function AdminDashboardPage() {
         permissions={permissions}
         initialSettings={{
           // 웹훅
-          webhook_notice: settingsMap["webhook_notice"] || process.env.DISCORD_WEBHOOK_NOTICE || "",
-          webhook_lawyer_approval: settingsMap["webhook_lawyer_approval"] || process.env.DISCORD_WEBHOOK_LAWYER_APPROVAL || "",
-          webhook_exam: settingsMap["webhook_exam"] || process.env.DISCORD_WEBHOOK_EXAM || "",
-          webhook_exam_admin: settingsMap["webhook_exam_admin"] || process.env.DISCORD_WEBHOOK_EXAM_ADMIN || "",
-          webhook_assembly: settingsMap["webhook_assembly"] || process.env.DISCORD_WEBHOOK_ASSEMBLY || "",
-          webhook_assembly_notice: settingsMap["webhook_assembly_notice"] || process.env.DISCORD_WEBHOOK_ASSEMBLY_NOTICE || "",
-          webhook_assembly_vote: settingsMap["webhook_assembly_vote"] || process.env.DISCORD_WEBHOOK_ASSEMBLY_VOTE || "",
-          webhook_discipline: settingsMap["webhook_discipline"] || process.env.DISCORD_WEBHOOK_DISCIPLINE || "",
-          webhook_admin: settingsMap["webhook_admin"] || process.env.DISCORD_WEBHOOK_ADMIN || "",
+          webhook_notice:
+            settingsMap["webhook_notice"] ||
+            process.env.DISCORD_WEBHOOK_NOTICE ||
+            "",
+          webhook_lawyer_approval:
+            settingsMap["webhook_lawyer_approval"] ||
+            process.env.DISCORD_WEBHOOK_LAWYER_APPROVAL ||
+            "",
+          webhook_exam:
+            settingsMap["webhook_exam"] ||
+            process.env.DISCORD_WEBHOOK_EXAM ||
+            "",
+          webhook_exam_admin:
+            settingsMap["webhook_exam_admin"] ||
+            process.env.DISCORD_WEBHOOK_EXAM_ADMIN ||
+            "",
+          webhook_assembly:
+            settingsMap["webhook_assembly"] ||
+            process.env.DISCORD_WEBHOOK_ASSEMBLY ||
+            "",
+          webhook_assembly_notice:
+            settingsMap["webhook_assembly_notice"] ||
+            process.env.DISCORD_WEBHOOK_ASSEMBLY_NOTICE ||
+            "",
+          webhook_assembly_vote:
+            settingsMap["webhook_assembly_vote"] ||
+            process.env.DISCORD_WEBHOOK_ASSEMBLY_VOTE ||
+            "",
+          webhook_discipline:
+            settingsMap["webhook_discipline"] ||
+            process.env.DISCORD_WEBHOOK_DISCIPLINE ||
+            "",
+          webhook_admin:
+            settingsMap["webhook_admin"] ||
+            process.env.DISCORD_WEBHOOK_ADMIN ||
+            "",
 
           // 디스코드 봇 & 서버
-          discord_bot_token: settingsMap["discord_bot_token"] || process.env.DISCORD_BOT_TOKEN || "",
-          discord_guild_id: settingsMap["discord_guild_id"] || process.env.DISCORD_GUILD_ID || "",
+          discord_bot_token:
+            settingsMap["discord_bot_token"] ||
+            process.env.DISCORD_BOT_TOKEN ||
+            "",
+          discord_guild_id:
+            settingsMap["discord_guild_id"] ||
+            process.env.DISCORD_GUILD_ID ||
+            "",
 
           // 기본 역할
-          discord_role_lawyer: settingsMap["discord_role_lawyer"] || process.env.DISCORD_ROLE_LAWYER || "",
-          discord_role_trainee: settingsMap["discord_role_trainee"] || process.env.DISCORD_ROLE_TRAINEE || "",
+          discord_role_lawyer:
+            settingsMap["discord_role_lawyer"] ||
+            process.env.DISCORD_ROLE_LAWYER ||
+            "",
+          discord_role_trainee:
+            settingsMap["discord_role_trainee"] ||
+            process.env.DISCORD_ROLE_TRAINEE ||
+            "",
 
           // 카테고리 헤더 역할
-          discord_role_group_executive: settingsMap["discord_role_group_executive"] || process.env.DISCORD_ROLE_GROUP_EXECUTIVE || "",
-          discord_role_group_assembly: settingsMap["discord_role_group_assembly"] || process.env.DISCORD_ROLE_GROUP_ASSEMBLY || "",
-          discord_role_group_secretariat: settingsMap["discord_role_group_secretariat"] || process.env.DISCORD_ROLE_GROUP_SECRETARIAT || "",
+          discord_role_group_executive:
+            settingsMap["discord_role_group_executive"] ||
+            process.env.DISCORD_ROLE_GROUP_EXECUTIVE ||
+            "",
+          discord_role_group_assembly:
+            settingsMap["discord_role_group_assembly"] ||
+            process.env.DISCORD_ROLE_GROUP_ASSEMBLY ||
+            "",
+          discord_role_group_secretariat:
+            settingsMap["discord_role_group_secretariat"] ||
+            process.env.DISCORD_ROLE_GROUP_SECRETARIAT ||
+            "",
 
           // 이사회
-          discord_role_board: settingsMap["discord_role_board"] || process.env.DISCORD_ROLE_BOARD || "",
-          discord_role_president: settingsMap["discord_role_president"] || process.env.DISCORD_ROLE_PRESIDENT || "",
-          discord_role_vice_president: settingsMap["discord_role_vice_president"] || process.env.DISCORD_ROLE_VICE_PRESIDENT || "",
-          discord_role_director: settingsMap["discord_role_director"] || process.env.DISCORD_ROLE_DIRECTOR || "",
+          discord_role_board:
+            settingsMap["discord_role_board"] ||
+            process.env.DISCORD_ROLE_BOARD ||
+            "",
+          discord_role_president:
+            settingsMap["discord_role_president"] ||
+            process.env.DISCORD_ROLE_PRESIDENT ||
+            "",
+          discord_role_vice_president:
+            settingsMap["discord_role_vice_president"] ||
+            process.env.DISCORD_ROLE_VICE_PRESIDENT ||
+            "",
+          discord_role_director:
+            settingsMap["discord_role_director"] ||
+            process.env.DISCORD_ROLE_DIRECTOR ||
+            "",
 
           // 총회
-          discord_role_speaker: settingsMap["discord_role_speaker"] || process.env.DISCORD_ROLE_SPEAKER || "",
-          discord_role_vice_speaker: settingsMap["discord_role_vice_speaker"] || process.env.DISCORD_ROLE_VICE_SPEAKER || "",
+          discord_role_speaker:
+            settingsMap["discord_role_speaker"] ||
+            process.env.DISCORD_ROLE_SPEAKER ||
+            "",
+          discord_role_vice_speaker:
+            settingsMap["discord_role_vice_speaker"] ||
+            process.env.DISCORD_ROLE_VICE_SPEAKER ||
+            "",
 
           // 사무국
-          discord_role_secretary_general: settingsMap["discord_role_secretary_general"] || process.env.DISCORD_ROLE_SECRETARY_GENERAL || "",
-          discord_role_staff: settingsMap["discord_role_staff"] || process.env.DISCORD_ROLE_STAFF || "",
+          discord_role_secretary_general:
+            settingsMap["discord_role_secretary_general"] ||
+            process.env.DISCORD_ROLE_SECRETARY_GENERAL ||
+            "",
+          discord_role_staff:
+            settingsMap["discord_role_staff"] ||
+            process.env.DISCORD_ROLE_STAFF ||
+            "",
 
           // 위원회
-          discord_role_exam_comm: settingsMap["discord_role_exam_comm"] || process.env.DISCORD_ROLE_EXAM_COMM || "",
-          discord_role_discipline_comm: settingsMap["discord_role_discipline_comm"] || process.env.DISCORD_ROLE_DISCIPLINE_COMM || "",
+          discord_role_exam_comm:
+            settingsMap["discord_role_exam_comm"] ||
+            process.env.DISCORD_ROLE_EXAM_COMM ||
+            "",
+          discord_role_discipline_comm:
+            settingsMap["discord_role_discipline_comm"] ||
+            process.env.DISCORD_ROLE_DISCIPLINE_COMM ||
+            "",
 
           // 팝업 공지
           popup_enabled: settingsMap["popup_enabled"] || "false",
@@ -176,7 +264,9 @@ export default async function AdminDashboardPage() {
         initialAuditLogs={auditLogs}
         stats={{
           totalUsers: users.length,
-          activeLawyers: users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE").length,
+          activeLawyers: users.filter(
+            (u) => u.role === "LAWYER" && u.status === "ACTIVE",
+          ).length,
           pendingUsers: users.filter((u) => u.status === "PENDING").length,
           totalAssemblies: assemblies.length,
           totalExams: exams.length,

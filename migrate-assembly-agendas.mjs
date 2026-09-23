@@ -21,7 +21,10 @@ try {
   await addColumn("agendas", "result_confirmed_at TEXT DEFAULT ''");
   await addColumn("agendas", "result_confirmed_by TEXT DEFAULT ''");
   await addColumn("agendas", "voting_method TEXT NOT NULL DEFAULT 'MAJORITY'");
-  await addColumn("assembly_attendances", "approval_status TEXT NOT NULL DEFAULT 'APPROVED'");
+  await addColumn(
+    "assembly_attendances",
+    "approval_status TEXT NOT NULL DEFAULT 'APPROVED'",
+  );
   await addColumn("assembly_attendances", "attended_at TEXT DEFAULT ''");
   await addColumn("assembly_attendances", "evidence_url TEXT DEFAULT ''");
   await addColumn("assembly_attendances", "rejection_reason TEXT DEFAULT ''");
@@ -56,7 +59,9 @@ try {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
-  await db.execute("DELETE FROM users WHERE id IN ('admin-1', 'lawyer-1') OR login_id IN ('admin', 'lawyer1')");
+  await db.execute(
+    "DELETE FROM users WHERE id IN ('admin-1', 'lawyer-1') OR login_id IN ('admin', 'lawyer1')",
+  );
   console.log("총회 운영 마이그레이션이 완료되었습니다.");
 } catch (error) {
   console.error("총회 운영 마이그레이션 실패:", error);

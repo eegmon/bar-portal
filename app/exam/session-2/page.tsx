@@ -80,7 +80,10 @@ export default function Session2Page() {
       formData.append("examId", "exam-2026-09");
       formData.append("securityCode", securityCode);
       formData.append("file", file);
-      const res = await fetch("/api/exam/upload", { method: "POST", body: formData });
+      const res = await fetch("/api/exam/upload", {
+        method: "POST",
+        body: formData,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "파일 업로드 실패");
       setFileName(data.fileName || file.name);
@@ -107,7 +110,7 @@ export default function Session2Page() {
     if (isInstantPledged) {
       if (
         !confirm(
-          "⚠️ [즉시 채점 서약 안내]\n답안을 수정하지 않고 즉시 채점을 요청하시겠습니까?\n이 서약 후에는 답안을 철회하거나 수정할 수 없습니다."
+          "⚠️ [즉시 채점 서약 안내]\n답안을 수정하지 않고 즉시 채점을 요청하시겠습니까?\n이 서약 후에는 답안을 철회하거나 수정할 수 없습니다.",
         )
       ) {
         return;
@@ -147,15 +150,21 @@ export default function Session2Page() {
           </div>
 
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-white">제2차 과제 제출실 입장 인증</h1>
+            <h1 className="text-2xl font-bold text-white">
+              제2차 과제 제출실 입장 인증
+            </h1>
             <p className="text-xs text-slate-400">
-              제2차 시험은 <strong>제1차 CBT 객관식 시험에 합격(통과)한 수험생</strong>에 한하여 응시가 허용됩니다.
+              제2차 시험은{" "}
+              <strong>제1차 CBT 객관식 시험에 합격(통과)한 수험생</strong>에
+              한하여 응시가 허용됩니다.
             </p>
           </div>
 
           <form onSubmit={handleVerify} className="space-y-4 text-left">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">개인 보안코드 (수험번호)</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                개인 보안코드 (수험번호)
+              </label>
               <input
                 type="text"
                 required
@@ -178,12 +187,17 @@ export default function Session2Page() {
               disabled={verifyLoading}
               className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-lg transition-all"
             >
-              {verifyLoading ? "1차 합격 여부 검증중..." : "1차 합격 인증 및 2차 시험장 입장"}
+              {verifyLoading
+                ? "1차 합격 여부 검증중..."
+                : "1차 합격 인증 및 2차 시험장 입장"}
             </button>
           </form>
 
           <div className="pt-2">
-            <Link href="/exam/cbt-1" className="text-xs text-slate-400 hover:text-blue-400 transition-colors">
+            <Link
+              href="/exam/cbt-1"
+              className="text-xs text-slate-400 hover:text-blue-400 transition-colors"
+            >
               아직 1차 CBT 시험을 응시하지 않으셨나요? 👉 1차 시험장 가기
             </Link>
           </div>
@@ -198,12 +212,19 @@ export default function Session2Page() {
       {/* 헤더 */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div>
-          <Link href="/exam" className="text-slate-400 hover:text-white text-xs flex items-center gap-1 mb-1">
+          <Link
+            href="/exam"
+            className="text-slate-400 hover:text-white text-xs flex items-center gap-1 mb-1"
+          >
             <ArrowLeft className="w-3.5 h-3.5" /> 시험 센터 허브로 돌아가기
           </Link>
-          <h1 className="text-2xl font-extrabold text-white">제2차 시험 과제 제출실 (24시간)</h1>
+          <h1 className="text-2xl font-extrabold text-white">
+            제2차 시험 과제 제출실 (24시간)
+          </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            수험번호 <strong className="text-blue-400 font-mono">#{securityCode}</strong> (1차 필기: {phase1Score}점 합격) 님의 2차 과제 제출 공간입니다.
+            수험번호{" "}
+            <strong className="text-blue-400 font-mono">#{securityCode}</strong>{" "}
+            (1차 필기: {phase1Score}점 합격) 님의 2차 과제 제출 공간입니다.
           </p>
         </div>
 
@@ -222,11 +243,14 @@ export default function Session2Page() {
             제1문 문제지 (논술형)
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            분량 제한은 없으나 지나치게 과도하거나 적은 분량은 감점 사유가 됩니다.
+            분량 제한은 없으나 지나치게 과도하거나 적은 분량은 감점 사유가
+            됩니다.
           </p>
           <button
             type="button"
-            onClick={() => alert("제1문 논술형 문제지 PDF 다운로드 링크입니다.")}
+            onClick={() =>
+              alert("제1문 논술형 문제지 PDF 다운로드 링크입니다.")
+            }
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
@@ -240,11 +264,14 @@ export default function Session2Page() {
             제2문 문제지 (실무기록형 서류/도장 포함)
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            표, 서류, 직인이 포함되어 있으므로 반드시 원본 PDF 형식으로 열람하시기 바랍니다.
+            표, 서류, 직인이 포함되어 있으므로 반드시 원본 PDF 형식으로
+            열람하시기 바랍니다.
           </p>
           <button
             type="button"
-            onClick={() => alert("제2문 실무기록 문제지 PDF 다운로드 링크입니다.")}
+            onClick={() =>
+              alert("제2문 실무기록 문제지 PDF 다운로드 링크입니다.")
+            }
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
@@ -258,14 +285,26 @@ export default function Session2Page() {
         <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div className="text-xs text-slate-300 space-y-1">
           <p className="font-semibold text-white">답안 제출 규칙</p>
-          <p>• <strong>PDF 파일 직접 업로드</strong>를 적극 권장합니다 (HWP, DOCX 또는 웹 텍스트 작성도 가능).</p>
-          <p>• <strong>수정 및 철회:</strong> 마감 전까지는 자유롭게 답안을 수정하거나 철회할 수 있습니다.</p>
-          <p>• <strong>즉시 채점 서약:</strong> 아래 서약 체크 시 제출 즉시 채점이 시작되며 철회가 불가합니다.</p>
+          <p>
+            • <strong>PDF 파일 직접 업로드</strong>를 적극 권장합니다 (HWP, DOCX
+            또는 웹 텍스트 작성도 가능).
+          </p>
+          <p>
+            • <strong>수정 및 철회:</strong> 마감 전까지는 자유롭게 답안을
+            수정하거나 철회할 수 있습니다.
+          </p>
+          <p>
+            • <strong>즉시 채점 서약:</strong> 아래 서약 체크 시 제출 즉시
+            채점이 시작되며 철회가 불가합니다.
+          </p>
         </div>
       </div>
 
       {/* 3. 답안 작성 & PDF 파일 업로드 폼 */}
-      <form onSubmit={handleSubmit} className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6 shadow-xl">
+      <form
+        onSubmit={handleSubmit}
+        className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6 shadow-xl"
+      >
         {/* PDF 파일 직접 첨부 영역 */}
         <div className="space-y-2">
           <label className="block text-xs font-bold text-white flex items-center gap-2">
@@ -278,8 +317,12 @@ export default function Session2Page() {
               <div className="flex items-center gap-2 text-xs text-blue-300">
                 <FileCheck className="w-5 h-5 text-blue-400 shrink-0" />
                 <div>
-                  <div className="font-bold text-white">{fileName || "첨부_답안.pdf"}</div>
-                  <div className="text-[11px] text-slate-400">PDF 파일이 정상적으로 첨부되었습니다.</div>
+                  <div className="font-bold text-white">
+                    {fileName || "첨부_답안.pdf"}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    PDF 파일이 정상적으로 첨부되었습니다.
+                  </div>
                 </div>
               </div>
               <button
@@ -295,7 +338,9 @@ export default function Session2Page() {
             <label className="border-2 border-dashed border-slate-700 hover:border-blue-500 bg-slate-950/60 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors group">
               <FileUp className="w-8 h-8 text-slate-500 group-hover:text-blue-400 transition-colors" />
               <div className="text-xs text-slate-300 font-semibold">
-                클릭하여 <span className="text-blue-400 font-bold">PDF 답안 파일</span>을 업로드하세요
+                클릭하여{" "}
+                <span className="text-blue-400 font-bold">PDF 답안 파일</span>을
+                업로드하세요
               </div>
               <p className="text-[11px] text-slate-500">
                 PDF, HWP, HWPX, DOCX 지원 (최대 10MB)
@@ -339,7 +384,8 @@ export default function Session2Page() {
                 답안을 수정하지 않고 [즉시 채점]을 요청합니다. (조기 채점 서약)
               </div>
               <p className="text-amber-200/80">
-                체크 시 답안이 즉시 잠금 처리되어 출제위원 채점이 바로 시작되며, 이후 수정이나 철회가 불가합니다.
+                체크 시 답안이 즉시 잠금 처리되어 출제위원 채점이 바로 시작되며,
+                이후 수정이나 철회가 불가합니다.
               </p>
             </div>
           </label>
@@ -354,11 +400,15 @@ export default function Session2Page() {
         <div className="flex justify-end gap-3 pt-2">
           <button
             type="submit"
-              disabled={isSubmitting || isUploading}
+            disabled={isSubmitting || isUploading}
             className="flex items-center gap-1.5 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-md transition-colors"
           >
             <Send className="w-3.5 h-3.5" />
-            {isSubmitting ? "제출중..." : isInstantPledged ? "즉시 채점 서약 최종 제출" : "답안지 제출하기"}
+            {isSubmitting
+              ? "제출중..."
+              : isInstantPledged
+                ? "즉시 채점 서약 최종 제출"
+                : "답안지 제출하기"}
           </button>
         </div>
       </form>

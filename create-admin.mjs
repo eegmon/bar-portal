@@ -6,7 +6,9 @@ const password = process.env.INITIAL_ADMIN_PASSWORD;
 const name = process.env.INITIAL_ADMIN_NAME?.trim();
 
 if (!loginId || !password || !name) {
-  console.error("INITIAL_ADMIN_LOGIN, INITIAL_ADMIN_PASSWORD, INITIAL_ADMIN_NAME 환경변수가 모두 필요합니다.");
+  console.error(
+    "INITIAL_ADMIN_LOGIN, INITIAL_ADMIN_PASSWORD, INITIAL_ADMIN_NAME 환경변수가 모두 필요합니다.",
+  );
   process.exit(1);
 }
 if (password.length < 12) {

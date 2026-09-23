@@ -199,7 +199,9 @@ async function init() {
 
   // 기존 DB에도 안건 순서 컬럼을 추가합니다.
   try {
-    await db.execute("ALTER TABLE agendas ADD COLUMN agenda_order INTEGER NOT NULL DEFAULT 0");
+    await db.execute(
+      "ALTER TABLE agendas ADD COLUMN agenda_order INTEGER NOT NULL DEFAULT 0",
+    );
   } catch {
     // 이미 마이그레이션된 DB에서는 무시합니다.
   }

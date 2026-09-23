@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Vote, Shield, CheckCircle2, AlertCircle, Lock, Plus, Minus, Send, Play, Square, Users } from "lucide-react";
+import {
+  Vote,
+  Shield,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+  Plus,
+  Minus,
+  Send,
+  Play,
+  Square,
+  Users,
+} from "lucide-react";
 
 interface VoteClientProps {
   user: {
@@ -24,7 +36,9 @@ export default function VoteClient({
   userVotedAgendas,
   initialAgendaId,
 }: VoteClientProps) {
-  const [selectedAgendaId, setSelectedAgendaId] = useState(initialAgendaId || agendas[0]?.id || "");
+  const [selectedAgendaId, setSelectedAgendaId] = useState(
+    initialAgendaId || agendas[0]?.id || "",
+  );
   const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [votedResult, setVotedResult] = useState<any>(null);
@@ -40,7 +54,11 @@ export default function VoteClient({
     try {
       const configured = JSON.parse(agenda?.choice_config || "[]");
       if (Array.isArray(configured) && configured.length >= 2) {
-        return configured.map((choice: any) => typeof choice === "string" ? choice : choice.label).filter(Boolean);
+        return configured
+          .map((choice: any) =>
+            typeof choice === "string" ? choice : choice.label,
+          )
+          .filter(Boolean);
       }
     } catch {
       // 기본 선택지를 사용합니다.
@@ -58,7 +76,9 @@ export default function VoteClient({
     if (!selectedAgendaId) return;
     let active = true;
     const loadStats = async () => {
-      const res = await fetch(`/api/assembly/vote?agendaId=${encodeURIComponent(selectedAgendaId)}`);
+      const res = await fetch(
+        `/api/assembly/vote?agendaId=${encodeURIComponent(selectedAgendaId)}`,
+      );
       const data = await res.json();
       if (active && res.ok) setLiveStats(data.stats);
     };
@@ -112,12 +132,18 @@ export default function VoteClient({
   const handleVoteSubmit = async () => {
     const isRanked = currentAgenda?.voting_method === "RANKED";
     if (!isRanked && allocatedSum !== votingPower) {
-      alert(`보유하신 의결권 ${votingPower}표를 모두 배분해 주세요. (현재 ${allocatedSum}/${votingPower}표 배분)`);
+      alert(
+        `보유하신 의결권 ${votingPower}표를 모두 배분해 주세요. (현재 ${allocatedSum}/${votingPower}표 배분)`,
+      );
       return;
     }
 
     if (currentAgenda?.is_secret) {
-      if (!confirm("🔒 [무기명 비밀투표 안내]\n투표자 정보와 선택값이 분리되어 익명 저장됩니다.\n표결을 최종 제출하시겠습니까?")) {
+      if (
+        !confirm(
+          "🔒 [무기명 비밀투표 안내]\n투표자 정보와 선택값이 분리되어 익명 저장됩니다.\n표결을 최종 제출하시겠습니까?",
+        )
+      ) {
         return;
       }
     } else {
@@ -148,10 +174,13 @@ export default function VoteClient({
   };
 
   // 2. 의장 표결 제어 (개시 / 종료)
-  const handleChairmanAction = async (action: "START_VOTING" | "CLOSE_VOTING") => {
-    const msg = action === "START_VOTING"
-      ? "본 안건에 대한 표결을 공식 개시(선포)하시겠습니까?"
-      : "본 안건의 표결을 종료하고 결과를 선포하시겠습니까?";
+  const handleChairmanAction = async (
+    action: "START_VOTING" | "CLOSE_VOTING",
+  ) => {
+    const msg =
+      action === "START_VOTING"
+        ? "본 안건에 대한 표결을 공식 개시(선포)하시겠습니까?"
+        : "본 안건의 표결을 종료하고 결과를 선포하시겠습니까?";
     if (!confirm(msg)) return;
 
     setIsChairmanActing(true);
@@ -167,7 +196,11 @@ export default function VoteClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "의장 처리 실패");
 
-      alert(action === "START_VOTING" ? "✅ 표결 개시가 공식 선포되었습니다!" : "✅ 표결이 종료되었습니다.");
+      alert(
+        action === "START_VOTING"
+          ? "✅ 표결 개시가 공식 선포되었습니다!"
+          : "✅ 표결이 종료되었습니다.",
+      );
       window.location.reload();
     } catch (err: any) {
       alert(`오류: ${err.message}`);
@@ -196,11 +229,15 @@ export default function VoteClient({
                 ag.status === "VOTING"
                   ? "bg-emerald-500/30 text-emerald-200"
                   : ag.status === "CLOSED"
-                  ? "bg-slate-700 text-slate-400"
-                  : "bg-amber-500/30 text-amber-200"
+                    ? "bg-slate-700 text-slate-400"
+                    : "bg-amber-500/30 text-amber-200"
               }`}
             >
-              {ag.status === "VOTING" ? "표결중" : ag.status === "CLOSED" ? "마감" : "대기"}
+              {ag.status === "VOTING"
+                ? "표결중"
+                : ag.status === "CLOSED"
+                  ? "마감"
+                  : "대기"}
             </span>
           </button>
         ))}
@@ -212,7 +249,9 @@ export default function VoteClient({
           <div className="flex items-center gap-2 text-xs text-amber-300 font-bold">
             <Shield className="w-4 h-4 text-amber-400" />
             [총회 의장 제어 패널] 안건 상태:{" "}
-            <span className="text-white font-mono">{currentAgenda?.status}</span>
+            <span className="text-white font-mono">
+              {currentAgenda?.status}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -250,14 +289,21 @@ export default function VoteClient({
             투표권자: <strong className="text-white">{user.name} 변호사</strong>
           </span>
           <div className="text-lg font-bold text-white flex items-center gap-2">
-            나의 행사 가능 의결권: <span className="text-emerald-400 font-mono text-2xl">{votingPower}표</span>
+            나의 행사 가능 의결권:{" "}
+            <span className="text-emerald-400 font-mono text-2xl">
+              {votingPower}표
+            </span>
           </div>
           <p className="text-[11px] text-slate-500">
-            • 본인 표 (1표) {proxyList.length > 0 ? `+ 위임받은 표 (${proxyList.length}표)` : ""}
+            • 본인 표 (1표){" "}
+            {proxyList.length > 0
+              ? `+ 위임받은 표 (${proxyList.length}표)`
+              : ""}
           </p>
           {proxyList.length > 0 && (
             <div className="text-[11px] text-emerald-400/90 pt-1">
-              위임자: {proxyList.map((p) => p.grantor_name || "회원").join(", ")}
+              위임자:{" "}
+              {proxyList.map((p) => p.grantor_name || "회원").join(", ")}
             </div>
           )}
         </div>
@@ -280,19 +326,50 @@ export default function VoteClient({
       {liveStats && currentAgenda && (
         <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-3 text-xs text-slate-300">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div><span className="text-slate-500 block">전체 의결권</span><strong className="text-white">{liveStats.totalRights}표</strong></div>
-            <div><span className="text-slate-500 block">출석 의결권</span><strong className="text-white">{liveStats.presentRights}표</strong></div>
-            <div><span className="text-slate-500 block">투표 행사표</span><strong className="text-white">{liveStats.casted}표</strong></div>
-            <div><span className="text-slate-500 block">현재 투표율</span><strong className="text-emerald-400">{liveStats.votingRate}%</strong></div>
-            <div><span className="text-slate-500 block">정족수</span><strong className={liveStats.quorumMet ? "text-emerald-400" : "text-amber-400"}>{liveStats.quorumMet ? "충족" : "미충족"}</strong></div>
+            <div>
+              <span className="text-slate-500 block">전체 의결권</span>
+              <strong className="text-white">{liveStats.totalRights}표</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">출석 의결권</span>
+              <strong className="text-white">
+                {liveStats.presentRights}표
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">투표 행사표</span>
+              <strong className="text-white">{liveStats.casted}표</strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">현재 투표율</span>
+              <strong className="text-emerald-400">
+                {liveStats.votingRate}%
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-500 block">정족수</span>
+              <strong
+                className={
+                  liveStats.quorumMet ? "text-emerald-400" : "text-amber-400"
+                }
+              >
+                {liveStats.quorumMet ? "충족" : "미충족"}
+              </strong>
+            </div>
           </div>
           {liveStats.tally?.length > 0 && (
             <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-3">
-              {liveStats.tally.map((item: { choice: string; total: number }) => (
-                <span key={item.choice} className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg">
-                  {item.choice}: <strong className="text-white">{item.total}표</strong>
-                </span>
-              ))}
+              {liveStats.tally.map(
+                (item: { choice: string; total: number }) => (
+                  <span
+                    key={item.choice}
+                    className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg"
+                  >
+                    {item.choice}:{" "}
+                    <strong className="text-white">{item.total}표</strong>
+                  </span>
+                ),
+              )}
             </div>
           )}
         </div>
@@ -305,9 +382,12 @@ export default function VoteClient({
           <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full mx-auto flex items-center justify-center">
             <CheckCircle2 className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-bold text-white">본 안건에 대한 표결을 완료하셨습니다.</h3>
+          <h3 className="text-lg font-bold text-white">
+            본 안건에 대한 표결을 완료하셨습니다.
+          </h3>
           <p className="text-xs text-slate-400">
-            중복 투표 방지 규정에 따라 이미 제출된 표는 수정하거나 다시 투표할 수 없습니다.
+            중복 투표 방지 규정에 따라 이미 제출된 표는 수정하거나 다시 투표할
+            수 없습니다.
           </p>
         </div>
       ) : currentAgenda?.status === "READY" ? (
@@ -316,9 +396,12 @@ export default function VoteClient({
           <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-full mx-auto flex items-center justify-center">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-bold text-white">의장의 표결 선언을 기다리는 중입니다.</h3>
+          <h3 className="text-lg font-bold text-white">
+            의장의 표결 선언을 기다리는 중입니다.
+          </h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
-            회칙 제17조의4에 의거하여 의장이 본 안건의 심의를 마치고 표결 개시를 선포해야 투표함이 열립니다.
+            회칙 제17조의4에 의거하여 의장이 본 안건의 심의를 마치고 표결 개시를
+            선포해야 투표함이 열립니다.
           </p>
         </div>
       ) : currentAgenda?.status === "CLOSED" ? (
@@ -327,8 +410,12 @@ export default function VoteClient({
           <div className="w-12 h-12 bg-slate-800 text-slate-400 rounded-full mx-auto flex items-center justify-center">
             <Lock className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-bold text-white">본 안건의 표결이 종료되었습니다.</h3>
-          <p className="text-xs text-slate-400">집계 결과가 총회 의사록에 기록되었습니다.</p>
+          <h3 className="text-lg font-bold text-white">
+            본 안건의 표결이 종료되었습니다.
+          </h3>
+          <p className="text-xs text-slate-400">
+            집계 결과가 총회 의사록에 기록되었습니다.
+          </p>
         </div>
       ) : (
         /* 표결 진행 중 (VOTING 상태) */
@@ -339,19 +426,48 @@ export default function VoteClient({
                 🟢 의장 표결 선포 완료
               </span>
             </div>
-            <h2 className="text-lg font-bold text-white">{currentAgenda?.title}</h2>
-            <p className="text-xs text-slate-400 mt-1">{currentAgenda?.description}</p>
+            <h2 className="text-lg font-bold text-white">
+              {currentAgenda?.title}
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              {currentAgenda?.description}
+            </p>
           </div>
 
           {currentAgenda?.voting_method === "RANKED" ? (
             <div className="space-y-3">
-              <p className="text-xs text-slate-400">선호하는 순서대로 배치하세요. 1순위부터 즉시결선 방식으로 집계됩니다.</p>
+              <p className="text-xs text-slate-400">
+                선호하는 순서대로 배치하세요. 1순위부터 즉시결선 방식으로
+                집계됩니다.
+              </p>
               {ranking.map((choice, index) => (
-                <div key={choice} className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between">
-                  <span className="text-sm font-bold text-white"><strong className="text-amber-400 mr-2">{index + 1}순위</strong>{choice}</span>
+                <div
+                  key={choice}
+                  className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between"
+                >
+                  <span className="text-sm font-bold text-white">
+                    <strong className="text-amber-400 mr-2">
+                      {index + 1}순위
+                    </strong>
+                    {choice}
+                  </span>
                   <div className="flex gap-1">
-                    <button type="button" onClick={() => moveRanking(index, -1)} disabled={index === 0} className="px-2 py-1 bg-slate-800 text-slate-300 rounded disabled:opacity-30">위</button>
-                    <button type="button" onClick={() => moveRanking(index, 1)} disabled={index === ranking.length - 1} className="px-2 py-1 bg-slate-800 text-slate-300 rounded disabled:opacity-30">아래</button>
+                    <button
+                      type="button"
+                      onClick={() => moveRanking(index, -1)}
+                      disabled={index === 0}
+                      className="px-2 py-1 bg-slate-800 text-slate-300 rounded disabled:opacity-30"
+                    >
+                      위
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveRanking(index, 1)}
+                      disabled={index === ranking.length - 1}
+                      className="px-2 py-1 bg-slate-800 text-slate-300 rounded disabled:opacity-30"
+                    >
+                      아래
+                    </button>
                   </div>
                 </div>
               ))}
@@ -360,63 +476,77 @@ export default function VoteClient({
             <>
               {/* 배분 현황 프로그레스 바 */}
               <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                <span className="text-slate-400">배분 완료: <strong className="text-white font-mono">{allocatedSum}</strong> / {votingPower}표</span>
-                <span className={`font-bold ${remainingVotes === 0 ? "text-emerald-400" : "text-amber-400"}`}>{remainingVotes === 0 ? "✅ 전량 배분 완료" : `⚠️ 남은 표: ${remainingVotes}표`}</span>
+                <span className="text-slate-400">
+                  배분 완료:{" "}
+                  <strong className="text-white font-mono">
+                    {allocatedSum}
+                  </strong>{" "}
+                  / {votingPower}표
+                </span>
+                <span
+                  className={`font-bold ${remainingVotes === 0 ? "text-emerald-400" : "text-amber-400"}`}
+                >
+                  {remainingVotes === 0
+                    ? "✅ 전량 배분 완료"
+                    : `⚠️ 남은 표: ${remainingVotes}표`}
+                </span>
               </div>
 
               {/* 선택지별 수량 조절 목록 */}
               <div className="space-y-3">
-            {choices.map((choice) => {
-              const currentVotes = allocations[choice] || 0;
-              return (
-                <div
-                  key={choice}
-                  className={`p-4 rounded-xl border transition-all flex items-center justify-between gap-4 ${
-                    currentVotes > 0
-                      ? "bg-slate-800/80 border-emerald-500/50 shadow-sm"
-                      : "bg-slate-950/60 border-slate-800"
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <span className="text-sm font-bold text-white">{choice}</span>
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickAllIn(choice)}
-                        className="text-[10px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors"
-                      >
-                        전부 투표 ({votingPower}표)
-                      </button>
+                {choices.map((choice) => {
+                  const currentVotes = allocations[choice] || 0;
+                  return (
+                    <div
+                      key={choice}
+                      className={`p-4 rounded-xl border transition-all flex items-center justify-between gap-4 ${
+                        currentVotes > 0
+                          ? "bg-slate-800/80 border-emerald-500/50 shadow-sm"
+                          : "bg-slate-950/60 border-slate-800"
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <span className="text-sm font-bold text-white">
+                          {choice}
+                        </span>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAllIn(choice)}
+                            className="text-[10px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700 transition-colors"
+                          >
+                            전부 투표 ({votingPower}표)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 수량 증감 버튼 (+/-) */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleAdjust(choice, -1)}
+                          disabled={currentVotes <= 0}
+                          className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white flex items-center justify-center transition-colors"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+
+                        <span className="w-10 text-center text-lg font-bold font-mono text-emerald-400">
+                          {currentVotes}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAdjust(choice, 1)}
+                          disabled={remainingVotes <= 0}
+                          className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white flex items-center justify-center transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* 수량 증감 버튼 (+/-) */}
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleAdjust(choice, -1)}
-                      disabled={currentVotes <= 0}
-                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white flex items-center justify-center transition-colors"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-
-                    <span className="w-10 text-center text-lg font-bold font-mono text-emerald-400">
-                      {currentVotes}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => handleAdjust(choice, 1)}
-                      disabled={remainingVotes <= 0}
-                      className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white flex items-center justify-center transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
               </div>
             </>
           )}
@@ -425,12 +555,18 @@ export default function VoteClient({
           <div className="pt-4 border-t border-slate-800 flex justify-end">
             <button
               type="button"
-              disabled={isSubmitting || (currentAgenda?.voting_method !== "RANKED" && allocatedSum !== votingPower)}
+              disabled={
+                isSubmitting ||
+                (currentAgenda?.voting_method !== "RANKED" &&
+                  allocatedSum !== votingPower)
+              }
               onClick={handleVoteSubmit}
               className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-xs rounded-xl shadow-lg transition-all"
             >
               <Send className="w-4 h-4" />
-              {isSubmitting ? "투표 처리중..." : `총 ${votingPower}표 최종 투표하기`}
+              {isSubmitting
+                ? "투표 처리중..."
+                : `총 ${votingPower}표 최종 투표하기`}
             </button>
           </div>
         </div>
