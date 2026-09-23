@@ -15,6 +15,11 @@ import {
   Trash2,
   Download,
   FileUp,
+  Calendar,
+  Clock,
+  Sparkles,
+  Settings,
+  XCircle,
 } from "lucide-react";
 
 interface QuestionData {
@@ -27,31 +32,71 @@ interface QuestionData {
   explanation?: string;
 }
 
+interface ExamAdminClientProps {
+  allExams?: any[];
+  initialExam?: any | null;
+  initialSubmissions?: any[];
+  exam?: any;
+  submissions?: any[];
+}
+
 export default function ExamAdminClient({
-  exam,
-  submissions,
-}: {
-  exam: any;
-  submissions: any[];
-}) {
+  allExams = [],
+  initialExam,
+  initialSubmissions = [],
+  exam: legacyExam,
+  submissions: legacySubmissions,
+}: ExamAdminClientProps) {
+  const exam = initialExam !== undefined ? initialExam : legacyExam;
+  const submissions = initialSubmissions !== undefined ? initialSubmissions : (legacySubmissions || []);
+
   const [activeTab, setActiveTab] = useState<
     "errata" | "questions" | "grading"
   >("errata");
+
+  // [신규] 0-1. 신규 시험 회차 개설 모달 상태
+  const nextDefaultRound = (allExams[0]?.round_number || 17) + 1;
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRound, setNewRound] = useState(nextDefaultRound);
+  const [newTitle, setNewTitle] = useState(`2026년도 제${nextDefaultRound}회 도스변호사시험`);
+  const [newPhase1Start, setNewPhase1Start] = useState("");
+  const [newPhase1End, setNewPhase1End] = useState("");
+  const [newPhase2Start, setNewPhase2Start] = useState("");
+  const [newPhase2End, setNewPhase2End] = useState("");
+  const [newStatus, setNewStatus] = useState("SCHEDULED");
+  const [newPhase1Pdf, setNewPhase1Pdf] = useState("");
+  const [newPhase2Doc1Pdf, setNewPhase2Doc1Pdf] = useState("");
+  const [newPhase2Doc2Pdf, setNewPhase2Doc2Pdf] = useState("");
+  const [broadcastNewExam, setBroadcastNewExam] = useState(true);
+  const [isCreatingExam, setIsCreatingExam] = useState(false);
+
+  // [신규] 0-2. 시험 상태 및 일정 수정 모달 상태
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [editTitle, setEditTitle] = useState(exam?.title || "");
+  const [editStatus, setEditStatus] = useState(exam?.status || "SCHEDULED");
+  const [editPhase1Start, setEditPhase1Start] = useState(exam?.phase1_start || "");
+  const [editPhase1End, setEditPhase1End] = useState(exam?.phase1_end || "");
+  const [editPhase2Start, setEditPhase2Start] = useState(exam?.phase2_start || "");
+  const [editPhase2End, setEditPhase2End] = useState(exam?.phase2_end || "");
+  const [editPhase1Pdf, setEditPhase1Pdf] = useState(exam?.phase1_pdf_url || "");
+  const [editPhase2Doc1Pdf, setEditPhase2Doc1Pdf] = useState(exam?.phase2_doc1_pdf_url || "");
+  const [editPhase2Doc2Pdf, setEditPhase2Doc2Pdf] = useState(exam?.phase2_doc2_pdf_url || "");
+  const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
 
   // 1. 실시간 문제 정정 방송 상태
   const [errataText, setErrataText] = useState("");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [notices, setNotices] = useState<any[]>(
-    JSON.parse(exam.errata_notices || "[]"),
+    exam ? JSON.parse(exam.errata_notices || "[]") : [],
   );
   const [issueCount, setIssueCount] = useState(10);
   const [issuedCodes, setIssuedCodes] = useState<string[]>([]);
   const [isIssuingCodes, setIsIssuingCodes] = useState(false);
 
   // 2. 1차 CBT 문항 편집기 상태
-  const initialQuestions: QuestionData[] = JSON.parse(
-    exam.phase1_questions || "[]",
-  );
+  const initialQuestions: QuestionData[] = exam
+    ? JSON.parse(exam.phase1_questions || "[]")
+    : [];
   const [questions, setQuestions] = useState<QuestionData[]>(
     initialQuestions.length > 0
       ? initialQuestions
@@ -73,6 +118,80 @@ export default function ExamAdminClient({
   >({});
   const [isGrading, setIsGrading] = useState<string | null>(null);
   const [isReleasing, setIsReleasing] = useState(false);
+
+  // [신규] 0-1. 신규 시험 회차 개설
+  const handleCreateExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRound || !newTitle.trim() || !newPhase1Start || !newPhase1End || !newPhase2Start || !newPhase2End) {
+      alert("회차 번호, 시험 명칭, 1차 및 2차 시험 시작/종료 일시를 모두 입력해 주세요.");
+      return;
+    }
+    setIsCreatingExam(true);
+    try {
+      const res = await fetch("/api/exam/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "CREATE_EXAM",
+          roundNumber: newRound,
+          title: newTitle,
+          phase1Start: newPhase1Start,
+          phase1End: newPhase1End,
+          phase2Start: newPhase2Start,
+          phase2End: newPhase2End,
+          status: newStatus,
+          phase1PdfUrl: newPhase1Pdf,
+          phase2Doc1PdfUrl: newPhase2Doc1Pdf,
+          phase2Doc2PdfUrl: newPhase2Doc2Pdf,
+          broadcastNotice: broadcastNewExam,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "시험 개설 실패");
+      alert(data.message || "새 시험 회차가 성공적으로 개설되었습니다!");
+      setShowCreateModal(false);
+      window.location.href = `/exam/admin?examId=${data.examId}`;
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsCreatingExam(false);
+    }
+  };
+
+  // [신규] 0-2. 시험 일정 및 상태 수정
+  const handleUpdateSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!exam?.id) return;
+    setIsUpdatingSchedule(true);
+    try {
+      const res = await fetch("/api/exam/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_EXAM_SCHEDULE",
+          examId: exam.id,
+          title: editTitle,
+          status: editStatus,
+          phase1Start: editPhase1Start,
+          phase1End: editPhase1End,
+          phase2Start: editPhase2Start,
+          phase2End: editPhase2End,
+          phase1PdfUrl: editPhase1Pdf,
+          phase2Doc1PdfUrl: editPhase2Doc1Pdf,
+          phase2Doc2PdfUrl: editPhase2Doc2Pdf,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "일정 변경 실패");
+      alert("✅ 시험 정보 및 일정이 성공적으로 변경되었습니다!");
+      setShowScheduleModal(false);
+      window.location.reload();
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsUpdatingSchedule(false);
+    }
+  };
 
   // 최종 합격자 공개 발표
   const handleReleaseResults = async () => {
@@ -320,8 +439,124 @@ export default function ExamAdminClient({
 
   return (
     <div className="space-y-6">
-      {/* 3개 탭 네비게이션 */}
-      <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
+      {/* 상단 시험 회차 관리 및 상태 컨트롤 바 */}
+      <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {allExams.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-semibold">회차 선택:</span>
+              <select
+                value={exam?.id || ""}
+                onChange={(e) => {
+                  window.location.href = `/exam/admin?examId=${e.target.value}`;
+                }}
+                className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-indigo-500"
+              >
+                {allExams.map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    제{ex.round_number}회 ({ex.title})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {exam && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-extrabold">
+                  제{exam.round_number}회
+                </span>
+                <h2 className="text-base font-extrabold text-white">
+                  {exam.title}
+                </h2>
+              </div>
+
+              {/* 상태 배지 */}
+              <span
+                className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                  exam.status === "SCHEDULED"
+                    ? "bg-slate-800 text-slate-300 border-slate-700"
+                    : exam.status === "PHASE1"
+                      ? "bg-blue-500/20 text-blue-300 border-blue-500/40 animate-pulse"
+                      : exam.status === "PHASE2"
+                        ? "bg-purple-500/20 text-purple-300 border-purple-500/40 animate-pulse"
+                        : exam.status === "GRADING"
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                          : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                {exam.status === "SCHEDULED"
+                  ? "시험 대기중 (SCHEDULED)"
+                  : exam.status === "PHASE1"
+                    ? "제1차 CBT 필기 진행중"
+                    : exam.status === "PHASE2"
+                      ? "제2차 서술형 제출 진행중"
+                      : exam.status === "GRADING"
+                        ? "2차 채점표 사정 진행중"
+                        : "최종 합격자 공고 완료 (FINISHED)"}
+              </span>
+            </>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {exam && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditTitle(exam.title || "");
+                setEditStatus(exam.status || "SCHEDULED");
+                setEditPhase1Start(exam.phase1_start || "");
+                setEditPhase1End(exam.phase1_end || "");
+                setEditPhase2Start(exam.phase2_start || "");
+                setEditPhase2End(exam.phase2_end || "");
+                setEditPhase1Pdf(exam.phase1_pdf_url || "");
+                setEditPhase2Doc1Pdf(exam.phase2_doc1_pdf_url || "");
+                setEditPhase2Doc2Pdf(exam.phase2_doc2_pdf_url || "");
+                setShowScheduleModal(true);
+              }}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 shadow"
+            >
+              <Settings className="w-3.5 h-3.5 text-amber-400" />
+              시험 일정·상태 변경
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition-colors flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            신규 시험(회차) 개설
+          </button>
+        </div>
+      </div>
+
+      {!exam ? (
+        <div className="p-12 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-4 shadow-xl">
+          <div className="w-16 h-16 mx-auto bg-indigo-500/10 text-indigo-400 rounded-2xl flex items-center justify-center">
+            <Award className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-bold text-white">등록된 변호사시험 회차가 없습니다.</h3>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+            변호사시험관리위원회에서 첫 번째 시험 회차를 개설하여 1차 CBT 필기 문항과 2차 서술형 문제지 일정을 시작하세요.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl shadow-lg transition-all inline-flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            제{nextDefaultRound}회 변호사시험 개설하기
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* 3개 탭 네비게이션 */}
+          <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-900 border border-slate-800 rounded-2xl">
         <button
           type="button"
           onClick={() => setActiveTab("errata")}
@@ -889,6 +1124,378 @@ export default function ExamAdminClient({
               합격자 명단이 공개 발표되었습니다. (/exam/results 에서 확인)
             </div>
           )}
+          </div>
+        )}
+      </>
+    )}
+
+      {/* ========================================================================= */}
+      {/* 모달 1: 신규 시험 회차 개설 모달 */}
+      {/* ========================================================================= */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-600/20 text-indigo-400 rounded-xl">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">
+                    신규 변호사시험(회차) 개설
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    새로운 시험 일정을 공고하고 1차 필기 및 2차 서술형 문제지를 등록합니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateExam} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    시험 회차 번호
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newRound}
+                    onChange={(e) => {
+                      const r = Number(e.target.value);
+                      setNewRound(r);
+                      setNewTitle(`2026년도 제${r}회 도스변호사시험`);
+                    }}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    시험 명칭 (공식 타이틀)
+                  </label>
+                  <input
+                    type="text"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    required
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              {/* 진행 상태 */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  초기 시험 진행 상태
+                </label>
+                <select
+                  value={newStatus}
+                  onChange={(e) => setNewStatus(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                >
+                  <option value="SCHEDULED">시험 대기중 (SCHEDULED) - 접수 및 공고 상태</option>
+                  <option value="PHASE1">제1차 CBT 필기 진행중 (PHASE1)</option>
+                  <option value="PHASE2">제2차 서술형 제출 진행중 (PHASE2)</option>
+                  <option value="GRADING">2차 채점표 사정 진행중 (GRADING)</option>
+                  <option value="FINISHED">최종 합격자 공고 완료 (FINISHED)</option>
+                </select>
+              </div>
+
+              {/* 1차 필기 일정 */}
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                <div className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4" /> 제1차 CBT 필기 (10문항) 일정
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">
+                      1차 시작 일시
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="예: 2026-09-24 20:00:00"
+                      value={newPhase1Start}
+                      onChange={(e) => setNewPhase1Start(e.target.value)}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">
+                      1차 마감 일시 (120분)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="예: 2026-09-24 22:00:00"
+                      value={newPhase1End}
+                      onChange={(e) => setNewPhase1End(e.target.value)}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 2차 서술형 일정 */}
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-3">
+                <div className="text-xs font-bold text-purple-400 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4" /> 제2차 서술형 (24시간) 일정
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">
+                      2차 시작 일시
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="예: 2026-09-24 23:00:00"
+                      value={newPhase2Start}
+                      onChange={(e) => setNewPhase2Start(e.target.value)}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">
+                      2차 마감 일시 (24시간)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="예: 2026-09-25 23:00:00"
+                      value={newPhase2End}
+                      onChange={(e) => setNewPhase2End(e.target.value)}
+                      required
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 문제지 PDF URL (선택) */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-400">
+                  문제지 PDF URL (선택 사항)
+                </label>
+                <input
+                  type="text"
+                  placeholder="1차 필기 문제지 PDF 링크 (선택)"
+                  value={newPhase1Pdf}
+                  onChange={(e) => setNewPhase1Pdf(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                />
+                <input
+                  type="text"
+                  placeholder="2차 제1문 논술 문제지 PDF 링크 (선택)"
+                  value={newPhase2Doc1Pdf}
+                  onChange={(e) => setNewPhase2Doc1Pdf(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                />
+                <input
+                  type="text"
+                  placeholder="2차 제2문 실무기록 문제지 PDF 링크 (선택)"
+                  value={newPhase2Doc2Pdf}
+                  onChange={(e) => setNewPhase2Doc2Pdf(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+                />
+              </div>
+
+              {/* 디스코드 방송 체크박스 */}
+              <label className="flex items-center gap-2 cursor-pointer pt-2">
+                <input
+                  type="checkbox"
+                  checked={broadcastNewExam}
+                  onChange={(e) => setBroadcastNewExam(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-950 text-indigo-500"
+                />
+                <span className="text-xs font-bold text-slate-300">
+                  📢 개설 즉시 디스코드 시험 채널(EXAM)로 시행 일정 공식 공고 발송
+                </span>
+              </label>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl border border-slate-700"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingExam}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg transition-colors flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {isCreatingExam ? "개설중..." : "신규 시험 개설하기"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 모달 2: 시험 일정 및 상태 수정 모달 */}
+      {/* ========================================================================= */}
+      {showScheduleModal && exam && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">
+                    제{exam.round_number}회 시험 일정 및 상태 변경
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    시험 진행 단계와 시작/종료 일시를 변경합니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowScheduleModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSchedule} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  시험 명칭
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  현재 시험 진행 단계 (Status)
+                </label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold"
+                >
+                  <option value="SCHEDULED">시험 대기중 (SCHEDULED)</option>
+                  <option value="PHASE1">제1차 CBT 필기 진행중 (PHASE1)</option>
+                  <option value="PHASE2">제2차 서술형 제출 진행중 (PHASE2)</option>
+                  <option value="GRADING">2차 채점표 사정 진행중 (GRADING)</option>
+                  <option value="FINISHED">최종 합격자 공고 완료 (FINISHED)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    1차 시작 일시
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhase1Start}
+                    onChange={(e) => setEditPhase1Start(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    1차 마감 일시
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhase1End}
+                    onChange={(e) => setEditPhase1End(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    2차 시작 일시
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhase2Start}
+                    onChange={(e) => setEditPhase2Start(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">
+                    2차 마감 일시
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhase2End}
+                    onChange={(e) => setEditPhase2End(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-400">
+                  문제지 PDF URL
+                </label>
+                <input
+                  type="text"
+                  placeholder="1차 필기 PDF URL"
+                  value={editPhase1Pdf}
+                  onChange={(e) => setEditPhase1Pdf(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
+                />
+                <input
+                  type="text"
+                  placeholder="2차 제1문 논술 PDF URL"
+                  value={editPhase2Doc1Pdf}
+                  onChange={(e) => setEditPhase2Doc1Pdf(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
+                />
+                <input
+                  type="text"
+                  placeholder="2차 제2문 실무기록 PDF URL"
+                  value={editPhase2Doc2Pdf}
+                  onChange={(e) => setEditPhase2Doc2Pdf(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl border border-slate-700"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingSchedule}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-colors"
+                >
+                  {isUpdatingSchedule ? "저장중..." : "변경 사항 저장"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

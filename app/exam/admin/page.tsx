@@ -7,26 +7,42 @@ import ExamAdminClient from "./ExamAdminClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExamAdminPage() {
+export default async function ExamAdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ examId?: string }>;
+}) {
   const user = await getSessionUser();
 
   if (!user || !canManageExam(user)) {
     redirect("/exam");
   }
 
-  let exam: any = null;
+  const resolvedParams = searchParams ? await searchParams : {};
+  const selectedExamId = resolvedParams.examId;
+
+  let allExams: any[] = [];
+  let currentExam: any = null;
   let submissions: any[] = [];
 
   try {
-    const examRes = await db.execute("SELECT * FROM exams ORDER BY round_number DESC LIMIT 1");
-    if (examRes.rows.length > 0) {
-      exam = examRes.rows[0];
+    const examsRes = await db.execute("SELECT * FROM exams ORDER BY round_number DESC");
+    allExams = examsRes.rows;
 
-      const subRes = await db.execute({
-        sql: "SELECT * FROM exam_submissions WHERE exam_id = ? ORDER BY submitted_at DESC",
-        args: [exam.id],
-      });
-      submissions = subRes.rows;
+    if (allExams.length > 0) {
+      if (selectedExamId) {
+        currentExam = allExams.find((e) => e.id === selectedExamId) || allExams[0];
+      } else {
+        currentExam = allExams[0];
+      }
+
+      if (currentExam) {
+        const subRes = await db.execute({
+          sql: "SELECT * FROM exam_submissions WHERE exam_id = ? ORDER BY submitted_at DESC",
+          args: [currentExam.id],
+        });
+        submissions = subRes.rows;
+      }
     }
   } catch (err) {
     console.error("Exam admin fetch error:", err);
@@ -43,7 +59,7 @@ export default async function ExamAdminPage() {
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">변호사시험관리위원회 관리 패널</h1>
           <p className="text-slate-400 text-sm mt-1">
-            1차 CBT 문항 실시간 편집, 실시간 문제 정정 긴급 방송, 2차 서술형 채점표 사정 및 최종 합격자 공고를 관장합니다.
+            신규 시험 회차 개설, 1차 CBT 문항 실시간 편집, 실시간 문제 정정 긴급 방송, 2차 서술형 채점표 사정 및 최종 합격자 공고를 관장합니다.
           </p>
         </div>
 
@@ -63,13 +79,11 @@ export default async function ExamAdminPage() {
         </div>
       </div>
 
-      {exam ? (
-        <ExamAdminClient exam={exam} submissions={submissions} />
-      ) : (
-        <div className="p-12 bg-slate-900 border border-slate-800 rounded-2xl text-center text-slate-400">
-          진행 중인 시험이 없습니다.
-        </div>
-      )}
+      <ExamAdminClient
+        allExams={allExams}
+        initialExam={currentExam}
+        initialSubmissions={submissions}
+      />
     </div>
   );
 }

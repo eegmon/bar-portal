@@ -17,6 +17,159 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action } = body;
 
+    // [신규] 0-1. 신규 변호사시험 회차 개설
+    if (action === "CREATE_EXAM") {
+      const {
+        roundNumber,
+        title,
+        phase1Start,
+        phase1End,
+        phase2Start,
+        phase2End,
+        phase1PdfUrl,
+        phase2Doc1PdfUrl,
+        phase2Doc2PdfUrl,
+        status = "SCHEDULED",
+        broadcastNotice = true,
+      } = body;
+
+      const round = Number(roundNumber);
+      if (!round || !title?.trim() || !phase1Start || !phase1End || !phase2Start || !phase2End) {
+        return NextResponse.json(
+          { error: "회차 번호, 시험 명칭, 1차 및 2차 시험 일시를 모두 입력해 주세요." },
+          { status: 400 },
+        );
+      }
+
+      // 회차 중복 검사
+      const dupCheck = await db.execute({
+        sql: "SELECT id FROM exams WHERE round_number = ?",
+        args: [round],
+      });
+      if (dupCheck.rows.length > 0) {
+        return NextResponse.json(
+          { error: `이미 제${round}회 시험이 등록되어 있습니다.` },
+          { status: 400 },
+        );
+      }
+
+      const examId = `exam-${round}-${Date.now()}`;
+      
+      // 기본 10문항 템플릿 생성
+      const defaultQuestions = Array.from({ length: 10 }, (_, i) => ({
+        num: i + 1,
+        subject: ["공법", "형사법", "민사법", "소송법", "법조윤리"][i % 5],
+        title: `제${round}회 변호사시험 제${i + 1}문 (문항을 편집해 주세요)`,
+        choices: [
+          "보기 1번 지문을 입력하세요.",
+          "보기 2번 지문을 입력하세요.",
+          "보기 3번 지문을 입력하세요.",
+          "보기 4번 지문을 입력하세요.",
+          "보기 5번 지문을 입력하세요.",
+        ],
+        answer: 1,
+        altAnswers: [],
+        explanation: "",
+      }));
+
+      await db.execute({
+        sql: `INSERT INTO exams 
+              (id, round_number, title, phase1_start, phase1_end, phase2_start, phase2_end, phase1_questions, phase1_pdf_url, phase2_doc1_pdf_url, phase2_doc2_pdf_url, status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          examId,
+          round,
+          title.trim(),
+          phase1Start,
+          phase1End,
+          phase2Start,
+          phase2End,
+          JSON.stringify(defaultQuestions),
+          phase1PdfUrl || "",
+          phase2Doc1PdfUrl || "",
+          phase2Doc2PdfUrl || "",
+          status,
+        ],
+      });
+
+      if (broadcastNotice) {
+        await sendDiscordWebhook("EXAM", {
+          content: `@everyone 📝 **[시험 공고] ${title} 일정이 개설되었습니다.**`,
+          embeds: [
+            {
+              title: `⚖️ ${title} 시행 계획 공고`,
+              description: `도스변호사시험관리위원회에서 제${round}회 변호사시험 시행 일정을 확정 공고합니다.`,
+              color: 0x4f46e5,
+              fields: [
+                { name: "1차 CBT 필기", value: `${phase1Start} ~ ${phase1End}`, inline: false },
+                { name: "2차 서술형", value: `${phase2Start} ~ ${phase2End}`, inline: false },
+                { name: "현재 상태", value: status, inline: true },
+              ],
+              footer: { text: "도스변호사협회 변호사시험관리위원회" },
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        examId,
+        message: `제${round}회 변호사시험(${title})이 성공적으로 개설되었습니다.`,
+      });
+    }
+
+    // [신규] 0-2. 시험 기본 정보 및 상태 갱신
+    if (action === "UPDATE_EXAM_SCHEDULE") {
+      const {
+        examId,
+        title,
+        phase1Start,
+        phase1End,
+        phase2Start,
+        phase2End,
+        status,
+        phase1PdfUrl,
+        phase2Doc1PdfUrl,
+        phase2Doc2PdfUrl,
+      } = body;
+
+      if (!examId) {
+        return NextResponse.json({ error: "examId가 필요합니다." }, { status: 400 });
+      }
+
+      await db.execute({
+        sql: `UPDATE exams 
+              SET title = COALESCE(?, title),
+                  phase1_start = COALESCE(?, phase1_start),
+                  phase1_end = COALESCE(?, phase1_end),
+                  phase2_start = COALESCE(?, phase2_start),
+                  phase2_end = COALESCE(?, phase2_end),
+                  status = COALESCE(?, status),
+                  phase1_pdf_url = COALESCE(?, phase1_pdf_url),
+                  phase2_doc1_pdf_url = COALESCE(?, phase2_doc1_pdf_url),
+                  phase2_doc2_pdf_url = COALESCE(?, phase2_doc2_pdf_url)
+              WHERE id = ?`,
+        args: [
+          title || null,
+          phase1Start || null,
+          phase1End || null,
+          phase2Start || null,
+          phase2End || null,
+          status || null,
+          phase1PdfUrl !== undefined ? phase1PdfUrl : null,
+          phase2Doc1PdfUrl !== undefined ? phase2Doc1PdfUrl : null,
+          phase2Doc2PdfUrl !== undefined ? phase2Doc2PdfUrl : null,
+          examId,
+        ],
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "시험 정보 및 진행 상태가 성공적으로 갱신되었습니다.",
+      });
+    }
+
     // 0. 관리자 발급 수험번호 생성
     if (action === "ISSUE_CANDIDATE_CODES") {
       const { examId, count } = body;
