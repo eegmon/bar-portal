@@ -69,16 +69,60 @@ export async function getBotConfig() {
 }
 
 /**
+ * 디스코드 유저 ID 해석 (숫자 ID, 멘션 태그, 또는 닉네임/사용자명 자동 검색)
+ */
+export async function resolveDiscordUserId(discordInput: string): Promise<string | null> {
+  if (!discordInput) return null;
+  const trimmed = discordInput.trim();
+
+  // 1. 순수 17~20자리 숫자 ID인 경우
+  if (/^\d{17,20}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // 2. <@123456789012345678> 멘션 포맷인 경우
+  const mentionMatch = trimmed.match(/\d{17,20}/);
+  if (mentionMatch) {
+    return mentionMatch[0];
+  }
+
+  // 3. 닉네임/사용자명 문자열인 경우 서버 멤버 검색 API로 ID 자동 조회
+  const { token, guildId } = await getBotConfig();
+  if (!token || !guildId) return null;
+
+  try {
+    const res = await fetch(
+      `https://discord.com/api/v10/guilds/${guildId}/members/search?query=${encodeURIComponent(trimmed)}&limit=1`,
+      {
+        headers: {
+          Authorization: `Bot ${token}`,
+        },
+      }
+    );
+    if (res.ok) {
+      const members = await res.json();
+      if (Array.isArray(members) && members.length > 0 && members[0]?.user?.id) {
+        return members[0].user.id;
+      }
+    }
+  } catch (err) {
+    console.warn("[Discord Bot] 유저 검색 오류:", err);
+  }
+
+  return null;
+}
+
+/**
  * 디스코드 봇을 통한 유저 역할(Role) 추가
  */
 export async function addDiscordRole(discordUserId: string, roleId: string): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
-  // 숫자만 추출 (만약 닉네임이나 형식이 섞여 있는 경우 정제)
-  const cleanUserId = discordUserId.replace(/[^0-9]/g, "");
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
+  if (!cleanRoleId) return false;
 
-  if (!cleanUserId || !cleanRoleId) {
-    console.warn(`[Discord Bot] 유효하지 않은 유저ID(${discordUserId}) 또는 역할ID(${roleId})`);
+  const resolvedUserId = await resolveDiscordUserId(discordUserId);
+  if (!resolvedUserId) {
+    console.warn(`[Discord Bot] 유효한 유저 ID를 찾을 수 없습니다: ${discordUserId}`);
     return false;
   }
 
@@ -90,7 +134,7 @@ export async function addDiscordRole(discordUserId: string, roleId: string): Pro
 
   try {
     const res = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${cleanUserId}/roles/${cleanRoleId}`,
+      `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
       {
         method: "PUT",
         headers: {
@@ -116,17 +160,18 @@ export async function addDiscordRole(discordUserId: string, roleId: string): Pro
  */
 export async function removeDiscordRole(discordUserId: string, roleId: string): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
-  const cleanUserId = discordUserId.replace(/[^0-9]/g, "");
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
+  if (!cleanRoleId) return false;
 
-  if (!cleanUserId || !cleanRoleId) return false;
+  const resolvedUserId = await resolveDiscordUserId(discordUserId);
+  if (!resolvedUserId) return false;
 
   const { token, guildId } = await getBotConfig();
   if (!token || !guildId) return false;
 
   try {
     const res = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${cleanUserId}/roles/${cleanRoleId}`,
+      `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
       {
         method: "DELETE",
         headers: {

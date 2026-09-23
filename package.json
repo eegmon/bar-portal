@@ -7,6 +7,7 @@
     "dev": "next dev",
     "prestart": "node migrate-assembly-agendas.mjs",
     "create-admin": "node create-admin.mjs",
+    "migrate-all": "node init-db.mjs && node migrate-settings.mjs && node migrate-positions.mjs && node migrate-assembly-agendas.mjs && node migrate-rules.mjs && node create-admin.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

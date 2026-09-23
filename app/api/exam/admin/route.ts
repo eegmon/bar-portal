@@ -192,39 +192,39 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, totalScore, passed });
     }
 
-    // 4. 최종 합격자 명단 디스코드 공고 릴리즈
-    if (action === "RELEASE_PASSERS") {
+    // 4. 최종 합격자 명단 공개 발표 (포털 + 디스코드)
+    if (action === "RELEASE_RESULTS") {
       const { examId } = body;
+      if (!examId) return NextResponse.json({ error: "examId가 필요합니다." }, { status: 400 });
+
+      const examRes = await db.execute({ sql: "SELECT * FROM exams WHERE id = ?", args: [examId] });
+      if (examRes.rows.length === 0) return NextResponse.json({ error: "시험을 찾을 수 없습니다." }, { status: 404 });
+      const exam = examRes.rows[0];
+
       const passersRes = await db.execute({
         sql: "SELECT security_code, total_score FROM exam_submissions WHERE exam_id = ? AND final_passed = 1 ORDER BY total_score DESC",
         args: [examId],
       });
 
+      // 시험 상태를 FINISHED로 변경
+      await db.execute({ sql: "UPDATE exams SET status = 'FINISHED' WHERE id = ?", args: [examId] });
+
       const passerList = passersRes.rows
-        .map(
-          (r, idx) =>
-            `${idx + 1}등: \`#${r.security_code}\` (${r.total_score}점)`,
-        )
+        .map((r, idx) => `${idx + 1}위: \`#${r.security_code}\` — **${r.total_score}점**`)
         .join("\n");
 
       await sendDiscordWebhook("NOTICE", {
-        content:
-          "@everyone **[합격자 공고] 2026년도 도스변호사시험 최종 합격자 발표**",
-        embeds: [
-          {
-            title: "🎉 제18회 도스변호사시험 최종 합격자 명단",
-            description: passerList || "합격자가 없습니다.",
-            color: 0x10b981,
-            footer: { text: "도스변호사협회 변호사시험관리위원회" },
-            timestamp: new Date().toISOString(),
-          },
-        ],
+        content: "@everyone 🎉 **[공식 합격자 발표] 도스변호사시험 최종 합격자 명단**",
+        embeds: [{
+          title: `🏆 ${exam.title} 최종 합격자 명단 (총 ${passersRes.rows.length}명)`,
+          description: passerList || "합격자가 없습니다.",
+          color: 0x10B981,
+          footer: { text: "도스변호사협회 변호사시험관리위원회 · 합격자 실명은 /exam/my-score 에서 확인" },
+          timestamp: new Date().toISOString(),
+        }],
       });
 
-      return NextResponse.json({
-        success: true,
-        count: passersRes.rows.length,
-      });
+      return NextResponse.json({ success: true, count: passersRes.rows.length, message: `합격자 ${passersRes.rows.length}명이 공식 발표되었습니다.` });
     }
 
     return NextResponse.json(

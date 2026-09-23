@@ -44,21 +44,28 @@ export default function Navbar({ user }: NavbarProps) {
               className="px-3 py-2 rounded-md hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1.5"
             >
               <Scale className="w-4 h-4 text-amber-500" />
-              변호사·법무법인
+              변호사 명부
+            </Link>
+            <Link
+              href="/firms"
+              className="px-3 py-2 rounded-md hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+            >
+              <Scale className="w-4 h-4 text-amber-400" />
+              법무법인
             </Link>
             <Link
               href="/exam"
               className="px-3 py-2 rounded-md hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1.5"
             >
               <FileText className="w-4 h-4 text-blue-400" />
-              변호사시험 (CBT)
+              변호사시험
             </Link>
             <Link
               href="/assembly"
               className="px-3 py-2 rounded-md hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1.5"
             >
               <Vote className="w-4 h-4 text-emerald-400" />
-              총회 & 전자투표
+              총회 & 투표
             </Link>
             <Link
               href="/discipline"
@@ -66,6 +73,13 @@ export default function Navbar({ user }: NavbarProps) {
             >
               <ShieldCheck className="w-4 h-4 text-red-400" />
               징계·공시
+            </Link>
+            <Link
+              href="/rules"
+              className="px-3 py-2 rounded-md hover:text-white hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+            >
+              <FileText className="w-4 h-4 text-purple-400" />
+              회칙·규정집
             </Link>
 
             {/* 관리 권한 보유 시 관리자 패널 링크 노출 */}

@@ -121,7 +121,9 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">디스코드 닉네임 / ID (선택)</label>
+          <label className="block text-xs font-semibold text-slate-300 mb-1">
+            디스코드 사용자명 / 고유 ID (선택)
+          </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
               <MessageSquare className="w-4 h-4" />
@@ -130,10 +132,13 @@ export default function RegisterPage() {
               type="text"
               value={discordId}
               onChange={(e) => setDiscordId(e.target.value)}
-              placeholder="예: gildong_01 (역할 자동 동기화용)"
+              placeholder="예: gildong_01 또는 18자리 숫자 ID (역할 자동 동기화용)"
               className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
             />
           </div>
+          <p className="text-[10px] text-slate-500 mt-1">
+            * 디스코드 사용자명(gildong) 또는 고유 숫자 ID(18자리) 중 편한 것을 입력하시면 서버에서 자동 인식합니다.
+          </p>
         </div>
 
         {/* 변호사 자격 등록 신청 여부 */}

@@ -74,6 +74,27 @@ export default function ExamAdminClient({
   const [isGrading, setIsGrading] = useState<string | null>(null);
   const [isReleasing, setIsReleasing] = useState(false);
 
+  // 최종 합격자 공개 발표
+  const handleReleaseResults = async () => {
+    if (!confirm(`"${exam.title}" 최종 합격자 명단을 포털과 디스코드에 공식 발표하시겠습니까?\n\n이 작업은 취소할 수 없습니다.`)) return;
+    setIsReleasing(true);
+    try {
+      const res = await fetch("/api/exam/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "RELEASE_RESULTS", examId: exam.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "발표 실패");
+      alert(`🎉 ${data.message}\n합격자 명단은 /exam/results 에서 공개됩니다.`);
+      window.location.reload();
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsReleasing(false);
+    }
+  };
+
   // 1. 실시간 문제 정정 방송
   const handleBroadcastErrata = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -836,6 +857,36 @@ export default function ExamAdminClient({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* 최종 합격자 공개 발표 버튼 */}
+          {submissions.length > 0 && exam.status !== "FINISHED" && (
+            <div className="mt-6 pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl">
+              <div>
+                <div className="text-sm font-bold text-emerald-300 flex items-center gap-2">
+                  <Award className="w-5 h-5" />
+                  최종 합격자 공개 발표
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  모든 채점 완료 후 클릭하면 포털 /exam/results 에 합격자 명단이 공개되고 디스코드로 공식 발표됩니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isReleasing}
+                onClick={handleReleaseResults}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition-colors flex items-center gap-2 shrink-0"
+              >
+                <Award className="w-4 h-4" />
+                {isReleasing ? "발표중..." : "최종 합격자 명단 공개 발표"}
+              </button>
+            </div>
+          )}
+          {exam.status === "FINISHED" && (
+            <div className="mt-4 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4" />
+              합격자 명단이 공개 발표되었습니다. (/exam/results 에서 확인)
             </div>
           )}
         </div>
