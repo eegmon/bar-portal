@@ -370,13 +370,13 @@ export default function AdminClient({
   };
 
   // 웹훅 테스트 발송
-  const handleTestWebhook = async (type: string) => {
+  const handleTestWebhook = async (type: string, webhookUrl?: string) => {
     setTestingWebhook(type);
     try {
       const res = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "TEST_WEBHOOK", testType: type }),
+        body: JSON.stringify({ action: "TEST_WEBHOOK", testType: type, webhookUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "테스트 발송 실패");
@@ -2209,7 +2209,10 @@ export default function AdminClient({
                 label: "사무국 관리자 웹훅 (ADMIN)",
                 desc: "신규 가입 신청, 설정 갱신 로그, 시험 출제 갱신",
               },
-            ].map((item) => (
+            ].map((item) => {
+              const testType = item.key.replace("webhook_", "").toUpperCase();
+              const isTesting = testingWebhook === testType;
+              return (
               <div
                 key={item.key}
                 className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2"
@@ -2223,16 +2226,12 @@ export default function AdminClient({
                   </div>
                   <button
                     type="button"
-                    disabled={testingWebhook === item.key}
-                    onClick={() =>
-                      handleTestWebhook(
-                        item.key.replace("webhook_", "").toUpperCase(),
-                      )
-                    }
-                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-blue-400 text-[11px] font-semibold rounded-lg border border-slate-700 flex items-center gap-1"
+                    disabled={isTesting}
+                    onClick={() => handleTestWebhook(testType, settings[item.key] || "")}
+                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-blue-400 text-[11px] font-semibold rounded-lg border border-slate-700 flex items-center gap-1 disabled:opacity-50"
                   >
                     <Send className="w-3 h-3" />
-                    {testingWebhook === item.key ? "전송중..." : "테스트 발송"}
+                    {isTesting ? "전송중..." : "테스트 발송"}
                   </button>
                 </div>
                 <input
@@ -2245,7 +2244,8 @@ export default function AdminClient({
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* 디스코드 봇 & 역할 자동지급 ID 설정 */}

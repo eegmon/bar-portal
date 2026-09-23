@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { action, settings, testType, popup, broadcastNotice } = body;
+    const { action, settings, testType, popup, broadcastNotice, webhookUrl } = body;
 
     // 1. 공지 팝업 전용 저장 액션
     if (action === "SAVE_POPUP") {
@@ -137,16 +137,43 @@ export async function POST(req: Request) {
     // 2. 테스트 웹훅 발송 액션
     if (action === "TEST_WEBHOOK") {
       const type = (testType || "ADMIN") as any;
-      await sendDiscordWebhook(type, {
-        embeds: [
-          {
-            title: `🔔 [테스트 발송] 디스코드 웹훅 연동 정상 (${type})`,
-            description: `관리자 **${user.name}** 님이 웹훅 테스트를 요청하였습니다.\n도스변호사협회 시스템과 디스코드 채널이 정상적으로 연동되어 있습니다.`,
-            color: 0x10B981,
-            timestamp: new Date().toISOString(),
-          },
-        ],
+
+      // 직접 전달된 URL이 있으면 그것을 사용, 없으면 DB/환경변수에서 조회
+      let url: string = webhookUrl || "";
+      if (!url) {
+        const { getWebhookUrl } = await import("@/lib/discord");
+        url = await getWebhookUrl(type);
+      }
+      if (!url) {
+        return NextResponse.json(
+          { error: `[${type}] 웹훅 URL이 입력되지 않았습니다. 먼저 URL을 입력하고 저장해주세요.` },
+          { status: 400 }
+        );
+      }
+
+      const testRes = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          embeds: [
+            {
+              title: `🔔 [테스트 발송] 디스코드 웹훅 연동 정상 (${type})`,
+              description: `관리자 **${user.name}** 님이 웹훅 테스트를 요청하였습니다.\n도스변호사협회 시스템과 디스코드 채널이 정상적으로 연동되어 있습니다.`,
+              color: 0x10B981,
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        }),
       });
+
+      if (!testRes.ok) {
+        const errText = await testRes.text();
+        return NextResponse.json(
+          { error: `디스코드 웹훅 전송 실패 (HTTP ${testRes.status}): ${errText}` },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json({ success: true, message: `${type} 채널로 테스트 웹훅이 발송되었습니다.` });
     }
 
