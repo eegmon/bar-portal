@@ -1,5 +1,18 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Initial administrator
+
+No default administrator account is created. Provision the first administrator explicitly with environment variables:
+
+```powershell
+$env:INITIAL_ADMIN_LOGIN="admin-office"
+$env:INITIAL_ADMIN_PASSWORD="use-a-unique-password-at-least-12-chars"
+$env:INITIAL_ADMIN_NAME="협회 사무국 관리자"
+npm run create-admin
+```
+
+Do not commit these values or put them in the source tree.
+
 ## Getting Started
 
 First, run the development server:
