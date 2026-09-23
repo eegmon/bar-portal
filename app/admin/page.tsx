@@ -58,6 +58,43 @@ export default async function AdminDashboardPage() {
     console.error("Admin users fetch error:", err);
   }
 
+  // 2.5 법무법인 현황 및 의결권 조회 (구성원 변호사 2인당 1표, 1인 0표)
+  let firms: any[] = [];
+  let pendingFirms: any[] = [];
+  try {
+    const fRes = await db.execute({
+      sql: `SELECT f.*, u.name AS rep_name, u.login_id AS rep_login_id
+            FROM law_firms f
+            LEFT JOIN users u ON f.representative_id = u.id
+            ORDER BY f.created_at DESC`,
+      args: [],
+    });
+    const allFirms = await Promise.all(
+      (fRes.rows as any[]).map(async (firm) => {
+        const countRes = await db.execute({
+          sql: `SELECT 
+                  COUNT(*) AS total_cnt,
+                  SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_cnt
+                FROM firm_members WHERE firm_id = ?`,
+          args: [firm.id],
+        });
+        const memberCount = Number(countRes.rows[0]?.total_cnt ?? 0);
+        const partnerCount = Number(countRes.rows[0]?.partner_cnt ?? 0);
+        const votingPower = Math.floor(partnerCount / 2);
+        return {
+          ...firm,
+          member_count: memberCount,
+          partner_count: partnerCount,
+          voting_power: votingPower,
+        };
+      })
+    );
+    firms = allFirms.filter((f) => f.status === "APPROVED");
+    pendingFirms = allFirms.filter((f) => f.status === "PENDING");
+  } catch (err) {
+    console.error("Admin firms fetch error:", err);
+  }
+
   // 3. 총회 및 안건 데이터 조회
   let assemblies: any[] = [];
   let agendas: any[] = [];
@@ -75,10 +112,11 @@ export default async function AdminDashboardPage() {
     );
     agendas = agRes.rows;
     const attRes = await db.execute(`
-      SELECT aa.*, u.name as grantor_name, p.name as proxy_name
+      SELECT aa.*, u.name as grantor_name, p.name as proxy_name, f.name as firm_name
       FROM assembly_attendances aa
       LEFT JOIN users u ON u.id = aa.user_id
       LEFT JOIN users p ON p.id = aa.proxy_to_user_id
+      LEFT JOIN law_firms f ON f.id = aa.firm_id
       ORDER BY aa.created_at DESC
     `);
     attendances = attRes.rows;
@@ -117,6 +155,7 @@ export default async function AdminDashboardPage() {
   const permissions = {
     canSettings: canManageSettings(user),
     canUsers: canManageUsers(user),
+    canFirms: canManageUsers(user),
     canAssembly: canManageAssembly(user),
     canExam: canManageExam(user),
     canDiscipline: canManageDiscipline(user),
@@ -257,6 +296,8 @@ export default async function AdminDashboardPage() {
           popup_updated_at: settingsMap["popup_updated_at"] || "",
         }}
         initialUsers={users}
+        initialFirms={firms}
+        initialPendingFirms={pendingFirms}
         initialAssemblies={assemblies}
         initialAgendas={agendas}
         initialAttendances={attendances}
@@ -268,6 +309,8 @@ export default async function AdminDashboardPage() {
             (u) => u.role === "LAWYER" && u.status === "ACTIVE",
           ).length,
           pendingUsers: users.filter((u) => u.status === "PENDING").length,
+          totalFirms: firms.length,
+          pendingFirms: pendingFirms.length,
           totalAssemblies: assemblies.length,
           totalExams: exams.length,
           totalSubmissions: submissionsCount,

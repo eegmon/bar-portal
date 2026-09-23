@@ -27,6 +27,7 @@ import {
   ArrowUp,
   ArrowDown,
   Trash2,
+  Building,
 } from "lucide-react";
 import Link from "next/link";
 import { OFFICER_POSITIONS, SessionUser } from "@/lib/types";
@@ -36,12 +37,15 @@ interface AdminClientProps {
   permissions: {
     canSettings: boolean;
     canUsers: boolean;
+    canFirms?: boolean;
     canAssembly: boolean;
     canExam: boolean;
     canDiscipline: boolean;
   };
   initialSettings: Record<string, string>;
   initialUsers: any[];
+  initialFirms?: any[];
+  initialPendingFirms?: any[];
   initialAssemblies: any[];
   initialAgendas: any[];
   initialAttendances: any[];
@@ -51,6 +55,8 @@ interface AdminClientProps {
     totalUsers: number;
     activeLawyers: number;
     pendingUsers: number;
+    totalFirms?: number;
+    pendingFirms?: number;
     totalAssemblies: number;
     totalExams: number;
     totalSubmissions: number;
@@ -62,6 +68,8 @@ export default function AdminClient({
   permissions,
   initialSettings,
   initialUsers,
+  initialFirms = [],
+  initialPendingFirms = [],
   initialAssemblies,
   initialAgendas,
   initialAttendances,
@@ -69,6 +77,8 @@ export default function AdminClient({
   initialAuditLogs,
   stats,
 }: AdminClientProps) {
+  const isSuperAdmin = currentUser?.role === "ADMIN";
+
   // 사용 가능한 첫 번째 탭 기본 선택 (URL ?tab= 파라미터 우선 반영)
   const defaultTab = permissions.canUsers
     ? "users"
@@ -83,7 +93,7 @@ export default function AdminClient({
       const tabParam = new URLSearchParams(window.location.search).get("tab");
       if (
         tabParam &&
-        ["users", "assembly", "settings", "overview"].includes(tabParam)
+        ["users", "firms", "assembly", "settings", "overview"].includes(tabParam)
       ) {
         return tabParam;
       }
@@ -129,8 +139,15 @@ export default function AdminClient({
     officeName: "",
     positions: [] as string[],
     phone: "",
+    bio: "",
     barExamRound: "",
   });
+
+  // 1.5 법무법인 현황 및 의결권 상태
+  const [firms, setFirms] = useState<any[]>(initialFirms);
+  const [pendingFirms, setPendingFirms] = useState<any[]>(initialPendingFirms);
+  const [firmSearchQuery, setFirmSearchQuery] = useState("");
+  const [isProcessingFirm, setIsProcessingFirm] = useState(false);
 
   // 2. 설정 상태
   const [settings, setSettings] =
@@ -346,6 +363,16 @@ export default function AdminClient({
     }));
   };
 
+  // 안전한 임시 비밀번호 자동 생성
+  const generateRandomPassword = () => {
+    const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$";
+    let pwd = "";
+    for (let i = 0; i < 10; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCreateForm((prev) => ({ ...prev, password: pwd }));
+  };
+
   // 회원 직권 생성 처리
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -370,6 +397,7 @@ export default function AdminClient({
           officeName: createForm.officeName.trim(),
           positions: createForm.positions,
           phone: createForm.phone.trim(),
+          bio: createForm.bio.trim(),
           barExamRound: createForm.barExamRound ? Number(createForm.barExamRound) : null,
         }),
       });
@@ -392,12 +420,59 @@ export default function AdminClient({
         officeName: "",
         positions: [],
         phone: "",
+        bio: "",
         barExamRound: "",
       });
     } catch (err: any) {
       alert(`오류: ${err.message}`);
     } finally {
       setIsCreatingUser(false);
+    }
+  };
+
+  // 법인 등록 신청 승인 처리
+  const handleApproveFirm = async (firmId: string) => {
+    if (!confirm("이 법인 등록 신청을 승인하시겠습니까?")) return;
+    setIsProcessingFirm(true);
+    try {
+      const res = await fetch("/api/firms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE_FIRM", firmId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert("✅ 법인 등록이 공식 승인되었습니다.");
+      const approved = pendingFirms.find((f) => f.id === firmId);
+      if (approved) {
+        setPendingFirms((prev) => prev.filter((f) => f.id !== firmId));
+        setFirms((prev) => [{ ...approved, status: "APPROVED" }, ...prev]);
+      }
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsProcessingFirm(false);
+    }
+  };
+
+  // 법인 등록 신청 반려 처리
+  const handleRejectFirm = async (firmId: string) => {
+    if (!confirm("이 법인 등록 신청을 반려하시겠습니까?")) return;
+    setIsProcessingFirm(true);
+    try {
+      const res = await fetch("/api/firms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REJECT_FIRM", firmId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert("법인 등록 신청이 반려되었습니다.");
+      setPendingFirms((prev) => prev.filter((f) => f.id !== firmId));
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsProcessingFirm(false);
     }
   };
 
@@ -1099,6 +1174,25 @@ export default function AdminClient({
           </button>
         )}
 
+        {(permissions.canFirms || permissions.canUsers) && (
+          <button
+            onClick={() => setActiveTab("firms")}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+              activeTab === "firms"
+                ? "bg-amber-600 text-white shadow-md"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Building className="w-4 h-4" />
+            법무법인 관리 ({firms.length}개)
+            {pendingFirms.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px] animate-pulse">
+                {pendingFirms.length}
+              </span>
+            )}
+          </button>
+        )}
+
         {permissions.canAssembly && (
           <button
             onClick={() => setActiveTab("assembly")}
@@ -1265,6 +1359,14 @@ export default function AdminClient({
                           <div className="text-[11px] text-slate-500">
                             {u.login_id}
                           </div>
+                          {u.bio && (
+                            <div
+                              className="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 mt-1 max-w-[220px] truncate"
+                              title={`자격 취득 근거/증빙: ${u.bio}`}
+                            >
+                              📜 {u.bio}
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3 px-3 font-mono text-[11px] text-slate-400">
@@ -1444,7 +1546,9 @@ export default function AdminClient({
                     <option value="TRAINEE">견습변호사 (TRAINEE)</option>
                     <option value="LAWYER">정회원 변호사 (LAWYER)</option>
                     <option value="PROSECUTOR">검찰총장 (PROSECUTOR)</option>
-                    <option value="ADMIN">시스템 총괄 관리자 (ADMIN)</option>
+                    {isSuperAdmin && (
+                      <option value="ADMIN">시스템 총괄 관리자 (ADMIN)</option>
+                    )}
                   </select>
                 </div>
 
@@ -1629,13 +1733,23 @@ export default function AdminClient({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">
-                    초기 비밀번호 <span className="text-rose-400">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-300 font-bold">
+                      초기 비밀번호 <span className="text-rose-400">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={generateRandomPassword}
+                      className="text-[10px] text-amber-400 hover:underline"
+                    >
+                      랜덤 생성
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
-                    placeholder="초기 비밀번호"
+                    minLength={6}
+                    placeholder="초기 비밀번호 (최소 6자)"
                     value={createForm.password}
                     onChange={(e) =>
                       setCreateForm({ ...createForm, password: e.target.value })
@@ -1677,7 +1791,9 @@ export default function AdminClient({
                     <option value="TRAINEE">견습변호사 (TRAINEE)</option>
                     <option value="CITIZEN">일반 시민 / 수험생 (CITIZEN)</option>
                     <option value="PROSECUTOR">검찰총장 (PROSECUTOR)</option>
-                    <option value="ADMIN">시스템 총괄 관리자 (ADMIN)</option>
+                    {isSuperAdmin && (
+                      <option value="ADMIN">시스템 총괄 관리자 (ADMIN)</option>
+                    )}
                   </select>
                 </div>
 
@@ -1701,14 +1817,14 @@ export default function AdminClient({
 
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">
-                    시험 기수 (선택)
+                    자격 근거 또는 증빙사항 (선택)
                   </label>
                   <input
-                    type="number"
-                    placeholder="예: 1"
-                    value={createForm.barExamRound}
+                    type="text"
+                    placeholder="예: 제1회 변시 합격 / 이전 활동 이력 / 판결문 등"
+                    value={createForm.bio}
                     onChange={(e) =>
-                      setCreateForm({ ...createForm, barExamRound: e.target.value })
+                      setCreateForm({ ...createForm, bio: e.target.value })
                     }
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
                   />
@@ -1830,6 +1946,242 @@ export default function AdminClient({
       )}
 
       {/* ========================================================================= */}
+      {/* 탭 1.5: 법무법인 현황 및 의결권 관리 */}
+      {/* ========================================================================= */}
+      {activeTab === "firms" && (permissions.canFirms || permissions.canUsers) && (
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Building className="w-5 h-5 text-amber-400" />
+                법무법인 및 합동법률사무소 관리 (총회 의결권)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                등록 신청된 법무법인을 심사·승인하고, 회칙에 의거한 <strong>구성원 변호사 2명당 1표(1명 0표)</strong> 의결권 산정 현황을 총괄 관리합니다.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                href="/firms"
+                target="_blank"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                법인 포털 페이지 바로가기
+              </Link>
+            </div>
+          </div>
+
+          {/* 법인 의결권 통계 요약 카드 3종 */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
+              <div className="text-xs font-semibold text-slate-400">정상 등록 법인</div>
+              <div className="text-2xl font-extrabold text-white mt-1">
+                {firms.length}개소
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">관리자 정식 승인 완료</div>
+            </div>
+
+            <div className="p-4 bg-slate-950 border border-amber-500/20 rounded-xl">
+              <div className="text-xs font-semibold text-amber-400">법인회원 총 의결권 산출 합계</div>
+              <div className="text-2xl font-extrabold text-amber-300 mt-1">
+                {firms.reduce((acc, f) => acc + (f.voting_power || 0), 0)}표
+              </div>
+              <div className="text-[11px] text-amber-400/70 mt-0.5">
+                구성원 변호사 2인당 1표 기준 (1인 0표)
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
+              <div className="text-xs font-semibold text-slate-400">승인 심사 대기</div>
+              <div className="text-2xl font-extrabold text-rose-400 mt-1">
+                {pendingFirms.length}건
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">신규 등록 신청 접수분</div>
+            </div>
+          </div>
+
+          {/* 승인 심사 대기 법인 섹션 */}
+          {pendingFirms.length > 0 && (
+            <div className="p-5 bg-amber-500/5 border border-amber-500/30 rounded-2xl space-y-3">
+              <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                신규 법무법인 등록 승인 대기 목록 ({pendingFirms.length}건)
+              </h3>
+              <div className="space-y-3">
+                {pendingFirms.map((pf) => (
+                  <div
+                    key={pf.id}
+                    className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-4"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-bold">
+                          {pf.type}
+                        </span>
+                        {pf.is_notary ? (
+                          <span className="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded font-bold">
+                            공증인가
+                          </span>
+                        ) : null}
+                        <span className="text-[10px] text-slate-500">
+                          신청일: {pf.created_at ? new Date(pf.created_at).toLocaleDateString() : "-"}
+                        </span>
+                      </div>
+                      <h4 className="text-base font-bold text-white">{pf.name}</h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        대표: <strong className="text-slate-200">{pf.rep_name || "미지정"}</strong> ({pf.rep_login_id || ""}) · 주소: {pf.address || "미기재"} · 연락처: {pf.contact || "미기재"}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isProcessingFirm}
+                        onClick={() => handleApproveFirm(pf.id)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        승인
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isProcessingFirm}
+                        onClick={() => handleRejectFirm(pf.id)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        반려
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 등록된 법무법인 검색 & 목록 */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Building className="w-4 h-4 text-amber-400" />
+                등록 법무법인 명부 및 의결권 현황
+              </h3>
+
+              <div className="flex items-center gap-2 w-full sm:w-64 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+                <Search className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="법인명 또는 주소 검색..."
+                  value={firmSearchQuery}
+                  onChange={(e) => setFirmSearchQuery(e.target.value)}
+                  className="bg-transparent border-none outline-none w-full text-xs placeholder-slate-500"
+                />
+              </div>
+            </div>
+
+            {firms.filter((f) =>
+              f.name.toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
+              (f.address || "").toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
+              (f.rep_name || "").toLowerCase().includes(firmSearchQuery.toLowerCase())
+            ).length === 0 ? (
+              <div className="p-8 bg-slate-950 border border-slate-800 rounded-xl text-center text-slate-400 text-xs">
+                등록된 법무법인이 없습니다.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold">
+                    <tr>
+                      <th className="p-3">법인명 / 구분</th>
+                      <th className="p-3">대표변호사</th>
+                      <th className="p-3">소재지 / 연락처</th>
+                      <th className="p-3 text-center">총 소속인원</th>
+                      <th className="p-3 text-center">구성원(파트너) 수</th>
+                      <th className="p-3 text-center">총회 의결권</th>
+                      <th className="p-3 text-right">상태</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 bg-slate-900/50">
+                    {firms
+                      .filter((f) =>
+                        f.name.toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
+                        (f.address || "").toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
+                        (f.rep_name || "").toLowerCase().includes(firmSearchQuery.toLowerCase())
+                      )
+                      .map((firm) => (
+                        <tr key={firm.id} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="p-3">
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              {firm.name}
+                              {firm.is_notary ? (
+                                <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px]">
+                                  공증
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="text-[11px] text-slate-500">{firm.type}</div>
+                          </td>
+                          <td className="p-3">
+                            <span className="font-semibold text-slate-200">{firm.rep_name || "미지정"}</span>
+                            {firm.rep_login_id && (
+                              <span className="text-[10px] text-slate-500 block">({firm.rep_login_id})</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <div className="text-slate-300 truncate max-w-xs">{firm.address || "미기재"}</div>
+                            <div className="text-[10px] text-slate-500">{firm.contact || "-"}</div>
+                          </td>
+                          <td className="p-3 text-center font-medium">
+                            {firm.member_count || 0}명
+                          </td>
+                          <td className="p-3 text-center font-bold text-amber-300">
+                            {firm.partner_count || 0}명
+                          </td>
+                          <td className="p-3 text-center">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${
+                                (firm.voting_power || 0) > 0
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                  : "bg-slate-800 text-slate-500 border-slate-700"
+                              }`}
+                            >
+                              {firm.voting_power || 0}표
+                            </span>
+                            {(firm.partner_count || 0) === 1 && (
+                              <span className="block text-[10px] text-slate-500 mt-0.5">
+                                (1인: 0표)
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3 text-right">
+                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                              정상 등록
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* 안내 규정 */}
+          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-400">
+            <h4 className="font-bold text-amber-400 flex items-center gap-1.5">
+              <Scale className="w-4 h-4" />
+              회칙 제14조 법인회원 의결권 규정 안내
+            </h4>
+            <p>• <strong>의결권 산정:</strong> 등록된 <strong>구성원 변호사(파트너) 2명당 1표</strong>가 부여됩니다. 구성원 변호사가 1명인 법인은 의결권이 0표입니다.</p>
+            <p>• <strong>소속 변호사(Associate):</strong> 고용된 소속 변호사는 법인 의결권 모수에 포함되지 않으며, 변호사 개인회원으로서의 1표를 별도로 행사합니다.</p>
+            <p>• <strong>의결권 행사:</strong> 법인회원의 의결권은 <strong>구성원 회의(만장일치 결의)</strong>를 거쳐 의장에게 서면 통지하거나, 개인회원(대표변호사 본인 또는 수임 변호사)에게 위임하여 행사합니다.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 탭 2: 정기/임시 총회 일정 & 안건 관리 */}
       {/* ========================================================================= */}
       {activeTab === "assembly" && permissions.canAssembly && (
@@ -1887,10 +2239,32 @@ export default function AdminClient({
                         {item.grantor_name || "회원"}
                       </strong>
                       {item.is_proxy ? (
-                        <span className="text-slate-400">
-                          {" "}
-                          → 수임인 {item.proxy_name || "미상"}
-                        </span>
+                        <>
+                          <span className="text-slate-400">
+                            {" "}
+                            → 수임인 {item.proxy_name || "미상"}
+                          </span>
+                          {item.firm_id ? (
+                            <span className="ml-1.5 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                              🏢 법인 위임: {item.firm_name || "법무법인"} ({item.voting_power || 1}표)
+                            </span>
+                          ) : (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]">
+                              개인 위임 (1표)
+                            </span>
+                          )}
+                          {item.evidence_url && (
+                            <a
+                              href={item.evidence_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-2 text-indigo-400 hover:text-indigo-300 underline text-[11px] inline-flex items-center gap-0.5"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              결의서/증빙
+                            </a>
+                          )}
+                        </>
                       ) : (
                         <span className="text-slate-400"> · 출석 신청</span>
                       )}

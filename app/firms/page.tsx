@@ -25,14 +25,25 @@ export default async function FirmsPage() {
     });
     firms = res.rows as any[];
 
-    // 구성원 수 집계
+    // 구성원 수, 파트너 수, 의결권 집계 (2인당 1표, 1인 0표)
     firms = await Promise.all(
       firms.map(async (firm) => {
         const cnt = await db.execute({
-          sql: "SELECT COUNT(*) AS cnt FROM firm_members WHERE firm_id = ?",
+          sql: `SELECT 
+                  COUNT(*) AS cnt,
+                  SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_cnt
+                FROM firm_members WHERE firm_id = ?`,
           args: [firm.id],
         });
-        return { ...firm, member_count: Number(cnt.rows[0]?.cnt ?? 0) };
+        const memberCount = Number(cnt.rows[0]?.cnt ?? 0);
+        const partnerCount = Number(cnt.rows[0]?.partner_cnt ?? 0);
+        const votingPower = Math.floor(partnerCount / 2);
+        return {
+          ...firm,
+          member_count: memberCount,
+          partner_count: partnerCount,
+          voting_power: votingPower,
+        };
       })
     );
 
@@ -62,6 +73,23 @@ export default async function FirmsPage() {
       });
       if (myRes.rows.length > 0) {
         myFirm = myRes.rows[0];
+        const countRes = await db.execute({
+          sql: `SELECT 
+                  COUNT(*) AS cnt,
+                  SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_cnt
+                FROM firm_members WHERE firm_id = ?`,
+          args: [myFirm.id],
+        });
+        const memberCount = Number(countRes.rows[0]?.cnt ?? 0);
+        const partnerCount = Number(countRes.rows[0]?.partner_cnt ?? 0);
+        const votingPower = Math.floor(partnerCount / 2);
+        myFirm = {
+          ...myFirm,
+          member_count: memberCount,
+          partner_count: partnerCount,
+          voting_power: votingPower,
+        };
+
         const membersRes = await db.execute({
           sql: `SELECT u.id, u.name, u.login_id, u.is_trainee, fm.is_partner
                 FROM firm_members fm

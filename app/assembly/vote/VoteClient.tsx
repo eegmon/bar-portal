@@ -295,15 +295,18 @@ export default function VoteClient({
             </span>
           </div>
           <p className="text-[11px] text-slate-500">
-            • 본인 표 (1표){" "}
+            • 본인 기본 의결권{" "}
             {proxyList.length > 0
-              ? `+ 위임받은 표 (${proxyList.length}표)`
+              ? `+ 위임받은 의결권 (${proxyList.reduce((sum, p) => sum + Number(p.voting_power || 1), 0)}표)`
               : ""}
           </p>
           {proxyList.length > 0 && (
-            <div className="text-[11px] text-emerald-400/90 pt-1">
-              위임자:{" "}
-              {proxyList.map((p) => p.grantor_name || "회원").join(", ")}
+            <div className="text-[11px] text-emerald-400/90 pt-1 space-y-0.5">
+              {proxyList.map((p, i) => (
+                <div key={i}>
+                  • {p.firm_id ? `🏢 [법인위임: ${p.firm_name || "법무법인"}] ${p.grantor_name} 변호사 (${p.voting_power || 1}표)` : `👤 [개인위임] ${p.grantor_name || "회원"} 변호사 (1표)`}
+                </div>
+              ))}
             </div>
           )}
         </div>

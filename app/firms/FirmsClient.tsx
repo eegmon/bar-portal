@@ -260,7 +260,9 @@ export default function FirmsClient({
                   </div>
                   <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
                     <span>{firm.address || "도스시"}</span>
-                    <span className="font-semibold text-slate-300">구성원 {firm.member_count}명</span>
+                    <span className="font-semibold text-slate-300">
+                      소속 {firm.member_count}명 · 파트너 {firm.partner_count || 0}명 ({firm.voting_power || 0}표)
+                    </span>
                   </div>
                 </div>
               ))}
@@ -298,6 +300,30 @@ export default function FirmsClient({
                   <div><span className="text-slate-500">주소</span><p className="text-slate-200 mt-0.5">{myFirm.address || "미기재"}</p></div>
                   <div><span className="text-slate-500">연락처</span><p className="text-slate-200 mt-0.5">{myFirm.contact || "미기재"}</p></div>
                 </div>
+
+                {myFirm.status === "APPROVED" && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div>
+                      <span className="text-amber-400 font-bold">🗳️ 총회 법인회원 산정 의결권: </span>
+                      <strong className="text-white text-sm ml-1">{myFirm.voting_power || 0}표</strong>
+                      <span className="text-slate-400 ml-2 text-[11px]">
+                        (구성원 변호사 {myFirm.partner_count || 0}명 기준 · 2인당 1표, 1인 0표)
+                      </span>
+                    </div>
+                    {(myFirm.voting_power || 0) > 0 ? (
+                      <a
+                        href="/assembly/proxy"
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg text-xs transition-colors"
+                      >
+                        법인 의결권 위임장 작성 →
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-slate-500">
+                        * 구성원 변호사가 2인 이상 등록되어야 의결권 1표가 발생합니다.
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 구성원 목록 */}
@@ -391,6 +417,10 @@ export default function FirmsClient({
               법무법인 / 법률사무소 등록 신청
             </h2>
             <p className="text-xs text-slate-400 mt-1">관리자 승인 후 공식 등록됩니다. (변호사법 제23조~제40조)</p>
+          </div>
+
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-[11px] leading-relaxed">
+            📜 <strong>법인 의결권 안내:</strong> 법인 등록 승인 후 구성원 변호사(파트너)를 2인 이상 등록하면, 총회에서 <strong>구성원 변호사 2명당 1표(1명 0표)</strong>의 법인회원 의결권이 산정됩니다.
           </div>
 
           <div className="space-y-4 text-xs">

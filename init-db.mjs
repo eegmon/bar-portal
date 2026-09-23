@@ -128,6 +128,8 @@ async function init() {
       id TEXT PRIMARY KEY,
       assembly_id TEXT REFERENCES assemblies(id),
       user_id TEXT REFERENCES users(id),
+      firm_id TEXT REFERENCES law_firms(id), -- 법인회원 위임인 경우 법인 ID
+      voting_power INTEGER DEFAULT 1,        -- 위임된 표 수 (개인 1표, 법인 2인당 1표)
       attended INTEGER DEFAULT 0, -- 1: 출석체크 완료
       is_proxy INTEGER DEFAULT 0,  -- 1: 위임장 제출
       proxy_to_user_id TEXT REFERENCES users(id), -- 대리 수임인
@@ -139,6 +141,13 @@ async function init() {
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
+
+  try {
+    await db.execute("ALTER TABLE assembly_attendances ADD COLUMN firm_id TEXT DEFAULT NULL");
+  } catch {}
+  try {
+    await db.execute("ALTER TABLE assembly_attendances ADD COLUMN voting_power INTEGER DEFAULT 1");
+  } catch {}
 
   // 총회 안건
   await db.execute(`

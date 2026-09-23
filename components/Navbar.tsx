@@ -31,11 +31,12 @@ export default function Navbar({ user }: NavbarProps) {
 
   const canAdmin = user ? hasAdminPanelAccess(user) : false;
 
-  // 테마 초기화 (localStorage 확인)
+  // 테마 초기화 (localStorage 및 OS 설정 확인)
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("bar_theme");
-    if (savedTheme === "light") {
+    const isSystemLight = !savedTheme && window.matchMedia("(prefers-color-scheme: light)").matches;
+    if (savedTheme === "light" || isSystemLight) {
       setIsLight(true);
       document.documentElement.classList.add("light");
     } else {
@@ -269,6 +270,27 @@ export default function Navbar({ user }: NavbarProps) {
               <Settings className="w-4 h-4 text-amber-400" />
               협회 관리자 패널 바로가기
             </Link>
+          )}
+
+          {/* 모바일 테마 전환 버튼 */}
+          {mounted && (
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="w-full p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+            >
+              {isLight ? (
+                <>
+                  <Moon className="w-4 h-4 text-indigo-400" />
+                  다크 모드로 전환
+                </>
+              ) : (
+                <>
+                  <Sun className="w-4 h-4 text-amber-400" />
+                  라이트 모드로 전환
+                </>
+              )}
+            </button>
           )}
         </div>
       )}

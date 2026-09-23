@@ -34,14 +34,27 @@ export async function GET(req: Request) {
       firms = res.rows as any[];
     }
 
-    // 각 법인의 구성원 수 조회
+    // 각 법인의 구성원 수 및 구성원 변호사(파트너) 수 조회하여 의결권 산출 (2명당 1표, 1명 0표)
     const firmsWithMemberCount = await Promise.all(
       firms.map(async (firm) => {
         const countRes = await db.execute({
-          sql: "SELECT COUNT(*) AS cnt FROM firm_members WHERE firm_id = ?",
+          sql: `SELECT 
+                  COUNT(*) AS total_cnt,
+                  SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_cnt
+                FROM firm_members WHERE firm_id = ?`,
           args: [firm.id],
         });
-        return { ...firm, member_count: countRes.rows[0]?.cnt ?? 0 };
+        const memberCount = Number(countRes.rows[0]?.total_cnt ?? 0);
+        const partnerCount = Number(countRes.rows[0]?.partner_cnt ?? 0);
+        // 등록된 구성원 변호사 2명당 1표, 1명은 0표
+        const votingPower = Math.floor(partnerCount / 2);
+
+        return {
+          ...firm,
+          member_count: memberCount,
+          partner_count: partnerCount,
+          voting_power: votingPower,
+        };
       })
     );
 

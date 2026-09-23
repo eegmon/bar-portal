@@ -28,36 +28,69 @@ html.light {
 }
 
 html.light body {
-  background-color: #f8fafc;
-  color: #0f172a;
-}
-
-html.light .bg-slate-950 {
   background-color: #f8fafc !important;
   color: #0f172a !important;
 }
 
-html.light .bg-slate-900 {
+/* 기본 레이아웃 배경 */
+html.light .bg-slate-950,
+html.light .bg-slate-950\/40,
+html.light .bg-slate-950\/50,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950\/70,
+html.light .bg-slate-950\/80,
+html.light .bg-slate-950\/90,
+html.light .bg-slate-950\/95,
+html.light .bg-slate-950\/98 {
+  background-color: #f8fafc !important;
+}
+
+/* 카드 및 섹션 배경 */
+html.light .bg-slate-900,
+html.light .bg-slate-900\/30,
+html.light .bg-slate-900\/40,
+html.light .bg-slate-900\/50,
+html.light .bg-slate-900\/60,
+html.light .bg-slate-900\/70,
+html.light .bg-slate-900\/80,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/95,
+html.light .bg-slate-900\/98 {
   background-color: #ffffff !important;
-  color: #0f172a !important;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
 }
 
-html.light .bg-slate-800 {
+/* 보조 블록 / 버튼 / 배지 배경 */
+html.light .bg-slate-800,
+html.light .bg-slate-800\/30,
+html.light .bg-slate-800\/40,
+html.light .bg-slate-800\/50,
+html.light .bg-slate-800\/60,
+html.light .bg-slate-800\/70,
+html.light .bg-slate-800\/80,
+html.light .bg-slate-800\/90 {
   background-color: #f1f5f9 !important;
-  color: #334155 !important;
 }
 
+/* 테두리 및 구분선 */
 html.light .border-slate-800,
-html.light .border-slate-700 {
+html.light .border-slate-800\/40,
+html.light .border-slate-800\/60,
+html.light .border-slate-800\/80,
+html.light .border-slate-700,
+html.light .border-slate-700\/40,
+html.light .border-slate-700\/50,
+html.light .border-slate-700\/80 {
   border-color: #e2e8f0 !important;
 }
 
-html.light .border-slate-800\/60,
-html.light .border-slate-800\/80 {
-  border-color: #f1f5f9 !important;
+html.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-800\/80 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
 }
 
+/* 텍스트 색상 및 대비 */
 html.light .text-white,
 html.light .text-slate-100 {
   color: #0f172a !important;
@@ -72,26 +105,40 @@ html.light .text-slate-300 {
 }
 
 html.light .text-slate-400 {
-  color: #64748b !important;
+  color: #475569 !important;
 }
 
 html.light .text-slate-500 {
   color: #64748b !important;
 }
 
+/* 헤더 & 푸터 */
 html.light header {
   background-color: #ffffff !important;
   border-bottom-color: #e2e8f0 !important;
-  color: #0f172a !important;
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
 html.light footer {
   background-color: #ffffff !important;
   border-top-color: #e2e8f0 !important;
-  color: #64748b !important;
 }
 
+/* 테이블 스타일 */
+html.light table thead tr {
+  background-color: #f1f5f9 !important;
+}
+
+html.light table thead th {
+  color: #475569 !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+html.light table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+/* 폼 입력 요소 */
 html.light input:not([type="checkbox"]):not([type="radio"]),
 html.light textarea,
 html.light select {
@@ -105,6 +152,7 @@ html.light textarea:focus,
 html.light select:focus {
   border-color: #f59e0b !important;
   background-color: #ffffff !important;
+  box-shadow: 0 0 0 1px #f59e0b;
 }
 
 html.light input::placeholder,
@@ -112,13 +160,21 @@ html.light textarea::placeholder {
   color: #94a3b8 !important;
 }
 
+/* 호버 효과 */
 html.light .hover\:bg-slate-800:hover,
 html.light .hover\:bg-slate-700:hover {
-  background-color: #f1f5f9 !important;
+  background-color: #e2e8f0 !important;
 }
 
-html.light .bg-slate-950\/80 {
-  background-color: rgba(248, 250, 252, 0.9) !important;
+html.light .hover\:bg-slate-900:hover {
+  background-color: #f8fafc !important;
+}
+
+/* 모달 백드롭 오버레이 (바깥 배경은 자연스러운 어두운 반투명 유지) */
+html.light .bg-black\/70,
+html.light .bg-black\/75,
+html.light .bg-black\/80 {
+  background-color: rgba(15, 23, 42, 0.65) !important;
 }
 
 /* 스크롤바 커스텀 */

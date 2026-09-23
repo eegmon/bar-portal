@@ -71,11 +71,12 @@ export default async function AssemblyVoteServerPage({
     );
     const activeAssemblyId = selectedAgenda?.assembly_id || selectedAssemblyId;
 
-    // 위임받은 표 수 조회
+    // 위임받은 표 수 조회 (개인 위임 + 법인 위임 표수 합산)
     const proxyRes = await db.execute({
-      sql: `SELECT aa.*, u.name as grantor_name 
+      sql: `SELECT aa.*, u.name as grantor_name, f.name as firm_name 
             FROM assembly_attendances aa
             LEFT JOIN users u ON aa.user_id = u.id
+            LEFT JOIN law_firms f ON aa.firm_id = f.id
             WHERE aa.assembly_id = ? AND aa.proxy_to_user_id = ? AND aa.is_proxy = 1 AND aa.approval_status = 'APPROVED'`,
       args: [activeAssemblyId, user.id],
     });
@@ -84,8 +85,12 @@ export default async function AssemblyVoteServerPage({
       sql: "SELECT COALESCE(v.voting_power, 1) as voting_power FROM users u LEFT JOIN assembly_voting_rights v ON v.user_id = u.id AND v.assembly_id = ? WHERE u.id = ?",
       args: [activeAssemblyId, user.id],
     });
+    const totalProxyPower = proxyList.reduce(
+      (sum, p: any) => sum + Number(p.voting_power || 1),
+      0,
+    );
     votingPower =
-      Number(ownRightRes.rows[0]?.voting_power || 1) + proxyList.length;
+      Number(ownRightRes.rows[0]?.voting_power || 1) + totalProxyPower;
 
     // 이미 투표한 안건 조회
     const votedRes = await db.execute({

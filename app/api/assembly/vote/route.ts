@@ -51,8 +51,22 @@ export async function GET(req: Request) {
       sql: "SELECT COALESCE(SUM(COALESCE(v.voting_power, 1)), 0) as total FROM users u LEFT JOIN assembly_voting_rights v ON v.user_id = u.id AND v.assembly_id = ? WHERE u.role = 'LAWYER' AND u.status = 'ACTIVE'",
       args: [agenda.assembly_id],
     });
+
+    // 법인회원 의결권 합계 (승인된 법인의 구성원 변호사 2인당 1표, 1인 0표)
+    const firmRightsRes = await db.execute({
+      sql: `SELECT COALESCE(SUM(partner_cnt / 2), 0) as firm_total
+            FROM (
+              SELECT f.id, COUNT(fm.lawyer_id) as partner_cnt
+              FROM law_firms f
+              JOIN firm_members fm ON fm.firm_id = f.id AND fm.is_partner = 1
+              WHERE f.status = 'APPROVED'
+              GROUP BY f.id
+            )`,
+      args: [],
+    });
+
     const presentRes = await db.execute({
-      sql: "SELECT COALESCE(SUM(CASE WHEN attended = 1 OR is_proxy = 1 THEN 1 ELSE 0 END), 0) as present_rights FROM assembly_attendances WHERE assembly_id = ? AND approval_status = 'APPROVED'",
+      sql: "SELECT COALESCE(SUM(CASE WHEN attended = 1 OR is_proxy = 1 THEN COALESCE(voting_power, 1) ELSE 0 END), 0) as present_rights FROM assembly_attendances WHERE assembly_id = ? AND approval_status = 'APPROVED'",
       args: [agenda.assembly_id],
     });
     const castRes = await db.execute({
@@ -67,7 +81,9 @@ export async function GET(req: Request) {
       sql: "SELECT choice, SUM(votes_count) as total FROM ballot_box WHERE agenda_id = ? GROUP BY choice",
       args: [agendaId],
     });
-    const totalRights = Number(totalRightsRes.rows[0]?.total || 0);
+    const personalRights = Number(totalRightsRes.rows[0]?.total || 0);
+    const firmRights = Number(firmRightsRes.rows[0]?.firm_total || 0);
+    const totalRights = personalRights + firmRights;
     const presentRights = Number(presentRes.rows[0]?.present_rights || 0);
     const casted = Number(castRes.rows[0]?.casted || 0);
     const stats = {
@@ -229,11 +245,11 @@ export async function POST(req: Request) {
     let calculatedVotingPower = Number(ownRightRes.rows[0]?.voting_power || 1);
     try {
       const proxyRes = await db.execute({
-        sql: "SELECT COUNT(*) as proxy_count FROM assembly_attendances WHERE assembly_id = ? AND proxy_to_user_id = ? AND is_proxy = 1 AND approval_status = 'APPROVED'",
+        sql: "SELECT COALESCE(SUM(COALESCE(voting_power, 1)), 0) as proxy_power FROM assembly_attendances WHERE assembly_id = ? AND proxy_to_user_id = ? AND is_proxy = 1 AND approval_status = 'APPROVED'",
         args: [agenda.assembly_id, user.id],
       });
-      const proxyCount = Number(proxyRes.rows[0]?.proxy_count || 0);
-      calculatedVotingPower += proxyCount;
+      const proxyPower = Number(proxyRes.rows[0]?.proxy_power || 0);
+      calculatedVotingPower += proxyPower;
     } catch (e) {
       console.error("위임표 계산 에러:", e);
     }

@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "회원 명부 관리 권한이 필요합니다." }, { status: 403 });
     }
 
+    const isSuperAdmin = admin.role === "ADMIN";
     const body = await req.json();
     const { action } = body;
 
@@ -66,11 +67,21 @@ export async function POST(req: Request) {
         officeName = "",
         positions = [],
         phone = "",
+        bio = "",
         barExamRound = null,
       } = body;
 
       if (!loginId || !password || !name) {
         return NextResponse.json({ error: "아이디, 비밀번호, 성명은 필수입니다." }, { status: 400 });
+      }
+
+      if (password.length < 6) {
+        return NextResponse.json({ error: "비밀번호는 최소 6자 이상이어야 합니다." }, { status: 400 });
+      }
+
+      // [보안 권한 상승 방지] 최고 관리자(ADMIN) 권한 부여는 오직 최고 관리자만 가능
+      if (role === "ADMIN" && !isSuperAdmin) {
+        return NextResponse.json({ error: "최고 관리자(ADMIN) 권한은 최고 관리자만 부여할 수 있습니다." }, { status: 403 });
       }
 
       // 아이디 중복 체크
@@ -88,8 +99,8 @@ export async function POST(req: Request) {
       const userPositions = Array.isArray(positions) ? positions : [];
 
       await db.execute({
-        sql: `INSERT INTO users (id, login_id, password, name, discord_id, role, status, is_trainee, office_name, positions, phone, bar_exam_round, last_renewed_at, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        sql: `INSERT INTO users (id, login_id, password, name, discord_id, role, status, is_trainee, office_name, positions, phone, bio, bar_exam_round, last_renewed_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
         args: [
           newUserId,
           loginId,
@@ -102,6 +113,7 @@ export async function POST(req: Request) {
           officeName || "",
           JSON.stringify(userPositions),
           phone || "",
+          bio || "",
           barExamRound || null,
         ],
       });
@@ -144,6 +156,7 @@ export async function POST(req: Request) {
         office_name: officeName || "",
         positions: userPositions,
         phone: phone || "",
+        bio: bio || "",
         bar_exam_round: barExamRound || null,
         created_at: new Date().toISOString(),
       };
@@ -177,6 +190,14 @@ export async function POST(req: Request) {
       userPositions = JSON.parse((targetUser.positions as string) || "[]");
     } catch {
       userPositions = [];
+    }
+
+    // [보안 권한 상승 및 관리자 계정 임의 조작 방지]
+    if (targetUser.role === "ADMIN" && !isSuperAdmin) {
+      return NextResponse.json(
+        { error: "최고 관리자(ADMIN) 계정은 최고 관리자만 관리할 수 있습니다." },
+        { status: 403 }
+      );
     }
 
     // 1. 변호사 승인 액션 (PENDING -> ACTIVE / LAWYER)
@@ -241,6 +262,14 @@ export async function POST(req: Request) {
       const newIsTrainee: number = isTrainee !== undefined ? Number(isTrainee) : Number(targetUser.is_trainee || 0);
       const newOfficeName = officeName !== undefined ? officeName : String(targetUser.office_name || "");
       const newPositions = Array.isArray(positions) ? positions : userPositions;
+
+      // 최고 관리자(ADMIN) 역할 승격 방지
+      if (newRole === "ADMIN" && !isSuperAdmin) {
+        return NextResponse.json(
+          { error: "최고 관리자(ADMIN) 권한은 최고 관리자만 부여할 수 있습니다." },
+          { status: 403 }
+        );
+      }
 
       await db.execute({
         sql: `UPDATE users 
