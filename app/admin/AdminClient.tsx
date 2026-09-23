@@ -115,6 +115,23 @@ export default function AdminClient({
   const [editPositions, setEditPositions] = useState<string[]>([]);
   const [isSavingUser, setIsSavingUser] = useState(false);
 
+  // 회원 직권 생성 모달 상태
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    loginId: "",
+    password: "changeme123!",
+    discordId: "",
+    role: "LAWYER",
+    status: "ACTIVE",
+    isTrainee: 0,
+    officeName: "",
+    positions: [] as string[],
+    phone: "",
+    barExamRound: "",
+  });
+
   // 2. 설정 상태
   const [settings, setSettings] =
     useState<Record<string, string>>(initialSettings);
@@ -304,6 +321,83 @@ export default function AdminClient({
       alert(`오류: ${err.message}`);
     } finally {
       setIsSavingUser(false);
+    }
+  };
+
+  // 회원 직권 생성 직책 토글
+  const toggleCreatePosition = (posId: string) => {
+    setCreateForm((prev) => {
+      const exists = prev.positions.includes(posId);
+      return {
+        ...prev,
+        positions: exists
+          ? prev.positions.filter((id) => id !== posId)
+          : [...prev.positions, posId],
+      };
+    });
+  };
+
+  // 임의 아이디 자동 생성
+  const generateRandomLoginId = () => {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    setCreateForm((prev) => ({
+      ...prev,
+      loginId: prev.role === "LAWYER" ? `lawyer_${randomNum}` : `user_${randomNum}`,
+    }));
+  };
+
+  // 회원 직권 생성 처리
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.name.trim() || !createForm.loginId.trim() || !createForm.password.trim()) {
+      alert("성명, 로그인 아이디, 초기 비밀번호는 필수 입력 항목입니다.");
+      return;
+    }
+    setIsCreatingUser(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "CREATE_USER",
+          name: createForm.name.trim(),
+          loginId: createForm.loginId.trim(),
+          password: createForm.password,
+          discordId: createForm.discordId.trim(),
+          role: createForm.role,
+          status: createForm.status,
+          isTrainee: createForm.isTrainee,
+          officeName: createForm.officeName.trim(),
+          positions: createForm.positions,
+          phone: createForm.phone.trim(),
+          barExamRound: createForm.barExamRound ? Number(createForm.barExamRound) : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "회원 생성 실패");
+
+      alert(`✅ [회원 직권 생성 완료]\n\n성명: ${createForm.name}\n아이디: ${createForm.loginId}\n초기 비밀번호: ${createForm.password}\n역할: ${createForm.role}\n상태: ${createForm.status}\n\n신규 회원에게 해당 접속 정보를 안내해 주세요.`);
+      if (data.user) {
+        setUsers((prev) => [data.user, ...prev]);
+      }
+      setIsCreateUserModalOpen(false);
+      setCreateForm({
+        name: "",
+        loginId: "",
+        password: "changeme123!",
+        discordId: "",
+        role: "LAWYER",
+        status: "ACTIVE",
+        isTrainee: 0,
+        officeName: "",
+        positions: [],
+        phone: "",
+        barExamRound: "",
+      });
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsCreatingUser(false);
     }
   };
 
@@ -1064,6 +1158,16 @@ export default function AdminClient({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {/* 직권 계정 생성 버튼 */}
+              <button
+                type="button"
+                onClick={() => setIsCreateUserModalOpen(true)}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                직권 계정 생성
+              </button>
+
               {/* 전체 디스코드 일괄 동기화 버튼 */}
               <button
                 type="button"
@@ -1451,6 +1555,276 @@ export default function AdminClient({
                 {isSavingUser ? "저장중..." : "직책 및 정보 변경 저장"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 회원 직권 생성 모달 */}
+      {isCreateUserModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-amber-400" />
+                관리자 직권 신규 회원 등록 (미가입자 계정 생성)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCreateUserModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-4 text-xs">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200/90 text-[11px] leading-relaxed">
+                💡 사이트에 아직 가입하지 않은 회원의 계정을 직권으로 생성합니다.
+                생성 후 부여된 아이디와 비밀번호로 회원이 직접 로그인할 수 있으며, 총회 출석 및 위임장 수여 대상자로 지정 가능합니다.
+              </div>
+
+              {/* 기본 인적사항 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    성명 <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="예: 홍길동"
+                    value={createForm.name}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, name: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-300 font-bold">
+                      로그인 아이디 <span className="text-rose-400">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={generateRandomLoginId}
+                      className="text-[10px] text-amber-400 hover:underline"
+                    >
+                      랜덤 생성
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="예: lawyer_hong"
+                    value={createForm.loginId}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, loginId: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    초기 비밀번호 <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="초기 비밀번호"
+                    value={createForm.password}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, password: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    디스코드 ID (유저 ID 또는 핸들)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="예: 123456789012345678"
+                    value={createForm.discordId}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, discordId: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* 역할 & 상태 & 소속 */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    기본 역할 (Role)
+                  </label>
+                  <select
+                    value={createForm.role}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, role: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="LAWYER">정회원 변호사 (LAWYER)</option>
+                    <option value="TRAINEE">견습변호사 (TRAINEE)</option>
+                    <option value="CITIZEN">일반 시민 / 수험생 (CITIZEN)</option>
+                    <option value="PROSECUTOR">검찰총장 (PROSECUTOR)</option>
+                    <option value="ADMIN">시스템 총괄 관리자 (ADMIN)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    자격 상태 (Status)
+                  </label>
+                  <select
+                    value={createForm.status}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, status: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="ACTIVE">정상 활성 (ACTIVE)</option>
+                    <option value="PENDING">승인 대기 (PENDING)</option>
+                    <option value="SUSPENDED">정직 / 업무정지 (SUSPENDED)</option>
+                    <option value="EXPIRED">자격 상실 (EXPIRED)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    시험 기수 (선택)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="예: 1"
+                    value={createForm.barExamRound}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, barExamRound: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    소속 법률사무소 / 법무법인
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="예: 법무법인 도스"
+                    value={createForm.officeName}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, officeName: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    연락처 / 전화번호
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="예: 010-0000-0000"
+                    value={createForm.phone}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, phone: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createForm.isTrainee === 1}
+                    onChange={(e) =>
+                      setCreateForm({
+                        ...createForm,
+                        isTrainee: e.target.checked ? 1 : 0,
+                      })
+                    }
+                    className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="text-slate-300 font-bold">
+                    수습/실무수습 중인 견습변호사로 지정
+                  </span>
+                </label>
+              </div>
+
+              {/* 임원 세부 직책 배정 */}
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <label className="block text-slate-300 font-bold">
+                  협회 임원 및 위원회 세부 직책 배정 (복수 선택)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {Object.values(OFFICER_POSITIONS).map((pos) => {
+                    const isChecked = createForm.positions.includes(pos.id);
+                    return (
+                      <label
+                        key={pos.id}
+                        className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                          isChecked
+                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300 font-bold"
+                            : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleCreatePosition(pos.id)}
+                          className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                        />
+                        <span className="text-xs">
+                          <span className="text-[10px] text-slate-500">
+                            [{pos.group}]
+                          </span>{" "}
+                          {pos.label}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateUserModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingUser}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow-md transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isCreatingUser ? (
+                    "계정 생성 중..."
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      신규 회원 직권 생성
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

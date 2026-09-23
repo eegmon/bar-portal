@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSessionUser, canManageUsers } from "@/lib/auth";
 import { sendDiscordWebhook, syncUserDiscordRoles } from "@/lib/discord";
@@ -50,7 +51,111 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { action, userId, role, status, isTrainee, officeName, positions } = body;
+    const { action } = body;
+
+    // 0. 관리자 직권 신규 회원 계정 생성
+    if (action === "CREATE_USER") {
+      const {
+        loginId,
+        password,
+        name,
+        discordId,
+        role = "LAWYER",
+        status = "ACTIVE",
+        isTrainee = 0,
+        officeName = "",
+        positions = [],
+        phone = "",
+        barExamRound = null,
+      } = body;
+
+      if (!loginId || !password || !name) {
+        return NextResponse.json({ error: "아이디, 비밀번호, 성명은 필수입니다." }, { status: 400 });
+      }
+
+      // 아이디 중복 체크
+      const checkUser = await db.execute({
+        sql: "SELECT id FROM users WHERE login_id = ?",
+        args: [loginId],
+      });
+
+      if (checkUser.rows.length > 0) {
+        return NextResponse.json({ error: "이미 존재하는 아이디입니다." }, { status: 400 });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUserId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const userPositions = Array.isArray(positions) ? positions : [];
+
+      await db.execute({
+        sql: `INSERT INTO users (id, login_id, password, name, discord_id, role, status, is_trainee, office_name, positions, phone, bar_exam_round, last_renewed_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        args: [
+          newUserId,
+          loginId,
+          hashedPassword,
+          name,
+          discordId || "",
+          role,
+          status,
+          Number(isTrainee) || 0,
+          officeName || "",
+          JSON.stringify(userPositions),
+          phone || "",
+          barExamRound || null,
+        ],
+      });
+
+      // 디스코드 역할 동기화 시도
+      if (discordId) {
+        try {
+          await syncUserDiscordRoles({
+            discordUserId: discordId,
+            role,
+            status,
+            isTrainee: Number(isTrainee) || 0,
+            positions: userPositions,
+          });
+        } catch (syncErr) {
+          console.warn("디스코드 역할 동기화 실패(무시):", syncErr);
+        }
+      }
+
+      // 웹훅 알림
+      await sendDiscordWebhook("ADMIN", {
+        embeds: [
+          {
+            title: `👤 [관리자 직권] 신규 회원 계정 생성: ${name} (${loginId})`,
+            description: `관리자 **${admin.name}** 님이 회원을 직권 등록하였습니다.\n• 역할: **${role}**\n• 상태: **${status}**\n• 소속: ${officeName || "미기재"}\n• 직책: ${userPositions.join(", ") || "일반"}\n• 디스코드: ${discordId || "미기재"}`,
+            color: 0x10B981,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+
+      const newUser = {
+        id: newUserId,
+        login_id: loginId,
+        name,
+        discord_id: discordId || "",
+        role,
+        status,
+        is_trainee: Number(isTrainee) || 0,
+        office_name: officeName || "",
+        positions: userPositions,
+        phone: phone || "",
+        bar_exam_round: barExamRound || null,
+        created_at: new Date().toISOString(),
+      };
+
+      return NextResponse.json({
+        success: true,
+        message: `${name} 회원의 계정이 성공적으로 생성되었습니다.`,
+        user: newUser,
+      });
+    }
+
+    const { userId, role, status, isTrainee, officeName, positions } = body;
 
     if (!userId) {
       return NextResponse.json({ error: "유저 ID가 필요합니다." }, { status: 400 });
