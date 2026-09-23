@@ -304,3 +304,174 @@ export async function syncUserDiscordRoles(params: {
     else await removeDiscordRole(discordUserId, disciplineCommRoleId);
   }
 }
+
+/**
+ * 디스코드 서버로부터 유저의 최신 역할(Role) 및 닉네임을 조회하여 포털 직책/권한 동기화 (Discord -> Site)
+ */
+export async function syncUserFromDiscord(userId: string, customDiscordId?: string): Promise<{
+  success: boolean;
+  message?: string;
+  updatedPositions?: string[];
+  updatedRole?: string;
+  isTrainee?: number;
+  discordNick?: string;
+}> {
+  try {
+    // 1. DB에서 사용자 정보 조회
+    const userRes = await db.execute({
+      sql: "SELECT id, login_id, name, role, status, is_trainee, positions, discord_id, phone FROM users WHERE id = ?",
+      args: [userId],
+    });
+
+    if (userRes.rows.length === 0) {
+      return { success: false, message: "사용자를 찾을 수 없습니다." };
+    }
+
+    const user = userRes.rows[0];
+    const targetDiscordInput = customDiscordId || (user.discord_id as string) || (user.phone as string) || "";
+    if (!targetDiscordInput) {
+      return { success: false, message: "등록된 디스코드 ID 또는 닉네임이 없습니다." };
+    }
+
+    const resolvedDiscordUserId = await resolveDiscordUserId(targetDiscordInput);
+    if (!resolvedDiscordUserId) {
+      return { success: false, message: `디스코드 사용자를 찾을 수 없습니다: ${targetDiscordInput}` };
+    }
+
+    const { token, guildId } = await getBotConfig();
+    if (!token || !guildId) {
+      return { success: false, message: "디스코드 봇 토큰 또는 서버 ID가 설정되지 않았습니다." };
+    }
+
+    // 2. 디스코드 Guild Member 정보 조회
+    const memberRes = await fetch(
+      `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedDiscordUserId}`,
+      {
+        headers: {
+          Authorization: `Bot ${token}`,
+        },
+      }
+    );
+
+    if (!memberRes.ok) {
+      const errText = await memberRes.text();
+      return { success: false, message: `디스코드 서버 멤버 조회 실패 (${memberRes.status}): ${errText}` };
+    }
+
+    const memberData = await memberRes.json();
+    const discordRoles: string[] = Array.isArray(memberData.roles) ? memberData.roles : [];
+    const discordNick: string = memberData.nick || memberData.user?.global_name || memberData.user?.username || "";
+
+    // 3. 시스템에 등록된 디스코드 역할 ID 매핑 조회
+    const lawyerRoleId = await getSettingValue("discord_role_lawyer", "DISCORD_ROLE_LAWYER");
+    const traineeRoleId = await getSettingValue("discord_role_trainee", "DISCORD_ROLE_TRAINEE");
+    const presidentRoleId = await getSettingValue("discord_role_president", "DISCORD_ROLE_PRESIDENT");
+    const vicePresidentRoleId = await getSettingValue("discord_role_vice_president", "DISCORD_ROLE_VICE_PRESIDENT");
+    const directorRoleId = await getSettingValue("discord_role_director", "DISCORD_ROLE_DIRECTOR");
+    const speakerRoleId = await getSettingValue("discord_role_speaker", "DISCORD_ROLE_SPEAKER");
+    const viceSpeakerRoleId = await getSettingValue("discord_role_vice_speaker", "DISCORD_ROLE_VICE_SPEAKER");
+    const secretaryGeneralRoleId = await getSettingValue("discord_role_secretary_general", "DISCORD_ROLE_SECRETARY_GENERAL");
+    const staffRoleId = await getSettingValue("discord_role_staff", "DISCORD_ROLE_STAFF");
+    const examCommRoleId = await getSettingValue("discord_role_exam_comm", "DISCORD_ROLE_EXAM_COMM");
+    const disciplineCommRoleId = await getSettingValue("discord_role_discipline_comm", "DISCORD_ROLE_DISCIPLINE_COMM");
+
+    // 4. 역할 매핑 계산
+    const newPositions: string[] = [];
+    if (presidentRoleId && discordRoles.includes(presidentRoleId)) newPositions.push("PRESIDENT");
+    if (vicePresidentRoleId && discordRoles.includes(vicePresidentRoleId)) newPositions.push("VICE_PRESIDENT");
+    if (directorRoleId && discordRoles.includes(directorRoleId)) newPositions.push("DIRECTOR");
+    if (speakerRoleId && discordRoles.includes(speakerRoleId)) newPositions.push("ASSEMBLY_SPEAKER");
+    if (viceSpeakerRoleId && discordRoles.includes(viceSpeakerRoleId)) newPositions.push("ASSEMBLY_VICE_SPEAKER");
+    if (secretaryGeneralRoleId && discordRoles.includes(secretaryGeneralRoleId)) newPositions.push("SECRETARY_GENERAL");
+    if (staffRoleId && discordRoles.includes(staffRoleId)) newPositions.push("SECRETARIAT_STAFF");
+    if (examCommRoleId && discordRoles.includes(examCommRoleId)) newPositions.push("EXAM_COMM_MEMBER");
+    if (disciplineCommRoleId && discordRoles.includes(disciplineCommRoleId)) newPositions.push("DISCIPLINE_COMM_MEMBER");
+
+    const isTrainee = (traineeRoleId && discordRoles.includes(traineeRoleId)) ? 1 : 0;
+    const hasLawyerRole = (lawyerRoleId && discordRoles.includes(lawyerRoleId));
+
+    let newRole = user.role as string;
+    // 임원/의장단/사무총장은 관리자 권한 부여
+    const hasAdminLeadership = newPositions.some(p =>
+      ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR", "SECRETARY_GENERAL", "ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p)
+    );
+    if (hasAdminLeadership) {
+      newRole = "ADMIN";
+    } else if (hasLawyerRole) {
+      newRole = "LAWYER";
+    }
+
+    // 5. DB 업데이트
+    await db.execute({
+      sql: `UPDATE users 
+            SET positions = ?, 
+                is_trainee = ?, 
+                role = ?,
+                discord_id = COALESCE(NULLIF(discord_id, ''), ?),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?`,
+      args: [
+        JSON.stringify(newPositions),
+        isTrainee,
+        newRole,
+        resolvedDiscordUserId,
+        userId,
+      ],
+    });
+
+    return {
+      success: true,
+      message: "디스코드 역할과 사이트 정보가 성공적으로 동기화되었습니다.",
+      updatedPositions: newPositions,
+      updatedRole: newRole,
+      isTrainee,
+      discordNick,
+    };
+  } catch (err: any) {
+    console.error("[Discord -> Site Sync Error]:", err);
+    return { success: false, message: err.message || "동기화 중 오류가 발생했습니다." };
+  }
+}
+
+/**
+ * 전체 회원의 디스코드 역할을 일괄 동기화 (배치 작업)
+ */
+export async function syncAllUsersFromDiscord(): Promise<{
+  total: number;
+  synced: number;
+  failed: number;
+  logs: string[];
+}> {
+  const usersRes = await db.execute("SELECT id, name, login_id, discord_id, phone FROM users");
+  let synced = 0;
+  let failed = 0;
+  const logs: string[] = [];
+
+  for (const user of usersRes.rows) {
+    const userId = user.id as string;
+    const userName = (user.name as string) || (user.login_id as string);
+    const targetDiscord = (user.discord_id as string) || (user.phone as string) || "";
+
+    if (!targetDiscord) {
+      failed++;
+      logs.push(`⏭️ [${userName}] 건너뜀 (등록된 디스코드 정보 없음)`);
+      continue;
+    }
+
+    const result = await syncUserFromDiscord(userId, targetDiscord);
+    if (result.success) {
+      synced++;
+      logs.push(`✅ [${userName}] 동기화 완료 (직책: ${result.updatedPositions?.join(", ") || "없음"}, 등급: ${result.updatedRole})`);
+    } else {
+      failed++;
+      logs.push(`❌ [${userName}] 실패: ${result.message}`);
+    }
+  }
+
+  return {
+    total: usersRes.rows.length,
+    synced,
+    failed,
+    logs,
+  };
+}

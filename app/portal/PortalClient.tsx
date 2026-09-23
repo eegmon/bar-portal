@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Scale, CheckCircle2, Clock, Calendar, Edit, Save,
-  Plus, Trash2, Lock, Award, ChevronDown
+  Plus, Trash2, Lock, Award, ChevronDown, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 
@@ -27,6 +27,7 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
   );
   const [customSpecialty, setCustomSpecialty] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isSyncingDiscord, setIsSyncingDiscord] = useState(false);
 
   // 비밀번호 변경 상태
   const [currentPw, setCurrentPw] = useState("");
@@ -72,6 +73,24 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
       alert(`오류: ${err.message}`);
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const handleSyncDiscord = async () => {
+    setIsSyncingDiscord(true);
+    try {
+      const res = await fetch("/api/discord/sync-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert(`🔄 디스코드 동기화 완료!\n직책: ${data.data?.updatedPositions?.join(", ") || "없음"}\n등급: ${data.data?.updatedRole || "-"}\n\n변경사항이 있으면 재로그인 후 반영됩니다.`);
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsSyncingDiscord(false);
     }
   };
 
@@ -154,12 +173,21 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> 최근 갱신: {lawyerProfile?.last_renewed_at?.slice(0, 10) || "-"}</span>
           <Link href="/assembly/proxy" className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-colors flex items-center gap-1">
             <Calendar className="w-3.5 h-3.5 text-amber-400" />
             총회 재등록신청서
           </Link>
+          <button
+            type="button"
+            onClick={handleSyncDiscord}
+            disabled={isSyncingDiscord}
+            className="px-3 py-1.5 bg-indigo-900/60 hover:bg-indigo-800/70 text-indigo-300 rounded-lg border border-indigo-700/50 transition-colors flex items-center gap-1 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDiscord ? "animate-spin" : ""}`} />
+            {isSyncingDiscord ? "동기화 중..." : "디스코드 역할 동기화"}
+          </button>
         </div>
       </div>
 

@@ -118,20 +118,52 @@ export default async function AdminDashboardPage() {
         currentUser={user}
         permissions={permissions}
         initialSettings={{
+          // 웹훅
           webhook_notice: settingsMap["webhook_notice"] || process.env.DISCORD_WEBHOOK_NOTICE || "",
+          webhook_lawyer_approval: settingsMap["webhook_lawyer_approval"] || process.env.DISCORD_WEBHOOK_LAWYER_APPROVAL || "",
           webhook_exam: settingsMap["webhook_exam"] || process.env.DISCORD_WEBHOOK_EXAM || "",
           webhook_assembly: settingsMap["webhook_assembly"] || process.env.DISCORD_WEBHOOK_ASSEMBLY || "",
           webhook_discipline: settingsMap["webhook_discipline"] || process.env.DISCORD_WEBHOOK_DISCIPLINE || "",
           webhook_admin: settingsMap["webhook_admin"] || process.env.DISCORD_WEBHOOK_ADMIN || "",
+
+          // 디스코드 봇 & 서버
           discord_bot_token: settingsMap["discord_bot_token"] || process.env.DISCORD_BOT_TOKEN || "",
           discord_guild_id: settingsMap["discord_guild_id"] || process.env.DISCORD_GUILD_ID || "",
+
+          // 기본 역할
           discord_role_lawyer: settingsMap["discord_role_lawyer"] || process.env.DISCORD_ROLE_LAWYER || "",
           discord_role_trainee: settingsMap["discord_role_trainee"] || process.env.DISCORD_ROLE_TRAINEE || "",
+
+          // 카테고리 헤더 역할
+          discord_role_group_executive: settingsMap["discord_role_group_executive"] || process.env.DISCORD_ROLE_GROUP_EXECUTIVE || "",
+          discord_role_group_assembly: settingsMap["discord_role_group_assembly"] || process.env.DISCORD_ROLE_GROUP_ASSEMBLY || "",
+          discord_role_group_secretariat: settingsMap["discord_role_group_secretariat"] || process.env.DISCORD_ROLE_GROUP_SECRETARIAT || "",
+
+          // 이사회
+          discord_role_board: settingsMap["discord_role_board"] || process.env.DISCORD_ROLE_BOARD || "",
           discord_role_president: settingsMap["discord_role_president"] || process.env.DISCORD_ROLE_PRESIDENT || "",
+          discord_role_vice_president: settingsMap["discord_role_vice_president"] || process.env.DISCORD_ROLE_VICE_PRESIDENT || "",
+          discord_role_director: settingsMap["discord_role_director"] || process.env.DISCORD_ROLE_DIRECTOR || "",
+
+          // 총회
           discord_role_speaker: settingsMap["discord_role_speaker"] || process.env.DISCORD_ROLE_SPEAKER || "",
+          discord_role_vice_speaker: settingsMap["discord_role_vice_speaker"] || process.env.DISCORD_ROLE_VICE_SPEAKER || "",
+
+          // 사무국
+          discord_role_secretary_general: settingsMap["discord_role_secretary_general"] || process.env.DISCORD_ROLE_SECRETARY_GENERAL || "",
+          discord_role_staff: settingsMap["discord_role_staff"] || process.env.DISCORD_ROLE_STAFF || "",
+
+          // 위원회
           discord_role_exam_comm: settingsMap["discord_role_exam_comm"] || process.env.DISCORD_ROLE_EXAM_COMM || "",
           discord_role_discipline_comm: settingsMap["discord_role_discipline_comm"] || process.env.DISCORD_ROLE_DISCIPLINE_COMM || "",
-          discord_role_staff: settingsMap["discord_role_staff"] || process.env.DISCORD_ROLE_STAFF || "",
+
+          // 팝업 공지
+          popup_enabled: settingsMap["popup_enabled"] || "false",
+          popup_level: settingsMap["popup_level"] || "INFO",
+          popup_title: settingsMap["popup_title"] || "",
+          popup_content: settingsMap["popup_content"] || "",
+          popup_link: settingsMap["popup_link"] || "",
+          popup_updated_at: settingsMap["popup_updated_at"] || "",
         }}
         initialUsers={users}
         initialAssemblies={assemblies}

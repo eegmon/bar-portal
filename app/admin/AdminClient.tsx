@@ -109,6 +109,11 @@ export default function AdminClient({
   const [broadcastPopupDiscord, setBroadcastPopupDiscord] = useState(true);
   const [isSavingPopup, setIsSavingPopup] = useState(false);
 
+  // 디스코드 역할 동기화 상태
+  const [syncingMemberId, setSyncingMemberId] = useState<string | null>(null);
+  const [isBatchSyncing, setIsBatchSyncing] = useState(false);
+  const [batchSyncLog, setBatchSyncLog] = useState<string[] | null>(null);
+
   // 3. 총회 및 안건 상태
   const [assemblies, setAssemblies] = useState<any[]>(initialAssemblies);
   const [agendas, setAgendas] = useState<any[]>(initialAgendas);
@@ -296,6 +301,49 @@ export default function AdminClient({
       alert(`오류: ${err.message}`);
     } finally {
       setIsSavingPopup(false);
+    }
+  };
+
+  // 개별 회원 디스코드 역할 동기화
+  const handleSyncMember = async (userId: string, userName: string) => {
+    setSyncingMemberId(userId);
+    try {
+      const res = await fetch("/api/discord/sync-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const result = data.data;
+      alert(`✅ [${userName}] 디스코드 동기화 완료!\n직책: ${result.updatedPositions?.join(", ") || "없음"}\n등급: ${result.updatedRole || "-"}`);
+      window.location.reload();
+    } catch (err: any) {
+      alert(`[${userName}] 동기화 실패: ${err.message}`);
+    } finally {
+      setSyncingMemberId(null);
+    }
+  };
+
+  // 전체 회원 디스코드 역할 일괄 동기화
+  const handleBatchSync = async () => {
+    if (!confirm("전체 회원의 디스코드 역할을 사이트에 일괄 동기화합니다.\n회원 수에 따라 수십 초가 소요될 수 있습니다. 진행하시겠습니까?")) return;
+    setIsBatchSyncing(true);
+    setBatchSyncLog(null);
+    try {
+      const res = await fetch("/api/discord/sync-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const { total, synced, failed, logs } = data.data;
+      setBatchSyncLog(logs);
+      alert(`🔄 전체 동기화 완료!\n총 ${total}명 중 성공 ${synced}명, 실패/스킵 ${failed}명`);
+    } catch (err: any) {
+      alert(`일괄 동기화 실패: ${err.message}`);
+    } finally {
+      setIsBatchSyncing(false);
     }
   };
 
@@ -805,6 +853,16 @@ export default function AdminClient({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {/* 전체 디스코드 일괄 동기화 버튼 */}
+              <button
+                type="button"
+                onClick={handleBatchSync}
+                disabled={isBatchSyncing}
+                className="px-3 py-2 bg-indigo-900/60 hover:bg-indigo-800/70 text-indigo-300 font-bold text-xs rounded-xl border border-indigo-700/50 flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+              >
+                <ArrowUp className={`w-3.5 h-3.5 ${isBatchSyncing ? "animate-bounce" : ""}`} />
+                {isBatchSyncing ? "전체 동기화 중..." : "🔄 전체 디스코드 역할 동기화"}
+              </button>
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-3" />
                 <input
@@ -973,12 +1031,23 @@ export default function AdminClient({
                                 </button>
                               </>
                             ) : (
-                              <button
-                                onClick={() => openEditModal(u)}
-                                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded text-xs font-semibold border border-slate-700 flex items-center gap-1"
-                              >
-                                <Edit className="w-3.5 h-3.5" /> 직책/권한 설정
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => openEditModal(u)}
+                                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 rounded text-xs font-semibold border border-slate-700 flex items-center gap-1"
+                                >
+                                  <Edit className="w-3.5 h-3.5" /> 직책/권한 설정
+                                </button>
+                                <button
+                                  onClick={() => handleSyncMember(u.id, u.name)}
+                                  disabled={syncingMemberId === u.id}
+                                  className="px-2.5 py-1 bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-300 rounded text-xs font-semibold border border-indigo-800/50 flex items-center gap-1 disabled:opacity-50"
+                                  title="디스코드 역할을 사이트에 동기화"
+                                >
+                                  <ArrowDown className={`w-3.5 h-3.5 ${syncingMemberId === u.id ? "animate-bounce" : ""}`} />
+                                  {syncingMemberId === u.id ? "동기화중" : "DC동기화"}
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -989,6 +1058,21 @@ export default function AdminClient({
               </tbody>
             </table>
           </div>
+
+          {/* 일괄 동기화 결과 로그 */}
+          {batchSyncLog && batchSyncLog.length > 0 && (
+            <div className="p-4 bg-slate-950 border border-indigo-800/40 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-indigo-300">🔄 전체 동기화 결과 로그</h4>
+                <button onClick={() => setBatchSyncLog(null)} className="text-slate-500 hover:text-white text-xs">닫기</button>
+              </div>
+              <div className="max-h-48 overflow-y-auto space-y-0.5">
+                {batchSyncLog.map((log, i) => (
+                  <div key={i} className="text-[11px] font-mono text-slate-300">{log}</div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

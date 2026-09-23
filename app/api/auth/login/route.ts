@@ -34,6 +34,22 @@ export async function POST(req: Request) {
       positions = [];
     }
 
+    // 로그인 시 디스코드 역할 최신 동기화 시도 (Discord -> Site)
+    const targetDiscord = (user.discord_id as string) || (user.phone as string) || "";
+    if (targetDiscord) {
+      try {
+        const { syncUserFromDiscord } = await import("@/lib/discord");
+        const syncResult = await syncUserFromDiscord(user.id as string, targetDiscord);
+        if (syncResult.success && syncResult.updatedPositions) {
+          positions = syncResult.updatedPositions;
+          if (syncResult.updatedRole) (user as any).role = syncResult.updatedRole;
+          if (syncResult.isTrainee !== undefined) (user as any).is_trainee = syncResult.isTrainee;
+        }
+      } catch (syncErr) {
+        console.warn("로그인 시 디스코드 동기화 무시:", syncErr);
+      }
+    }
+
     const sessionUser: SessionUser = {
       id: user.id as string,
       loginId: user.login_id as string,
