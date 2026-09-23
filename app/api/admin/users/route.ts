@@ -94,7 +94,7 @@ export async function POST(req: Request) {
         });
       }
 
-      await sendDiscordWebhook("NOTICE", {
+      await sendDiscordWebhook("LAWYER_APPROVAL", {
         content: `🎉 **[변호사 등록 승인] ${targetUser.name} 변호사님의 공식 등록이 승인되었습니다.**`,
         embeds: [
           {

@@ -19,6 +19,9 @@ import {
   Scale,
   Award,
   AlertTriangle,
+  AlertOctagon,
+  Bell,
+  Info,
   Bot,
   FileText,
   ArrowUp,
@@ -96,6 +99,15 @@ export default function AdminClient({
     useState<Record<string, string>>(initialSettings);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState<string | null>(null);
+
+  // 팝업 공지 상태
+  const [popupEnabled, setPopupEnabled] = useState(initialSettings?.popup_enabled === "true");
+  const [popupLevel, setPopupLevel] = useState<"INFO" | "WARNING" | "URGENT">((initialSettings?.popup_level as any) || "INFO");
+  const [popupTitle, setPopupTitle] = useState(initialSettings?.popup_title || "");
+  const [popupContent, setPopupContent] = useState(initialSettings?.popup_content || "");
+  const [popupLink, setPopupLink] = useState(initialSettings?.popup_link || "");
+  const [broadcastPopupDiscord, setBroadcastPopupDiscord] = useState(true);
+  const [isSavingPopup, setIsSavingPopup] = useState(false);
 
   // 3. 총회 및 안건 상태
   const [assemblies, setAssemblies] = useState<any[]>(initialAssemblies);
@@ -254,6 +266,36 @@ export default function AdminClient({
       alert(`오류: ${err.message}`);
     } finally {
       setIsSavingUser(false);
+    }
+  };
+
+  // 팝업 공지 설정 저장
+  const handleSavePopup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingPopup(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SAVE_POPUP",
+          popup: {
+            enabled: popupEnabled,
+            level: popupLevel,
+            title: popupTitle,
+            content: popupContent,
+            link: popupLink,
+          },
+          broadcastNotice: broadcastPopupDiscord,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "팝업 공지 저장 실패");
+      alert("📢 포털 안내사항 팝업 공지 설정이 성공적으로 저장되었습니다!");
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsSavingPopup(false);
     }
   };
 
@@ -1009,15 +1051,7 @@ export default function AdminClient({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-300 mb-1">의결 방식</label>
-                <select value={newAgMethod} onChange={(e) => setNewAgMethod(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
-                  <option value="MAJORITY">일반 과반수</option>
-                  <option value="TWO_THIRDS">2/3 이상 찬성</option>
-                  <option value="PLURALITY">최다 득표</option>
-                  <option value="RANKED">선호순위 투표 (즉시결선)</option>
-                </select>
-              </div>
+
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1791,23 +1825,268 @@ export default function AdminClient({
       )}
 
       {/* ========================================================================= */}
-      {/* 탭 3: 디스코드 웹훅 & 봇 역할 설정 */}
+      {/* 탭 3: 디스코드 웹훅 & 봇 역할 설정 및 팝업 공지 */}
       {/* ========================================================================= */}
       {activeTab === "settings" && permissions.canSettings && (
-        <form
-          onSubmit={handleSaveSettings}
-          className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6"
-        >
-          <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Bot className="w-5 h-5 text-blue-400" />
-              디스코드 5대 웹훅 및 봇 역할(Role) 자동지급 설정
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              각 알림 채널별 웹훅 URL과 디스코드 봇 토큰 및 역할 ID를 입력하면
-              회원의 자격 변경 시 디스코드 역할이 자동 부여됩니다.
-            </p>
-          </div>
+        <div className="space-y-8">
+          {/* 팝업 공지 관리 카드 */}
+          <form
+            onSubmit={handleSavePopup}
+            className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-amber-400" />
+                  📢 포털 메인 안내사항 팝업공지(모달) 관리
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  포털 메인 접속 시 모든 사용자에게 모달 팝업으로 중요한 공지를 즉시 고지합니다. (24시간 동안 보지 않기 지원)
+                </p>
+              </div>
+
+              {/* 활성화 스위치 */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-slate-300">
+                  팝업 노출 상태:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPopupEnabled(!popupEnabled)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    popupEnabled ? "bg-emerald-600" : "bg-slate-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      popupEnabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+                <span
+                  className={`text-xs font-extrabold ${
+                    popupEnabled ? "text-emerald-400" : "text-slate-500"
+                  }`}
+                >
+                  {popupEnabled ? "ON (노출중)" : "OFF (비활성)"}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 왼쪽: 입력 폼 */}
+              <div className="space-y-4">
+                {/* 심각도 / 유형 선택 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-2">
+                    공지 유형 / 심각도 (Severity)
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPopupLevel("INFO")}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                        popupLevel === "INFO"
+                          ? "bg-blue-950/60 border-blue-500 text-blue-300 ring-2 ring-blue-500/30"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                      }`}
+                    >
+                      <Info className="w-4 h-4 text-blue-400" />
+                      <span>일반 안내</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPopupLevel("WARNING")}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                        popupLevel === "WARNING"
+                          ? "bg-amber-950/60 border-amber-500 text-amber-300 ring-2 ring-amber-500/30"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                      }`}
+                    >
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      <span>중요 공지</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPopupLevel("URGENT")}
+                      className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                        popupLevel === "URGENT"
+                          ? "bg-red-950/60 border-red-500 text-red-300 ring-2 ring-red-500/30 animate-pulse"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                      }`}
+                    >
+                      <AlertOctagon className="w-4 h-4 text-red-400" />
+                      <span>긴급 속보</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 공지 제목 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    팝업 제목
+                  </label>
+                  <input
+                    type="text"
+                    value={popupTitle}
+                    onChange={(e) => setPopupTitle(e.target.value)}
+                    placeholder="예: [안내] 제10회 변호사시험 원서접수 기간 공고"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* 공지 본문 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    팝업 상세 내용
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={popupContent}
+                    onChange={(e) => setPopupContent(e.target.value)}
+                    placeholder="공지할 상세 내용을 입력하세요. 줄바꿈이 지원됩니다."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-500 resize-none font-sans"
+                  />
+                </div>
+
+                {/* 바로가기 링크 (선택사항) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    관련 페이지 바로가기 링크 (선택사항)
+                  </label>
+                  <input
+                    type="text"
+                    value={popupLink}
+                    onChange={(e) => setPopupLink(e.target.value)}
+                    placeholder="예: /exam/apply 또는 https://..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* 오른쪽: 실시간 팝업 미리보기 */}
+              <div className="flex flex-col">
+                <label className="block text-xs font-bold text-slate-400 mb-2">
+                  👁️ 실시간 팝업 렌더링 미리보기
+                </label>
+                <div className="flex-1 bg-slate-950/80 rounded-2xl border border-slate-800 p-4 flex items-center justify-center">
+                  <div
+                    className={`w-full max-w-sm rounded-xl p-4 shadow-2xl border ${
+                      popupLevel === "URGENT"
+                        ? "bg-slate-900 border-red-500/50 shadow-red-950/40"
+                        : popupLevel === "WARNING"
+                          ? "bg-slate-900 border-amber-500/50 shadow-amber-950/40"
+                          : "bg-slate-900 border-blue-500/50 shadow-blue-950/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      {popupLevel === "URGENT" ? (
+                        <div className="p-1 rounded bg-red-500/20 text-red-400">
+                          <AlertOctagon className="w-4 h-4" />
+                        </div>
+                      ) : popupLevel === "WARNING" ? (
+                        <div className="p-1 rounded bg-amber-500/20 text-amber-400">
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                      ) : (
+                        <div className="p-1 rounded bg-blue-500/20 text-blue-400">
+                          <Info className="w-4 h-4" />
+                        </div>
+                      )}
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          popupLevel === "URGENT"
+                            ? "bg-red-500/20 text-red-300"
+                            : popupLevel === "WARNING"
+                              ? "bg-amber-500/20 text-amber-300"
+                              : "bg-blue-500/20 text-blue-300"
+                        }`}
+                      >
+                        {popupLevel === "URGENT"
+                          ? "긴급 속보"
+                          : popupLevel === "WARNING"
+                            ? "주요 공지"
+                            : "일반 안내"}
+                      </span>
+                    </div>
+
+                    <h4 className="text-sm font-extrabold text-white mb-2 line-clamp-2">
+                      {popupTitle || "공지 제목이 여기에 표시됩니다."}
+                    </h4>
+
+                    <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed mb-4 max-h-32 overflow-y-auto">
+                      {popupContent || "공지 내용이 여기에 표시됩니다."}
+                    </p>
+
+                    {popupLink && (
+                      <div className="mb-3">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:underline">
+                          🔗 관련 페이지 바로가기 &rarr;
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          disabled
+                          className="rounded border-slate-700 bg-slate-800 text-amber-500"
+                        />
+                        <span>오늘 하루 보지 않기</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="px-2.5 py-1 bg-slate-800 text-slate-300 rounded text-[11px] font-bold"
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 하단 저장 액션 바 */}
+            <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={broadcastPopupDiscord}
+                  onChange={(e) => setBroadcastPopupDiscord(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-0"
+                />
+                <span className="text-xs font-bold text-slate-300">
+                  📢 저장 시 디스코드 공식 공지 채널(NOTICE)로 즉시 방송 발송
+                </span>
+              </label>
+
+              <button
+                type="submit"
+                disabled={isSavingPopup}
+                className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Bell className="w-4 h-4" />
+                {isSavingPopup ? "저장 및 반영중..." : "팝업 공지 설정 저장 및 즉시 반영"}
+              </button>
+            </div>
+          </form>
+
+          {/* 디스코드 웹훅 및 봇 설정 폼 */}
+          <form
+            onSubmit={handleSaveSettings}
+            className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6"
+          >
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Bot className="w-5 h-5 text-blue-400" />
+                디스코드 5대 웹훅 및 봇 역할(Role) 자동지급 설정
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                각 알림 채널별 웹훅 URL과 디스코드 봇 토큰 및 역할 ID를 입력하면
+                회원의 자격 변경 시 디스코드 역할이 자동 부여됩니다.
+              </p>
+            </div>
 
           {/* 5대 웹훅 설정 */}
           <div className="space-y-4">
@@ -1819,7 +2098,12 @@ export default function AdminClient({
               {
                 key: "webhook_notice",
                 label: "공지사항 웹훅 (NOTICE)",
-                desc: "합격자 공고, 정회원 등록 승인",
+                desc: "변호사시험 합격자 공고 등 협회 공식 공고",
+              },
+              {
+                key: "webhook_lawyer_approval",
+                label: "정회원 등록 승인 웹훅 (LAWYER_APPROVAL)",
+                desc: "신규 변호사 자격 등록 승인 공표 (미설정 시 NOTICE 웹훅으로 발송)",
               },
               {
                 key: "webhook_exam",
@@ -1829,7 +2113,7 @@ export default function AdminClient({
               {
                 key: "webhook_assembly",
                 label: "총회/전자투표 웹훅 (ASSEMBLY)",
-                desc: "총회 소집, 표결 선포, 위임장 접수",
+                desc: "총회 소집, 표결 선포, 위임장 접수, 공식 의사록",
               },
               {
                 key: "webhook_discipline",
@@ -1839,7 +2123,7 @@ export default function AdminClient({
               {
                 key: "webhook_admin",
                 label: "사무국 관리자 웹훅 (ADMIN)",
-                desc: "신규 가입 알림, 설정 갱신 로그",
+                desc: "신규 가입 신청, 설정 갱신 로그, 시험 출제 갱신",
               },
             ].map((item) => (
               <div
@@ -1925,19 +2209,21 @@ export default function AdminClient({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
               {[
-                { key: "discord_role_lawyer", label: "정회원 변호사 역할 ID" },
-                { key: "discord_role_trainee", label: "견습변호사 역할 ID" },
-                { key: "discord_role_president", label: "협회장 역할 ID" },
-                { key: "discord_role_speaker", label: "총회의장 역할 ID" },
-                {
-                  key: "discord_role_exam_comm",
-                  label: "변호사시험관리위원 역할 ID",
-                },
-                {
-                  key: "discord_role_discipline_comm",
-                  label: "변호사징계위원 역할 ID",
-                },
-                { key: "discord_role_staff", label: "사무국 직원 역할 ID" },
+                { key: "discord_role_lawyer", label: "⚖️ 정회원 변호사 역할 ID" },
+                { key: "discord_role_trainee", label: "📋 견습변호사 역할 ID" },
+                { key: "discord_role_group_executive", label: "【 🎓 · 임원 】 헤더 역할 ID" },
+                { key: "discord_role_board", label: "🏢 이사회 (그룹) 역할 ID" },
+                { key: "discord_role_president", label: "[ ⚖️ ] 회장 역할 ID" },
+                { key: "discord_role_vice_president", label: "[ ⚖️ ] 부회장 역할 ID" },
+                { key: "discord_role_director", label: "[ 🎓 ] 이사 역할 ID" },
+                { key: "discord_role_group_assembly", label: "【 📜 · 총회 】 헤더 역할 ID" },
+                { key: "discord_role_speaker", label: "[ 🎭 ] 의장 (총회) 역할 ID" },
+                { key: "discord_role_vice_speaker", label: "[ 🎭 ] 부의장 (총회) 역할 ID" },
+                { key: "discord_role_group_secretariat", label: "【 📂 · 사무국 】 헤더 역할 ID" },
+                { key: "discord_role_secretary_general", label: "[ 🖋️ ] 사무총장 역할 ID" },
+                { key: "discord_role_staff", label: "[ 🖋️ ] 직원 (사무국) 역할 ID" },
+                { key: "discord_role_discipline_comm", label: "⚖️ 징계위원회 역할 ID" },
+                { key: "discord_role_exam_comm", label: "📝 변호사시험관리위원 역할 ID" },
               ].map((r) => (
                 <div
                   key={r.key}
@@ -1973,6 +2259,7 @@ export default function AdminClient({
             </button>
           </div>
         </form>
+        </div>
       )}
 
       {/* ========================================================================= */}

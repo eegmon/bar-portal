@@ -32,14 +32,22 @@ export async function getSettingValue(key: string, envFallbackKey?: string): Pro
   return "";
 }
 
-export async function getWebhookUrl(type: string): Promise<string> {
+export type WebhookType = "NOTICE" | "LAWYER_APPROVAL" | "DISCIPLINE" | "EXAM" | "ASSEMBLY" | "ADMIN";
+
+export async function getWebhookUrl(type: WebhookType | string): Promise<string> {
   const dbKey = `webhook_${type.toLowerCase()}`;
   const envKey = `DISCORD_WEBHOOK_${type.toUpperCase()}`;
-  return getSettingValue(dbKey, envKey);
+  let url = await getSettingValue(dbKey, envKey);
+  
+  // LAWYER_APPROVAL 전용 웹훅이 없으면 NOTICE 웹훅으로 fallback
+  if (!url && type === "LAWYER_APPROVAL") {
+    url = await getSettingValue("webhook_notice", "DISCORD_WEBHOOK_NOTICE");
+  }
+  return url;
 }
 
 export async function sendDiscordWebhook(
-  type: "NOTICE" | "DISCIPLINE" | "EXAM" | "ASSEMBLY" | "ADMIN",
+  type: WebhookType,
   payload: { content?: string; embeds?: DiscordEmbed[] }
 ) {
   const url = await getWebhookUrl(type);
@@ -201,11 +209,27 @@ export async function syncUserDiscordRoles(params: {
 
   const lawyerRoleId = await getSettingValue("discord_role_lawyer", "DISCORD_ROLE_LAWYER");
   const traineeRoleId = await getSettingValue("discord_role_trainee", "DISCORD_ROLE_TRAINEE");
+  
+  // 이사회 & 임원 그룹
+  const groupExecutiveRoleId = await getSettingValue("discord_role_group_executive", "DISCORD_ROLE_GROUP_EXECUTIVE");
   const presidentRoleId = await getSettingValue("discord_role_president", "DISCORD_ROLE_PRESIDENT");
+  const vicePresidentRoleId = await getSettingValue("discord_role_vice_president", "DISCORD_ROLE_VICE_PRESIDENT");
+  const directorRoleId = await getSettingValue("discord_role_director", "DISCORD_ROLE_DIRECTOR");
+  const boardRoleId = await getSettingValue("discord_role_board", "DISCORD_ROLE_BOARD");
+
+  // 총회 그룹
+  const groupAssemblyRoleId = await getSettingValue("discord_role_group_assembly", "DISCORD_ROLE_GROUP_ASSEMBLY");
   const speakerRoleId = await getSettingValue("discord_role_speaker", "DISCORD_ROLE_SPEAKER");
+  const viceSpeakerRoleId = await getSettingValue("discord_role_vice_speaker", "DISCORD_ROLE_VICE_SPEAKER");
+
+  // 사무국 그룹
+  const groupSecretariatRoleId = await getSettingValue("discord_role_group_secretariat", "DISCORD_ROLE_GROUP_SECRETARIAT");
+  const secretaryGeneralRoleId = await getSettingValue("discord_role_secretary_general", "DISCORD_ROLE_SECRETARY_GENERAL");
+  const staffRoleId = await getSettingValue("discord_role_staff", "DISCORD_ROLE_STAFF");
+
+  // 위원회
   const examCommRoleId = await getSettingValue("discord_role_exam_comm", "DISCORD_ROLE_EXAM_COMM");
   const disciplineCommRoleId = await getSettingValue("discord_role_discipline_comm", "DISCORD_ROLE_DISCIPLINE_COMM");
-  const staffRoleId = await getSettingValue("discord_role_staff", "DISCORD_ROLE_STAFF");
 
   // 1. 변호사/견습 역할 동기화
   if (status === "ACTIVE" && role === "LAWYER") {
@@ -217,32 +241,66 @@ export async function syncUserDiscordRoles(params: {
     if (traineeRoleId) await removeDiscordRole(discordUserId, traineeRoleId);
   }
 
-  // 2. 직책별 디스코드 역할 부여
+  // 2. 이사회 & 【 🎓 · 임원 】 그룹
+  const isExecutive = positions.some((p) => ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR"].includes(p));
+  if (groupExecutiveRoleId) {
+    if (isExecutive) await addDiscordRole(discordUserId, groupExecutiveRoleId);
+    else await removeDiscordRole(discordUserId, groupExecutiveRoleId);
+  }
+  if (boardRoleId) {
+    if (isExecutive) await addDiscordRole(discordUserId, boardRoleId);
+    else await removeDiscordRole(discordUserId, boardRoleId);
+  }
   if (presidentRoleId) {
     if (positions.includes("PRESIDENT")) await addDiscordRole(discordUserId, presidentRoleId);
     else await removeDiscordRole(discordUserId, presidentRoleId);
   }
+  if (vicePresidentRoleId) {
+    if (positions.includes("VICE_PRESIDENT")) await addDiscordRole(discordUserId, vicePresidentRoleId);
+    else await removeDiscordRole(discordUserId, vicePresidentRoleId);
+  }
+  if (directorRoleId) {
+    if (positions.includes("DIRECTOR")) await addDiscordRole(discordUserId, directorRoleId);
+    else await removeDiscordRole(discordUserId, directorRoleId);
+  }
 
+  // 3. 총회 의장단 & 【 📜 · 총회 】 그룹
+  const isAssemblyLeader = positions.some((p) => ["ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p));
+  if (groupAssemblyRoleId) {
+    if (isAssemblyLeader) await addDiscordRole(discordUserId, groupAssemblyRoleId);
+    else await removeDiscordRole(discordUserId, groupAssemblyRoleId);
+  }
   if (speakerRoleId) {
     if (positions.includes("ASSEMBLY_SPEAKER")) await addDiscordRole(discordUserId, speakerRoleId);
     else await removeDiscordRole(discordUserId, speakerRoleId);
   }
+  if (viceSpeakerRoleId) {
+    if (positions.includes("ASSEMBLY_VICE_SPEAKER")) await addDiscordRole(discordUserId, viceSpeakerRoleId);
+    else await removeDiscordRole(discordUserId, viceSpeakerRoleId);
+  }
 
+  // 4. 사무국 & 【 📂 · 사무국 】 그룹
+  const isSecretariat = positions.some((p) => ["SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p));
+  if (groupSecretariatRoleId) {
+    if (isSecretariat) await addDiscordRole(discordUserId, groupSecretariatRoleId);
+    else await removeDiscordRole(discordUserId, groupSecretariatRoleId);
+  }
+  if (secretaryGeneralRoleId) {
+    if (positions.includes("SECRETARY_GENERAL")) await addDiscordRole(discordUserId, secretaryGeneralRoleId);
+    else await removeDiscordRole(discordUserId, secretaryGeneralRoleId);
+  }
+  if (staffRoleId) {
+    if (positions.includes("SECRETARIAT_STAFF")) await addDiscordRole(discordUserId, staffRoleId);
+    else await removeDiscordRole(discordUserId, staffRoleId);
+  }
+
+  // 5. 위원회
   if (examCommRoleId) {
     if (positions.includes("EXAM_COMM_MEMBER")) await addDiscordRole(discordUserId, examCommRoleId);
     else await removeDiscordRole(discordUserId, examCommRoleId);
   }
-
   if (disciplineCommRoleId) {
     if (positions.includes("DISCIPLINE_COMM_MEMBER")) await addDiscordRole(discordUserId, disciplineCommRoleId);
     else await removeDiscordRole(discordUserId, disciplineCommRoleId);
-  }
-
-  if (staffRoleId) {
-    if (positions.includes("SECRETARY_GENERAL") || positions.includes("SECRETARIAT_STAFF")) {
-      await addDiscordRole(discordUserId, staffRoleId);
-    } else {
-      await removeDiscordRole(discordUserId, staffRoleId);
-    }
   }
 }
