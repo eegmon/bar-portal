@@ -122,7 +122,10 @@ export default async function AdminDashboardPage() {
           webhook_notice: settingsMap["webhook_notice"] || process.env.DISCORD_WEBHOOK_NOTICE || "",
           webhook_lawyer_approval: settingsMap["webhook_lawyer_approval"] || process.env.DISCORD_WEBHOOK_LAWYER_APPROVAL || "",
           webhook_exam: settingsMap["webhook_exam"] || process.env.DISCORD_WEBHOOK_EXAM || "",
+          webhook_exam_admin: settingsMap["webhook_exam_admin"] || process.env.DISCORD_WEBHOOK_EXAM_ADMIN || "",
           webhook_assembly: settingsMap["webhook_assembly"] || process.env.DISCORD_WEBHOOK_ASSEMBLY || "",
+          webhook_assembly_notice: settingsMap["webhook_assembly_notice"] || process.env.DISCORD_WEBHOOK_ASSEMBLY_NOTICE || "",
+          webhook_assembly_vote: settingsMap["webhook_assembly_vote"] || process.env.DISCORD_WEBHOOK_ASSEMBLY_VOTE || "",
           webhook_discipline: settingsMap["webhook_discipline"] || process.env.DISCORD_WEBHOOK_DISCIPLINE || "",
           webhook_admin: settingsMap["webhook_admin"] || process.env.DISCORD_WEBHOOK_ADMIN || "",
 

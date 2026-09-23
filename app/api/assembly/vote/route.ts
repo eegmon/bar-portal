@@ -177,7 +177,7 @@ export async function POST(req: Request) {
     await db.batch(voteStatements, "write");
 
     // 7. 디스코드 실시간 알림
-    await sendDiscordWebhook("ASSEMBLY", {
+    await sendDiscordWebhook("ASSEMBLY_VOTE", {
       embeds: [
         {
           title: `🗳️ [총회 전자투표] 표결 접수 (${agenda.title})`,

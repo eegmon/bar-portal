@@ -26,6 +26,7 @@ import {
   FileText,
   ArrowUp,
   ArrowDown,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { OFFICER_POSITIONS, SessionUser } from "@/lib/types";
@@ -68,7 +69,7 @@ export default function AdminClient({
   initialAuditLogs,
   stats,
 }: AdminClientProps) {
-  // 사용 가능한 첫 번째 탭 기본 선택
+  // 사용 가능한 첫 번째 탭 기본 선택 (URL ?tab= 파라미터 우선 반영)
   const defaultTab = permissions.canUsers
     ? "users"
     : permissions.canAssembly
@@ -77,7 +78,24 @@ export default function AdminClient({
         ? "settings"
         : "overview";
 
-  const [activeTab, setActiveTab] = useState<string>(defaultTab);
+  const [activeTab, setActiveTabState] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const tabParam = new URLSearchParams(window.location.search).get("tab");
+      if (tabParam && ["users", "assembly", "settings", "overview"].includes(tabParam)) {
+        return tabParam;
+      }
+    }
+    return defaultTab;
+  });
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState(null, "", url.toString());
+    }
+  };
 
   // 1. 회원 명부 상태
   const [users, setUsers] = useState<any[]>(initialUsers);
@@ -118,7 +136,9 @@ export default function AdminClient({
   const [assemblies, setAssemblies] = useState<any[]>(initialAssemblies);
   const [agendas, setAgendas] = useState<any[]>(initialAgendas);
   const [attendances, setAttendances] = useState<any[]>(initialAttendances);
-  const [selectedAssemblyId, setSelectedAssemblyId] = useState("");
+  const [selectedAssemblyId, setSelectedAssemblyId] = useState(
+    initialAssemblies[0]?.id || "",
+  );
   const [votingRights, setVotingRights] = useState<any[]>(initialVotingRights);
   const [auditLogs] = useState<any[]>(initialAuditLogs);
   const [rightAssemblyId, setRightAssemblyId] = useState(assemblies[0]?.id || "");
@@ -414,12 +434,50 @@ export default function AdminClient({
       alert(
         `🏛️ ${newAssIsRegular ? "정기총회" : "임시총회(임시회)"} 일정이 성공적으로 개설되었습니다!`,
       );
+      if (data.assembly) {
+        setAssemblies((prev) => [data.assembly, ...prev]);
+        setSelectedAssemblyId(data.assemblyId);
+        setTargetAssemblyId(data.assemblyId);
+      }
       setShowAssemblyModal(false);
-      window.location.reload();
+      setNewAssTitle("");
+      setNewAssHeldAt("");
     } catch (err: any) {
       alert(`오류: ${err.message}`);
     } finally {
       setIsCreatingAssembly(false);
+    }
+  };
+
+  // 총회 일정 삭제
+  const handleDeleteAssembly = async (assembly: any) => {
+    if (
+      !confirm(
+        `⚠️ [총회 일정 삭제]\n\n"${assembly.title}"(제${assembly.round_number}회) 일정을 완전히 삭제하시겠습니까?\n\n※ 상정된 모든 안건과 투표함, 출석/위임장 기록이 함께 영구 삭제됩니다.`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/assembly/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "DELETE_ASSEMBLY", assemblyId: assembly.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "총회 삭제 실패");
+
+      alert(data.message || "총회가 삭제되었습니다.");
+      const remainingAssemblies = assemblies.filter((a) => a.id !== assembly.id);
+      setAssemblies(remainingAssemblies);
+      setAgendas((prev) => prev.filter((ag) => ag.assembly_id !== assembly.id));
+      if (selectedAssemblyId === assembly.id) {
+        const nextId = remainingAssemblies[0]?.id || "";
+        setSelectedAssemblyId(nextId);
+        setTargetAssemblyId(nextId);
+      }
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
     }
   };
 
@@ -451,8 +509,18 @@ export default function AdminClient({
       if (!res.ok) throw new Error(data.error || "안건 상정 실패");
 
       alert("📋 안건이 상정되었습니다.");
+      if (data.agenda) {
+        setAgendas((prev) => [...prev, data.agenda]);
+      }
+      setSelectedAssemblyId(targetAssemblyId);
       setShowAgendaModal(false);
-      window.location.reload();
+      setNewAgTitle("");
+      setNewAgDesc("");
+      setNewAgChoices("찬성, 반대, 기권");
+      setNewAgQuorum(0);
+      setNewAgDeadline("");
+      setNewAgMethod("MAJORITY");
+      setNewAgIsSecret(false);
     } catch (err: any) {
       alert(`오류: ${err.message}`);
     } finally {
@@ -1253,7 +1321,12 @@ export default function AdminClient({
                 <Plus className="w-3.5 h-3.5" /> 신규 총회 일정 개설
               </button>
               <button
-                onClick={() => setShowAgendaModal(true)}
+                onClick={() => {
+                  if (selectedAssemblyId) {
+                    setTargetAssemblyId(selectedAssemblyId);
+                  }
+                  setShowAgendaModal(true);
+                }}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" /> 신규 안건 상정
@@ -1421,19 +1494,60 @@ export default function AdminClient({
                         <FileText className="w-3.5 h-3.5" />
                         {ass.minutes_text ? "의사록 수정/열람" : "의사록 작성"}
                       </button>
+
+                      {/* 이 총회에 안건 추가 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTargetAssemblyId(ass.id);
+                          setShowAgendaModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> 안건 추가
+                      </button>
+
+                      {/* 총회 삭제 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAssembly(ass)}
+                        className="px-2.5 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                        title="총회 및 관련 안건 전체 삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> 총회 삭제
+                      </button>
                     </div>
                   </div>
 
                   {/* 해당 총회의 안건 목록 */}
                   <div className="space-y-2">
-                    <div className="text-xs font-semibold text-slate-400 flex items-center gap-1">
-                      상정된 안건 ({assAgendas.length}건):
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+                      <span>상정된 안건 ({assAgendas.length}건):</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTargetAssemblyId(ass.id);
+                          setShowAgendaModal(true);
+                        }}
+                        className="text-[11px] text-emerald-400 hover:underline flex items-center gap-0.5"
+                      >
+                        <Plus className="w-3 h-3" /> 안건 추가
+                      </button>
                     </div>
 
                     {assAgendas.length === 0 ? (
-                      <div className="p-3 bg-slate-900 rounded-lg text-xs text-slate-500 text-center">
-                        아직 상정된 안건이 없습니다. 상단 [신규 안건 상정]
-                        버튼을 눌러 안건을 추가하세요.
+                      <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-400 text-center space-y-2">
+                        <p>아직 상정된 안건이 없습니다.</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetAssemblyId(ass.id);
+                            setShowAgendaModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow inline-flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> 이 총회에 안건 추가하기
+                        </button>
                       </div>
                     ) : (
                       assAgendas.map((ag, agendaIndex) => (
@@ -1451,6 +1565,25 @@ export default function AdminClient({
                                 }`}
                               >
                                 {ag.is_secret ? "무기명 비밀투표" : "기명투표"}
+                              </span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                                  ag.voting_method === "TWO_THIRDS"
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                    : ag.voting_method === "PLURALITY"
+                                      ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                                      : ag.voting_method === "RANKED"
+                                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                        : "bg-slate-800 text-slate-300 border border-slate-700"
+                                }`}
+                              >
+                                {ag.voting_method === "TWO_THIRDS"
+                                  ? "특별의결 (2/3)"
+                                  : ag.voting_method === "PLURALITY"
+                                    ? "최다득표제"
+                                    : ag.voting_method === "RANKED"
+                                      ? "순위투표"
+                                      : "일반의결 (과반)"}
                               </span>
                               <span className="font-bold text-white">
                                 {ag.title}
@@ -1756,6 +1889,25 @@ export default function AdminClient({
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">쉼표로 구분합니다. 2개 이상 입력해야 합니다.</p>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-bold">
+                  투표 의결 방식 (Voting Method)
+                </label>
+                <select
+                  value={newAgMethod}
+                  onChange={(e) => setNewAgMethod(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-xs"
+                >
+                  <option value="MAJORITY">일반의결 (출석 과반수 찬성 - 일반 안건 및 예산안)</option>
+                  <option value="TWO_THIRDS">특별의결 (출석 2/3 이상 찬성 - 회칙 개정, 임원 불신임)</option>
+                  <option value="PLURALITY">최다득표제 (단순 다수결 - 복수 후보자/선택지 선출)</option>
+                  <option value="RANKED">선호투표제 (순위투표)</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  도스변협 회칙 제15조에 따른 기본 일반의결(과반수) 또는 회칙 개정 등 특별의결(2/3 이상)을 지정합니다.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2164,25 +2316,24 @@ export default function AdminClient({
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Bot className="w-5 h-5 text-blue-400" />
-                디스코드 5대 웹훅 및 봇 역할(Role) 자동지급 설정
+                디스코드 채널별 전용 웹훅 및 봇 역할(Role) 자동지급 설정
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                각 알림 채널별 웹훅 URL과 디스코드 봇 토큰 및 역할 ID를 입력하면
-                회원의 자격 변경 시 디스코드 역할이 자동 부여됩니다.
+                총회 공지/표결, 시험 공지/관리자 알림, 정회원 승인 등 채널 목적별 웹훅 URL을 분리하여 디스코드에 알림을 전송합니다.
               </p>
             </div>
 
-          {/* 5대 웹훅 설정 */}
+          {/* 웹훅 설정 목록 */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-amber-400 border-b border-slate-800 pb-2">
-              📢 5대 알림 채널 웹훅 URL
+            <h3 className="text-xs font-bold text-amber-400 border-b border-slate-800 pb-2 flex items-center gap-1.5">
+              <span>📢</span> 채널별 디스코드 전용 웹훅 URL (미입력 시 상위 웹훅 자동 Fallback)
             </h3>
 
             {[
               {
                 key: "webhook_notice",
                 label: "공지사항 웹훅 (NOTICE)",
-                desc: "변호사시험 합격자 공고 등 협회 공식 공고",
+                desc: "변호사시험 최종 합격자 공고 등 협회 공식 대외 공고",
               },
               {
                 key: "webhook_lawyer_approval",
@@ -2190,24 +2341,34 @@ export default function AdminClient({
                 desc: "신규 변호사 자격 등록 승인 공표 (미설정 시 NOTICE 웹훅으로 발송)",
               },
               {
-                key: "webhook_exam",
-                label: "변호사시험 웹훅 (EXAM)",
-                desc: "문제 정정 긴급 방송",
+                key: "webhook_assembly_notice",
+                label: "🏛️ 총회 일정 공지 웹훅 (ASSEMBLY_NOTICE)",
+                desc: "정기/임시 총회 소집 공고, 사전 위임장/출석 접수, 공식 의사록 공표 (미설정 시 기존 총회 웹훅 활용)",
               },
               {
-                key: "webhook_assembly",
-                label: "총회/전자투표 웹훅 (ASSEMBLY)",
-                desc: "총회 소집, 표결 선포, 위임장 접수, 공식 의사록",
+                key: "webhook_assembly_vote",
+                label: "🗳️ 총회 의사진행 및 표결 웹훅 (ASSEMBLY_VOTE)",
+                desc: "총회 개회 중 안건 표결 개시 선포, 마감 연장 알림, 실시간 표결 종료 및 집계 결과 선포",
+              },
+              {
+                key: "webhook_exam",
+                label: "📝 변호사시험 수험생 공지 웹훅 (EXAM)",
+                desc: "시험 시행 계획 공식 공고, 제1차 필기 실시간 문제 정정 긴급 방송",
+              },
+              {
+                key: "webhook_exam_admin",
+                label: "🔒 변호사시험 관리자 전용 웹훅 (EXAM_ADMIN)",
+                desc: "CBT 1차 문항 및 정답표 갱신 알림, 익명 수험번호 발급, 수험생 1차/2차 답안 제출 접수 알림 (미설정 시 ADMIN 웹훅 활용)",
               },
               {
                 key: "webhook_discipline",
-                label: "징계위원회 웹훅 (DISCIPLINE)",
-                desc: "징계 처분 대국민 공시",
+                label: "⚖️ 징계위원회 웹훅 (DISCIPLINE)",
+                desc: "변호사법 제60조에 따른 징계 처분 대국민 공시",
               },
               {
                 key: "webhook_admin",
-                label: "사무국 관리자 웹훅 (ADMIN)",
-                desc: "신규 가입 신청, 설정 갱신 로그, 시험 출제 갱신",
+                label: "사무국 일반 관리자 웹훅 (ADMIN)",
+                desc: "신규 회원가입 신청 접수, 시스템 및 역할 설정 갱신 감사로그",
               },
             ].map((item) => {
               const testType = item.key.replace("webhook_", "").toUpperCase();

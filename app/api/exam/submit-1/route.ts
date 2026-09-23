@@ -79,7 +79,7 @@ export async function POST(req: Request) {
         args: [userId, JSON.stringify(answers), score, passed, existing.id],
       });
 
-      await sendDiscordWebhook("ADMIN", {
+      await sendDiscordWebhook("EXAM_ADMIN", {
         embeds: [
           {
             title: `📝 제1차 변호사시험 답안 제출 (#${code})`,

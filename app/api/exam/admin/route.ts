@@ -34,9 +34,19 @@ export async function POST(req: Request) {
       } = body;
 
       const round = Number(roundNumber);
-      if (!round || !title?.trim() || !phase1Start || !phase1End || !phase2Start || !phase2End) {
+      if (
+        !round ||
+        !title?.trim() ||
+        !phase1Start ||
+        !phase1End ||
+        !phase2Start ||
+        !phase2End
+      ) {
         return NextResponse.json(
-          { error: "회차 번호, 시험 명칭, 1차 및 2차 시험 일시를 모두 입력해 주세요." },
+          {
+            error:
+              "회차 번호, 시험 명칭, 1차 및 2차 시험 일시를 모두 입력해 주세요.",
+          },
           { status: 400 },
         );
       }
@@ -54,7 +64,7 @@ export async function POST(req: Request) {
       }
 
       const examId = `exam-${round}-${Date.now()}`;
-      
+
       // 기본 10문항 템플릿 생성
       const defaultQuestions = Array.from({ length: 10 }, (_, i) => ({
         num: i + 1,
@@ -94,15 +104,23 @@ export async function POST(req: Request) {
 
       if (broadcastNotice) {
         await sendDiscordWebhook("EXAM", {
-          content: `@everyone 📝 **[시험 공고] ${title} 일정이 개설되었습니다.**`,
+          content: `📝 **[시험 공고] ${title} 일정이 개설되었습니다.**`,
           embeds: [
             {
               title: `⚖️ ${title} 시행 계획 공고`,
               description: `도스변호사시험관리위원회에서 제${round}회 변호사시험 시행 일정을 확정 공고합니다.`,
               color: 0x4f46e5,
               fields: [
-                { name: "1차 CBT 필기", value: `${phase1Start} ~ ${phase1End}`, inline: false },
-                { name: "2차 서술형", value: `${phase2Start} ~ ${phase2End}`, inline: false },
+                {
+                  name: "1차 CBT 필기",
+                  value: `${phase1Start} ~ ${phase1End}`,
+                  inline: false,
+                },
+                {
+                  name: "2차 서술형",
+                  value: `${phase2Start} ~ ${phase2End}`,
+                  inline: false,
+                },
                 { name: "현재 상태", value: status, inline: true },
               ],
               footer: { text: "도스변호사협회 변호사시험관리위원회" },
@@ -135,7 +153,10 @@ export async function POST(req: Request) {
       } = body;
 
       if (!examId) {
-        return NextResponse.json({ error: "examId가 필요합니다." }, { status: 400 });
+        return NextResponse.json(
+          { error: "examId가 필요합니다." },
+          { status: 400 },
+        );
       }
 
       await db.execute({
@@ -210,6 +231,17 @@ export async function POST(req: Request) {
         issuedCodes.push(code);
       }
 
+      await sendDiscordWebhook("EXAM_ADMIN", {
+        embeds: [
+          {
+            title: `🔑 [변호사시험 관리자] 수험번호 ${issuedCodes.length}개 발급 완료`,
+            description: `변호사시험관리위원회(**${user.name}** 위원)에서 수험번호 ${issuedCodes.length}개를 신규 발급하였습니다.`,
+            color: 0x3b82f6,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+
       return NextResponse.json({
         success: true,
         examId,
@@ -233,8 +265,8 @@ export async function POST(req: Request) {
         args: [JSON.stringify(questions), examId],
       });
 
-      // 디스코드 관리자/시험 채널 알림
-      await sendDiscordWebhook("ADMIN", {
+      // 디스코드 시험 관리자 채널 알림
+      await sendDiscordWebhook("EXAM_ADMIN", {
         embeds: [
           {
             title: "📝 [변호사시험] 제1차 CBT 문항 및 정답표 갱신",
@@ -348,10 +380,21 @@ export async function POST(req: Request) {
     // 4. 최종 합격자 명단 공개 발표 (포털 + 디스코드)
     if (action === "RELEASE_RESULTS") {
       const { examId } = body;
-      if (!examId) return NextResponse.json({ error: "examId가 필요합니다." }, { status: 400 });
+      if (!examId)
+        return NextResponse.json(
+          { error: "examId가 필요합니다." },
+          { status: 400 },
+        );
 
-      const examRes = await db.execute({ sql: "SELECT * FROM exams WHERE id = ?", args: [examId] });
-      if (examRes.rows.length === 0) return NextResponse.json({ error: "시험을 찾을 수 없습니다." }, { status: 404 });
+      const examRes = await db.execute({
+        sql: "SELECT * FROM exams WHERE id = ?",
+        args: [examId],
+      });
+      if (examRes.rows.length === 0)
+        return NextResponse.json(
+          { error: "시험을 찾을 수 없습니다." },
+          { status: 404 },
+        );
       const exam = examRes.rows[0];
 
       const passersRes = await db.execute({
@@ -360,24 +403,38 @@ export async function POST(req: Request) {
       });
 
       // 시험 상태를 FINISHED로 변경
-      await db.execute({ sql: "UPDATE exams SET status = 'FINISHED' WHERE id = ?", args: [examId] });
+      await db.execute({
+        sql: "UPDATE exams SET status = 'FINISHED' WHERE id = ?",
+        args: [examId],
+      });
 
       const passerList = passersRes.rows
-        .map((r, idx) => `${idx + 1}위: \`#${r.security_code}\` — **${r.total_score}점**`)
+        .map(
+          (r, idx) =>
+            `${idx + 1}위: \`#${r.security_code}\` — **${r.total_score}점**`,
+        )
         .join("\n");
 
       await sendDiscordWebhook("NOTICE", {
-        content: "@everyone 🎉 **[공식 합격자 발표] 도스변호사시험 최종 합격자 명단**",
-        embeds: [{
-          title: `🏆 ${exam.title} 최종 합격자 명단 (총 ${passersRes.rows.length}명)`,
-          description: passerList || "합격자가 없습니다.",
-          color: 0x10B981,
-          footer: { text: "도스변호사협회 변호사시험관리위원회 · 합격자 실명은 /exam/my-score 에서 확인" },
-          timestamp: new Date().toISOString(),
-        }],
+        content: "🎉 **[공식 합격자 발표] 도스변호사시험 최종 합격자 명단**",
+        embeds: [
+          {
+            title: `🏆 ${exam.title} 최종 합격자 명단 (총 ${passersRes.rows.length}명)`,
+            description: passerList || "합격자가 없습니다.",
+            color: 0x10b981,
+            footer: {
+              text: "도스변호사협회 변호사시험관리위원회 · 합격자 실명은 /exam/my-score 에서 확인",
+            },
+            timestamp: new Date().toISOString(),
+          },
+        ],
       });
 
-      return NextResponse.json({ success: true, count: passersRes.rows.length, message: `합격자 ${passersRes.rows.length}명이 공식 발표되었습니다.` });
+      return NextResponse.json({
+        success: true,
+        count: passersRes.rows.length,
+        message: `합격자 ${passersRes.rows.length}명이 공식 발표되었습니다.`,
+      });
     }
 
     return NextResponse.json(

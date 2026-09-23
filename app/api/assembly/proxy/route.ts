@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       }
 
       // 디스코드 총회/사무국 알림
-      await sendDiscordWebhook("ASSEMBLY", {
+      await sendDiscordWebhook("ASSEMBLY_NOTICE", {
         embeds: [
           {
             title: "📋 [정기총회] 불참 자격 재등록 신청서 접수",
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
       }
 
       // 디스코드 총회/사무국 알림
-      await sendDiscordWebhook("ASSEMBLY", {
+      await sendDiscordWebhook("ASSEMBLY_NOTICE", {
         embeds: [
           {
             title: "🗳️ [정기총회] 의결권 위임장 접수",

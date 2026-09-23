@@ -137,7 +137,7 @@ export async function POST(req: Request) {
         const typeLabel = typeLabels[type] || type;
 
         await sendDiscordWebhook("DISCIPLINE", {
-          content: `@everyone ⚖️ **[변호사 징계처분 공시] 변호사법 제60조 및 회칙 제36조에 따른 징계 공시**`,
+          content: `⚖️ **[변호사 징계처분 공시] 변호사법 제60조 및 회칙 제36조에 따른 징계 공시**`,
           embeds: [
             {
               title: `🚨 도스변호사협회 변호사징계위원회 처분 공시`,

@@ -32,17 +32,50 @@ export async function getSettingValue(key: string, envFallbackKey?: string): Pro
   return "";
 }
 
-export type WebhookType = "NOTICE" | "LAWYER_APPROVAL" | "DISCIPLINE" | "EXAM" | "ASSEMBLY" | "ADMIN";
+export type WebhookType =
+  | "NOTICE"
+  | "LAWYER_APPROVAL"
+  | "DISCIPLINE"
+  | "EXAM"
+  | "EXAM_ADMIN"
+  | "ASSEMBLY"
+  | "ASSEMBLY_NOTICE"
+  | "ASSEMBLY_VOTE"
+  | "ADMIN";
 
 export async function getWebhookUrl(type: WebhookType | string): Promise<string> {
   const dbKey = `webhook_${type.toLowerCase()}`;
   const envKey = `DISCORD_WEBHOOK_${type.toUpperCase()}`;
   let url = await getSettingValue(dbKey, envKey);
   
-  // LAWYER_APPROVAL 전용 웹훅이 없으면 NOTICE 웹훅으로 fallback
+  // 1. LAWYER_APPROVAL 전용 웹훅이 없으면 NOTICE 웹훅으로 fallback
   if (!url && type === "LAWYER_APPROVAL") {
     url = await getSettingValue("webhook_notice", "DISCORD_WEBHOOK_NOTICE");
   }
+
+  // 2. 총회 소집/일정 공고 (ASSEMBLY_NOTICE) 없으면 기존 ASSEMBLY 웹훅으로 fallback
+  if (!url && type === "ASSEMBLY_NOTICE") {
+    url = await getSettingValue("webhook_assembly", "DISCORD_WEBHOOK_ASSEMBLY");
+    if (!url) {
+      url = await getSettingValue("webhook_notice", "DISCORD_WEBHOOK_NOTICE");
+    }
+  }
+
+  // 3. 총회 의사진행 및 표결 (ASSEMBLY_VOTE) 없으면 기존 ASSEMBLY 웹훅으로 fallback
+  if (!url && type === "ASSEMBLY_VOTE") {
+    url = await getSettingValue("webhook_assembly", "DISCORD_WEBHOOK_ASSEMBLY");
+  }
+
+  // 4. ASSEMBLY 기본 호출 시 ASSEMBLY_NOTICE 우선 참조
+  if (!url && type === "ASSEMBLY") {
+    url = await getSettingValue("webhook_assembly_notice", "DISCORD_WEBHOOK_ASSEMBLY_NOTICE");
+  }
+
+  // 5. 변호사시험 관리자 전용 웹훅 (EXAM_ADMIN) 없으면 ADMIN 관리자 웹훅으로 fallback
+  if (!url && type === "EXAM_ADMIN") {
+    url = await getSettingValue("webhook_admin", "DISCORD_WEBHOOK_ADMIN");
+  }
+
   return url;
 }
 

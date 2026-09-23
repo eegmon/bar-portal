@@ -60,8 +60,8 @@ export async function POST(req: Request) {
       ],
     });
 
-    // 디스코드 채점관 전용 알림
-    await sendDiscordWebhook("ADMIN", {
+    // 디스코드 채점관/시험관리자 전용 알림
+    await sendDiscordWebhook("EXAM_ADMIN", {
       embeds: [
         {
           title: `📄 제2차 변호사시험 서술형 답안 제출 (#${code})`,
