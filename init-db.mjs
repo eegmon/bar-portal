@@ -26,6 +26,7 @@ async function init() {
       office_address TEXT DEFAULT '',
       bio TEXT DEFAULT '',
       specialties TEXT DEFAULT '[]', -- 전문분야 JSON
+      positions TEXT DEFAULT '[]', -- 직책 JSON (PRESIDENT, ASSEMBLY_SPEAKER 등)
       last_renewed_at TEXT DEFAULT (datetime('now')), -- 월별 재등록/갱신일
       created_at TEXT DEFAULT (datetime('now'))
     )

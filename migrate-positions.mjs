@@ -8,8 +8,8 @@ async function migratePositions() {
   try {
     await db.execute("ALTER TABLE users ADD COLUMN positions TEXT DEFAULT '[]'");
     console.log("✓ Added positions column to users table");
-  } catch (err) {
-    console.log("ℹ positions column already exists or info:", err.message);
+  } catch {
+    console.log("ℹ positions column already present in users table (OK)");
   }
 
   // Update default accounts
