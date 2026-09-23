@@ -11,9 +11,7 @@ interface PortalClientProps {
   lawyerProfile: any;
 }
 
-const SPECIALTY_OPTIONS = [
-  "형사", "민사", "가사", "행정", "헌법", "상사", "노동", "부동산", "지식재산", "국제", "금융", "조세", "의료", "환경", "스포츠"
-];
+const DEFAULT_SPECIALTIES = ["형사", "민사", "행정", "헌법"];
 
 export default function PortalClient({ lawyerProfile }: PortalClientProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "profile" | "security" | "bonus">("overview");
@@ -27,6 +25,7 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
   const [specialties, setSpecialties] = useState<string[]>(
     (() => { try { return JSON.parse(lawyerProfile?.specialties || "[]"); } catch { return []; } })()
   );
+  const [customSpecialty, setCustomSpecialty] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // 비밀번호 변경 상태
@@ -37,12 +36,25 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
 
   // 가산점 신청 상태
   const [bonusSchool, setBonusSchool] = useState("");
-  const [bonusYear, setBonusYear] = useState("");
+  const [bonusEvidence, setBonusEvidence] = useState("");
   const [isApplyingBonus, setIsApplyingBonus] = useState(false);
   const bonusStatus = lawyerProfile?.bonus_eligible;
 
   const toggleSpecialty = (s: string) => {
     setSpecialties((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+  };
+
+  const addCustomSpecialty = () => {
+    const trimmed = customSpecialty.trim().replace(/^#/, "");
+    if (!trimmed) return;
+    if (!specialties.includes(trimmed)) {
+      setSpecialties((prev) => [...prev, trimmed]);
+    }
+    setCustomSpecialty("");
+  };
+
+  const removeSpecialty = (s: string) => {
+    setSpecialties((prev) => prev.filter((x) => x !== s));
   };
 
   const handleSaveProfile = async () => {
@@ -87,13 +99,16 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
 
   const handleApplyBonus = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bonusSchool || !bonusYear) return;
+    if (!bonusSchool.trim() || !bonusEvidence.trim()) {
+      alert("학교명과 증빙자료를 입력해 주세요.");
+      return;
+    }
     setIsApplyingBonus(true);
     try {
       const res = await fetch("/api/portal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "APPLY_BONUS", schoolName: bonusSchool, graduationYear: bonusYear }),
+        body: JSON.stringify({ action: "APPLY_BONUS", schoolName: bonusSchool, evidence: bonusEvidence }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -255,8 +270,14 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
                 <input type="text" disabled value={lawyerProfile?.name || ""} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-500 cursor-not-allowed" />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1 font-semibold">연락처</label>
-                <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="010-0000-0000" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500" />
+                <label className="block text-slate-400 mb-1 font-semibold">연락처 (디스코드 등)</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="예: discord@username"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                />
               </div>
             </div>
 
@@ -271,8 +292,8 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1 font-semibold">디스코드 ID (역할 자동 지급)</label>
-              <input type="text" value={discordId} onChange={(e) => setDiscordId(e.target.value)} placeholder="123456789012345678" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-amber-500" />
+              <label className="block text-slate-400 mb-1 font-semibold">디스코드 ID (역할 자동 지급용 고유ID / 닉네임)</label>
+              <input type="text" value={discordId} onChange={(e) => setDiscordId(e.target.value)} placeholder="예: username 또는 18자리 숫자 ID" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-amber-500" />
             </div>
 
             <div>
@@ -281,22 +302,72 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1.5 font-semibold">전문분야 (다중 선택)</label>
-              <div className="flex flex-wrap gap-2">
-                {SPECIALTY_OPTIONS.map((s) => (
+              <label className="block text-slate-400 mb-1.5 font-semibold">전문분야 (기본 선택 및 자유 추가)</label>
+              
+              {/* 기본 4대 전문분야 */}
+              <div className="flex flex-wrap gap-2 mb-2">
+                {DEFAULT_SPECIALTIES.map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => toggleSpecialty(s)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                       specialties.includes(s)
-                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm"
                         : "bg-slate-950 text-slate-400 border-slate-700 hover:border-slate-600"
                     }`}
                   >
                     {specialties.includes(s) ? "✓ " : ""}{s}
                   </button>
                 ))}
+              </div>
+
+              {/* 기타 직접 입력된 태그들 */}
+              {specialties.filter((s) => !DEFAULT_SPECIALTIES.includes(s)).length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-2.5 pt-1">
+                  {specialties
+                    .filter((s) => !DEFAULT_SPECIALTIES.includes(s))
+                    .map((s) => (
+                      <span
+                        key={s}
+                        className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-semibold flex items-center gap-1.5"
+                      >
+                        #{s}
+                        <button
+                          type="button"
+                          onClick={() => removeSpecialty(s)}
+                          className="hover:text-red-400 font-bold ml-0.5 focus:outline-none"
+                          title="삭제"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
+
+              {/* 기타 직접 추가 입력창 */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customSpecialty}
+                  onChange={(e) => setCustomSpecialty(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomSpecialty();
+                    }
+                  }}
+                  placeholder="기타 전문분야 직접 입력 (예: 기업법무, 가사 등)"
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={addCustomSpecialty}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-lg text-xs font-semibold shrink-0"
+                >
+                  + 직접 추가
+                </button>
               </div>
             </div>
           </div>
@@ -364,31 +435,31 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
           ) : (
             <form onSubmit={handleApplyBonus} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-300 mb-1 font-semibold">이수 학교명 *</label>
+                <label className="block text-slate-300 mb-1 font-semibold">이수 학교 / 학과명 *</label>
                 <input
                   type="text"
                   required
                   value={bonusSchool}
                   onChange={(e) => setBonusSchool(e.target.value)}
-                  placeholder="예: 도스대학교 법학전문대학원"
+                  placeholder="예: 도스대학교 법학전문대학원 또는 OO대학교 법학과"
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
               <div>
-                <label className="block text-slate-300 mb-1 font-semibold">졸업연도 *</label>
-                <input
-                  type="number"
+                <label className="block text-slate-300 mb-1 font-semibold">
+                  증빙자료 (학위증 / 졸업증명서 / 수료증 이미지 링크 또는 상세 설명) *
+                </label>
+                <textarea
+                  rows={3}
                   required
-                  min={2000}
-                  max={2099}
-                  value={bonusYear}
-                  onChange={(e) => setBonusYear(e.target.value)}
-                  placeholder="2026"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                  value={bonusEvidence}
+                  onChange={(e) => setBonusEvidence(e.target.value)}
+                  placeholder="예: 졸업증명서/학위증 이미지 링크(Imgur, Discord 등) 또는 문서 발급 번호 / 상세 증빙 정보"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500 leading-relaxed"
                 />
               </div>
               <p className="text-[11px] text-slate-500">
-                * 신청 후 관리자(사무국)가 이수 사실을 확인하여 승인합니다. 허위 신청 시 자격이 취소될 수 있습니다.
+                * 신청 후 협회 관리자(사무국)가 제출된 증빙자료를 검토하여 가산점을 승인합니다. 허위 신청 시 자격이 취소될 수 있습니다.
               </p>
               <div className="flex justify-end pt-2 border-t border-slate-800">
                 <button type="submit" disabled={isApplyingBonus} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow">

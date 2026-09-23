@@ -54,17 +54,17 @@ export async function POST(req: Request) {
 
     // ── 법학과정 가산점 신청 ──────────────────────────────────────
     if (action === "APPLY_BONUS") {
-      const { schoolName, graduationYear } = body;
-      if (!schoolName || !graduationYear) {
-        return NextResponse.json({ error: "학교명과 졸업연도를 입력해 주세요." }, { status: 400 });
+      const { schoolName, evidence } = body;
+      if (!schoolName || !evidence) {
+        return NextResponse.json({ error: "학교명과 증빙자료를 입력해 주세요." }, { status: 400 });
       }
 
       // bonus_eligible = 2 : 심사중 상태
       await db.execute({
         sql: `UPDATE users SET bonus_eligible = 2, bio = CASE WHEN bio IS NULL OR bio = '' THEN ? ELSE bio || '\n[가산점신청] ' || ? END WHERE id = ?`,
         args: [
-          `[가산점신청] ${schoolName} ${graduationYear}년 졸업`,
-          `${schoolName} ${graduationYear}년 졸업`,
+          `[가산점신청] ${schoolName} (증빙: ${evidence})`,
+          `${schoolName} (증빙: ${evidence})`,
           user.id,
         ],
       });
