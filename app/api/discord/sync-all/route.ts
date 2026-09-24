@@ -4,18 +4,28 @@ import { canManageUsers } from "@/lib/types";
 import { syncAllUsersFromDiscord } from "@/lib/discord";
 import db from "@/lib/db";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const currentUser = await getSessionUser();
     if (!currentUser) {
-      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+      return NextResponse.json(
+        { error: "로그인이 필요합니다." },
+        { status: 401 },
+      );
     }
 
     if (!canManageUsers(currentUser)) {
-      return NextResponse.json({ error: "전체 회원 동기화 권한이 없습니다." }, { status: 403 });
+      return NextResponse.json(
+        { error: "전체 회원 동기화 권한이 없습니다." },
+        { status: 403 },
+      );
     }
 
-    const batchResult = await syncAllUsersFromDiscord();
+    const staleSinceParam = new URL(request.url).searchParams.get("staleSince");
+    const staleSinceHours = staleSinceParam
+      ? Number(staleSinceParam)
+      : undefined;
+    const batchResult = await syncAllUsersFromDiscord({ staleSinceHours });
 
     // 감사 로그 기록
     try {
@@ -38,6 +48,9 @@ export async function POST() {
     });
   } catch (err: any) {
     console.error("sync-all API error:", err);
-    return NextResponse.json({ error: err.message || "서버 오류가 발생했습니다." }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "서버 오류가 발생했습니다." },
+      { status: 500 },
+    );
   }
 }

@@ -29,18 +29,32 @@ export async function POST(req: Request) {
         phase1PdfUrl,
         phase2Doc1PdfUrl,
         phase2Doc2PdfUrl,
+        phase1MaxScore = 100,
+        phase2Question1MaxScore = 50,
+        phase2Question2MaxScore = 50,
+        finalPassingScore = 0,
+        phase1OperationMode = "MANUAL",
+        phase2OperationMode = "MANUAL",
         status = "SCHEDULED",
         broadcastNotice = true,
       } = body;
 
       const round = Number(roundNumber);
+      const maxScores = [
+        Number(phase1MaxScore),
+        Number(phase2Question1MaxScore),
+        Number(phase2Question2MaxScore),
+      ];
       if (
         !round ||
         !title?.trim() ||
         !phase1Start ||
         !phase1End ||
         !phase2Start ||
-        !phase2End
+        !phase2End ||
+        maxScores.some((score) => !Number.isInteger(score) || score <= 0) ||
+        !["TIME", "MANUAL"].includes(phase1OperationMode) ||
+        !["TIME", "MANUAL"].includes(phase2OperationMode)
       ) {
         return NextResponse.json(
           {
@@ -84,8 +98,8 @@ export async function POST(req: Request) {
 
       await db.execute({
         sql: `INSERT INTO exams 
-              (id, round_number, title, phase1_start, phase1_end, phase2_start, phase2_end, phase1_questions, phase1_pdf_url, phase2_doc1_pdf_url, phase2_doc2_pdf_url, status)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (id, round_number, title, phase1_start, phase1_end, phase2_start, phase2_end, phase1_questions, phase1_pdf_url, phase2_doc1_pdf_url, phase2_doc2_pdf_url, status, phase1_max_score, phase2_question1_max_score, phase2_question2_max_score, final_passing_score, phase1_operation_mode, phase2_operation_mode)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           examId,
           round,
@@ -99,6 +113,12 @@ export async function POST(req: Request) {
           phase2Doc1PdfUrl || "",
           phase2Doc2PdfUrl || "",
           status,
+          maxScores[0],
+          maxScores[1],
+          maxScores[2],
+          Number(finalPassingScore) || 0,
+          phase1OperationMode,
+          phase2OperationMode,
         ],
       });
 
@@ -150,11 +170,32 @@ export async function POST(req: Request) {
         phase1PdfUrl,
         phase2Doc1PdfUrl,
         phase2Doc2PdfUrl,
+        phase1MaxScore,
+        phase2Question1MaxScore,
+        phase2Question2MaxScore,
+        finalPassingScore,
+        phase1OperationMode,
+        phase2OperationMode,
       } = body;
 
       if (!examId) {
         return NextResponse.json(
           { error: "examId가 필요합니다." },
+          { status: 400 },
+        );
+      }
+
+      if (
+        (phase1OperationMode !== undefined &&
+          !["TIME", "MANUAL"].includes(phase1OperationMode)) ||
+        (phase2OperationMode !== undefined &&
+          !["TIME", "MANUAL"].includes(phase2OperationMode))
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "시험 운영 모드는 시간 자동 또는 관리자 수동만 선택할 수 있습니다.",
+          },
           { status: 400 },
         );
       }
@@ -169,7 +210,13 @@ export async function POST(req: Request) {
                   status = COALESCE(?, status),
                   phase1_pdf_url = COALESCE(?, phase1_pdf_url),
                   phase2_doc1_pdf_url = COALESCE(?, phase2_doc1_pdf_url),
-                  phase2_doc2_pdf_url = COALESCE(?, phase2_doc2_pdf_url)
+                  phase2_doc2_pdf_url = COALESCE(?, phase2_doc2_pdf_url),
+                  phase1_max_score = COALESCE(?, phase1_max_score),
+                  phase2_question1_max_score = COALESCE(?, phase2_question1_max_score),
+                  phase2_question2_max_score = COALESCE(?, phase2_question2_max_score),
+                  final_passing_score = COALESCE(?, final_passing_score),
+                  phase1_operation_mode = COALESCE(?, phase1_operation_mode),
+                  phase2_operation_mode = COALESCE(?, phase2_operation_mode)
               WHERE id = ?`,
         args: [
           title || null,
@@ -181,6 +228,16 @@ export async function POST(req: Request) {
           phase1PdfUrl !== undefined ? phase1PdfUrl : null,
           phase2Doc1PdfUrl !== undefined ? phase2Doc1PdfUrl : null,
           phase2Doc2PdfUrl !== undefined ? phase2Doc2PdfUrl : null,
+          phase1MaxScore !== undefined ? Number(phase1MaxScore) : null,
+          phase2Question1MaxScore !== undefined
+            ? Number(phase2Question1MaxScore)
+            : null,
+          phase2Question2MaxScore !== undefined
+            ? Number(phase2Question2MaxScore)
+            : null,
+          finalPassingScore !== undefined ? Number(finalPassingScore) : null,
+          phase1OperationMode !== undefined ? phase1OperationMode : null,
+          phase2OperationMode !== undefined ? phase2OperationMode : null,
           examId,
         ],
       });
@@ -225,8 +282,8 @@ export async function POST(req: Request) {
         await db.execute({
           sql: `INSERT INTO exam_submissions
                 (id, exam_id, user_id, security_code, phase1_answers, phase2_text_answer, phase2_file_url)
-                VALUES (?, ?, ?, ?, '[]', '', '')`,
-          args: [submissionId, examId, `anonymous-${code}`, code],
+                VALUES (?, ?, NULL, ?, '[]', '', '')`,
+          args: [submissionId, examId, code],
         });
         issuedCodes.push(code);
       }
@@ -339,16 +396,19 @@ export async function POST(req: Request) {
 
     // 3. 2차 채점표 점수 입력 및 합격 판정
     if (action === "GRADE_PHASE2") {
-      const { submissionId, phase2Score, feedback, isPass } = body;
+      const {
+        submissionId,
+        phase2Question1Score,
+        phase2Question2Score,
+        phase2Score,
+        feedback,
+      } = body;
       if (!submissionId) {
         return NextResponse.json(
           { error: "제출물 ID가 필요합니다." },
           { status: 400 },
         );
       }
-
-      const p2Score = Number(phase2Score || 0);
-      const passed = isPass ? 1 : 0;
 
       // 기존 1차 점수 조회
       const subRes = await db.execute({
@@ -363,23 +423,67 @@ export async function POST(req: Request) {
       }
 
       const sub = subRes.rows[0];
+      const examRes = await db.execute({
+        sql: "SELECT phase2_question1_max_score, phase2_question2_max_score FROM exams WHERE id = ?",
+        args: [sub.exam_id],
+      });
+      const exam = examRes.rows[0];
+      if (!exam) {
+        return NextResponse.json(
+          { error: "시험 정보를 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
+      const question1Max = Number(exam.phase2_question1_max_score || 50);
+      const question2Max = Number(exam.phase2_question2_max_score || 50);
+      const p2Question1Score = Number(
+        phase2Question1Score ??
+          Math.min(Number(phase2Score || 0), question1Max),
+      );
+      const p2Question2Score = Number(
+        phase2Question2Score ??
+          Math.max(Number(phase2Score || 0) - p2Question1Score, 0),
+      );
+      if (
+        !Number.isFinite(p2Question1Score) ||
+        !Number.isFinite(p2Question2Score) ||
+        p2Question1Score < 0 ||
+        p2Question1Score > question1Max ||
+        p2Question2Score < 0 ||
+        p2Question2Score > question2Max
+      ) {
+        return NextResponse.json(
+          {
+            error: `제1문은 0~${question1Max}점, 제2문은 0~${question2Max}점으로 입력해 주세요.`,
+          },
+          { status: 400 },
+        );
+      }
+      const p2Score = p2Question1Score + p2Question2Score;
       const p1Score = Number(sub.phase1_score || 0);
-      const bonus = Number(sub.bonus_score || 0);
-      const totalScore = Math.round(p1Score * 0.4 + p2Score * 0.6 + bonus);
+      const totalScore = p1Score + p2Score;
 
       await db.execute({
         sql: `UPDATE exam_submissions 
-              SET phase2_score = ?, phase2_feedback = ?, total_score = ?, final_passed = ?
+              SET phase2_question1_score = ?, phase2_question2_score = ?,
+                  phase2_score = ?, phase2_feedback = ?, total_score = ?, final_passed = 0
               WHERE id = ?`,
-        args: [p2Score, feedback || "", totalScore, passed, submissionId],
+        args: [
+          p2Question1Score,
+          p2Question2Score,
+          p2Score,
+          feedback || "",
+          totalScore,
+          submissionId,
+        ],
       });
 
-      return NextResponse.json({ success: true, totalScore, passed });
+      return NextResponse.json({ success: true, totalScore, passed: false });
     }
 
     // 4. 최종 합격자 명단 공개 발표 (포털 + 디스코드)
     if (action === "RELEASE_RESULTS") {
-      const { examId } = body;
+      const { examId, passingScore } = body;
       if (!examId)
         return NextResponse.json(
           { error: "examId가 필요합니다." },
@@ -396,6 +500,23 @@ export async function POST(req: Request) {
           { status: 404 },
         );
       const exam = examRes.rows[0];
+
+      const threshold = Number(passingScore ?? exam.final_passing_score ?? 0);
+      if (!Number.isInteger(threshold) || threshold < 0) {
+        return NextResponse.json(
+          { error: "최종 합격점수는 0 이상의 정수로 입력해 주세요." },
+          { status: 400 },
+        );
+      }
+
+      await db.execute({
+        sql: "UPDATE exams SET final_passing_score = ? WHERE id = ?",
+        args: [threshold, examId],
+      });
+      await db.execute({
+        sql: "UPDATE exam_submissions SET final_passed = CASE WHEN total_score >= ? THEN 1 ELSE 0 END WHERE exam_id = ?",
+        args: [threshold, examId],
+      });
 
       const passersRes = await db.execute({
         sql: "SELECT security_code, total_score FROM exam_submissions WHERE exam_id = ? AND final_passed = 1 ORDER BY total_score DESC",

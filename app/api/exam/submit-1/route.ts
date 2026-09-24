@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { sendDiscordWebhook } from "@/lib/discord";
+import { isExamPhaseOpen } from "@/lib/exam-timing";
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +16,6 @@ export async function POST(req: Request) {
     }
 
     const code = String(securityCode).trim().toUpperCase();
-    const userId = `anonymous-${code}`;
 
     // 시험 정보 및 정답표 조회
     const examRes = await db.execute({
@@ -31,16 +31,7 @@ export async function POST(req: Request) {
     }
 
     const exam = examRes.rows[0];
-    const now = Date.now();
-    const startAt = new Date(String(exam.phase1_start)).getTime();
-    const endAt = new Date(String(exam.phase1_end)).getTime();
-    if (
-      exam.status !== "PHASE1" ||
-      !Number.isFinite(startAt) ||
-      !Number.isFinite(endAt) ||
-      now < startAt ||
-      now > endAt
-    ) {
+    if (!isExamPhaseOpen(exam, "PHASE1")) {
       return NextResponse.json(
         { error: "현재 제1차 시험 응시 시간이 아닙니다." },
         { status: 403 },
@@ -54,13 +45,16 @@ export async function POST(req: Request) {
       args: [examId, code],
     });
 
-    // 자동 채점 (10문, 각 10점 만점 100점)
+    const phase1MaxScore = Number(exam.phase1_max_score || 100);
+    const phase1PassScore = Math.ceil(phase1MaxScore * 0.6);
+
+    // 자동 채점: 정답률을 시험별 1차 만점에 비례해 환산
     let score = 0;
     const gradingDetails = questions.map((q: any, idx: number) => {
       const userChoice = answers[idx + 1];
       const validAnswers = q.altAnswers || [q.answer];
       const isCorrect = validAnswers.includes(userChoice);
-      if (isCorrect) score += 10;
+      if (isCorrect) score += 1;
       return {
         num: q.num,
         userChoice,
@@ -69,7 +63,10 @@ export async function POST(req: Request) {
     });
 
     // 1차 합격 기준 (예: 60점 이상)
-    const passed = score >= 60 ? 1 : 0;
+    score = Math.round(
+      (score / Math.max(questions.length, 1)) * phase1MaxScore,
+    );
+    const passed = score >= phase1PassScore ? 1 : 0;
 
     if (existingSub.rows.length === 0) {
       return NextResponse.json(
@@ -89,16 +86,16 @@ export async function POST(req: Request) {
     if (existingSub.rows.length > 0) {
       await db.execute({
         sql: `UPDATE exam_submissions
-              SET user_id = ?, phase1_answers = ?, phase1_score = ?, phase1_passed = ?, submitted_at = datetime('now')
+              SET phase1_answers = ?, phase1_score = ?, phase1_passed = ?, submitted_at = datetime('now')
               WHERE id = ?`,
-        args: [userId, JSON.stringify(answers), score, passed, existing.id],
+        args: [JSON.stringify(answers), score, passed, existing.id],
       });
 
       await sendDiscordWebhook("EXAM_ADMIN", {
         embeds: [
           {
             title: `📝 제1차 변호사시험 답안 제출 (#${code})`,
-            description: `익명 수험번호 #${code} 답안이 접수되었습니다.\n• 득점: **${score}점 / 100점**\n• 1차 통과 여부: **${passed ? "🟢 통과 (합격)" : "🔴 과락 (불합격)"}**`,
+            description: `익명 수험번호 #${code} 답안이 접수되었습니다.\n• 득점: **${score}점 / ${phase1MaxScore}점**\n• 1차 통과 여부: **${passed ? "🟢 통과 (합격)" : "🔴 과락 (불합격)"}**`,
             color: passed ? 0x10b981 : 0xef4444,
             timestamp: new Date().toISOString(),
           },

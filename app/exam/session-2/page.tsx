@@ -22,6 +22,7 @@ export default function Session2Page() {
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyError, setVerifyError] = useState("");
   const [phase1Score, setPhase1Score] = useState<number | null>(null);
+  const [examId, setExamId] = useState("");
 
   const [textAnswer, setTextAnswer] = useState("");
   const [fileUrl, setFileUrl] = useState("");
@@ -30,6 +31,8 @@ export default function Session2Page() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [submittedStatus, setSubmittedStatus] = useState<any>(null);
+  const [isPublished, setIsPublished] = useState(false);
+  const [publishedAt, setPublishedAt] = useState("");
 
   // 1차 합격 여부 검증
   const handleVerify = async (e: React.FormEvent) => {
@@ -49,6 +52,7 @@ export default function Session2Page() {
       if (!res.ok) throw new Error(data.error || "자격 검증 실패");
 
       setIsVerified(true);
+      setExamId(data.examId || "");
       setPhase1Score(data.phase1Score);
       if (data.existingTextAnswer) setTextAnswer(data.existingTextAnswer);
       if (data.existingFileUrl) {
@@ -56,6 +60,8 @@ export default function Session2Page() {
         setFileName("기존_제출된_파일.pdf");
       }
       if (data.isPledged) setIsInstantPledged(true);
+      setIsPublished(Boolean(data.isPublished));
+      setPublishedAt(data.publishedAt || "");
     } catch (err: any) {
       setVerifyError(err.message);
     } finally {
@@ -65,6 +71,7 @@ export default function Session2Page() {
 
   // 파일을 서버 저장소에 업로드하고 URL만 제출 데이터에 보관합니다.
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isPublished) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -77,7 +84,7 @@ export default function Session2Page() {
     setIsUploading(true);
     try {
       const formData = new FormData();
-      formData.append("examId", "exam-2026-09");
+      formData.append("examId", examId);
       formData.append("securityCode", securityCode);
       formData.append("file", file);
       const res = await fetch("/api/exam/upload", {
@@ -96,21 +103,26 @@ export default function Session2Page() {
   };
 
   const handleRemoveFile = () => {
+    if (isPublished) return;
     setFileUrl("");
     setFileName("");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (
+    e: React.FormEvent | React.MouseEvent,
+    publish: boolean,
+  ) => {
+    if (isPublished) return;
     e.preventDefault();
     if (!textAnswer.trim() && !fileUrl.trim()) {
       alert("PDF 답안 파일을 첨부하거나 답안 내용을 작성해 주세요.");
       return;
     }
 
-    if (isInstantPledged) {
+    if (publish) {
       if (
         !confirm(
-          "⚠️ [즉시 채점 서약 안내]\n답안을 수정하지 않고 즉시 채점을 요청하시겠습니까?\n이 서약 후에는 답안을 철회하거나 수정할 수 없습니다.",
+          "⚠️ 최종 게시 안내\n답안을 최종 게시하시겠습니까?\n게시 후에는 답안을 철회하거나 수정할 수 없습니다.",
         )
       ) {
         return;
@@ -123,16 +135,21 @@ export default function Session2Page() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          examId: "exam-2026-09",
+          examId,
           securityCode,
           textAnswer,
           fileUrl,
-          isInstantPledged,
+          isInstantPledged: publish && isInstantPledged,
+          publish,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "제출 실패");
       setSubmittedStatus(data);
+      if (publish) {
+        setIsPublished(true);
+        setPublishedAt(new Date().toISOString());
+      }
     } catch (err: any) {
       alert(`오류: ${err.message}`);
     } finally {
@@ -302,9 +319,19 @@ export default function Session2Page() {
 
       {/* 3. 답안 작성 & PDF 파일 업로드 폼 */}
       <form
-        onSubmit={handleSubmit}
+        onSubmit={(e) => handleSubmit(e, false)}
         className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6 shadow-xl"
       >
+        {isPublished && (
+          <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-start gap-2">
+            <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              2차 답안이{" "}
+              {publishedAt ? new Date(publishedAt).toLocaleString("ko-KR") : ""}{" "}
+              최종 게시되어 수정할 수 없습니다.
+            </span>
+          </div>
+        )}
         {/* PDF 파일 직접 첨부 영역 */}
         <div className="space-y-2">
           <label className="block text-xs font-bold text-white flex items-center gap-2">
@@ -364,6 +391,7 @@ export default function Session2Page() {
             rows={8}
             value={textAnswer}
             onChange={(e) => setTextAnswer(e.target.value)}
+            disabled={isPublished}
             placeholder="[제1문 답안]&#10;1. 쟁점의 정리...&#10;&#10;[제2문 답안]&#10;소장 또는 준비서면..."
             className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3.5 text-xs text-white font-mono leading-relaxed focus:outline-none focus:border-blue-500"
           />
@@ -375,6 +403,7 @@ export default function Session2Page() {
             <input
               type="checkbox"
               checked={isInstantPledged}
+              disabled={isPublished}
               onChange={(e) => setIsInstantPledged(e.target.checked)}
               className="w-4 h-4 mt-0.5 rounded border-slate-700 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-900"
             />
@@ -397,18 +426,23 @@ export default function Session2Page() {
           </div>
         )}
 
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
           <button
             type="submit"
-            disabled={isSubmitting || isUploading}
-            className="flex items-center gap-1.5 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-md transition-colors"
+            disabled={isSubmitting || isUploading || isPublished}
+            className="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-xs rounded-lg shadow-md transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            임시 저장
+          </button>
+          <button
+            type="button"
+            disabled={isSubmitting || isUploading || isPublished}
+            onClick={(e) => handleSubmit(e, true)}
+            className="flex items-center justify-center gap-1.5 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-xs rounded-lg shadow-md transition-colors"
           >
             <Send className="w-3.5 h-3.5" />
-            {isSubmitting
-              ? "제출중..."
-              : isInstantPledged
-                ? "즉시 채점 서약 최종 제출"
-                : "답안지 제출하기"}
+            {isSubmitting ? "게시 중..." : "2차 답안 최종 게시"}
           </button>
         </div>
       </form>

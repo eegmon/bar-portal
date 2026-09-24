@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { sendDiscordWebhook } from "@/lib/discord";
+import { isExamPhaseOpen } from "@/lib/exam-timing";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { examId, securityCode, textAnswer, fileUrl, isInstantPledged } =
-      body;
+    const {
+      examId,
+      securityCode,
+      textAnswer,
+      fileUrl,
+      isInstantPledged,
+      publish = false,
+    } = body;
 
     if (!examId || !securityCode || (!textAnswer && !fileUrl)) {
       return NextResponse.json(
@@ -31,21 +38,11 @@ export async function POST(req: Request) {
     }
 
     const examRes = await db.execute({
-      sql: "SELECT status, phase2_start, phase2_end FROM exams WHERE id = ?",
+      sql: "SELECT status, phase2_start, phase2_end, phase2_operation_mode FROM exams WHERE id = ?",
       args: [examId],
     });
     const exam = examRes.rows[0];
-    const now = Date.now();
-    const startAt = new Date(String(exam?.phase2_start || "")).getTime();
-    const endAt = new Date(String(exam?.phase2_end || "")).getTime();
-    if (
-      !exam ||
-      exam.status !== "PHASE2" ||
-      !Number.isFinite(startAt) ||
-      !Number.isFinite(endAt) ||
-      now < startAt ||
-      now > endAt
-    ) {
+    if (!exam || !isExamPhaseOpen(exam, "PHASE2")) {
       return NextResponse.json(
         { error: "현재 제2차 시험 답안 제출 시간이 아닙니다." },
         { status: 403 },
@@ -59,7 +56,7 @@ export async function POST(req: Request) {
         { status: 403 },
       );
     }
-    if (existing.is_instant_grade_pledged && !existing.phase2_feedback) {
+    if (existing.phase2_published || existing.is_instant_grade_pledged) {
       return NextResponse.json(
         {
           error:
@@ -71,12 +68,17 @@ export async function POST(req: Request) {
 
     await db.execute({
       sql: `UPDATE exam_submissions
-            SET phase2_text_answer = ?, phase2_file_url = ?, is_instant_grade_pledged = ?, submitted_at = datetime('now')
+          SET phase2_text_answer = ?, phase2_file_url = ?,
+            is_instant_grade_pledged = ?, phase2_published = ?,
+            phase2_published_at = CASE WHEN ? = 1 THEN datetime('now') ELSE phase2_published_at END,
+            submitted_at = datetime('now')
             WHERE id = ?`,
       args: [
         textAnswer || "",
         fileUrl || "",
         isInstantPledged ? 1 : 0,
+        publish ? 1 : 0,
+        publish ? 1 : 0,
         existing.id,
       ],
     });
@@ -97,9 +99,10 @@ export async function POST(req: Request) {
       success: true,
       securityCode: code,
       isInstantPledged: Boolean(isInstantPledged),
-      message: isInstantPledged
-        ? "즉시 채점 서약으로 최종 제출되었습니다. 출제위원이 곧 채점을 시작합니다."
-        : "답안이 임시 저장되었습니다. 마감 시간 전까지 수정 및 철회가 가능합니다.",
+      published: Boolean(publish),
+      message: publish
+        ? "2차 답안이 최종 게시되었습니다. 게시 후에는 수정할 수 없습니다."
+        : "2차 답안이 임시 저장되었습니다. 최종 게시 전까지 수정할 수 있습니다.",
     });
   } catch (err: any) {
     console.error("2차 시험 제출 에러:", err);

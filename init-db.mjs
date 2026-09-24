@@ -27,11 +27,19 @@ async function init() {
       bio TEXT DEFAULT '',
       specialties TEXT DEFAULT '[]', -- 전문분야 JSON
       positions TEXT DEFAULT '[]', -- 직책 JSON (PRESIDENT, ASSEMBLY_SPEAKER 등)
+      discord_synced_at TEXT, -- Discord 역할 동기화 시각
       last_renewed_at TEXT DEFAULT (datetime('now')), -- 월별 재등록/갱신일
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
   console.log("✓ users (변호사 명부) 테이블 생성 완료");
+
+  // 기존 DB에도 Discord 동기화 시각 컬럼을 추가합니다.
+  try {
+    await db.execute("ALTER TABLE users ADD COLUMN discord_synced_at TEXT");
+  } catch {
+    // 이미 마이그레이션된 DB에서는 무시합니다.
+  }
 
   // 2. 법률사무소 및 법무법인/공증인가 (변호사법 제23조~제40조)
   await db.execute(`
@@ -78,6 +86,12 @@ async function init() {
       phase2_doc2_pdf_url TEXT DEFAULT '', -- 제2문 실무기록
       errata_notices TEXT DEFAULT '[]', -- 실시간 문제 정정 공지 JSON
       status TEXT NOT NULL DEFAULT 'SCHEDULED', -- SCHEDULED, PHASE1, PHASE2, GRADING, FINISHED
+      phase1_max_score INTEGER NOT NULL DEFAULT 100,
+      phase2_question1_max_score INTEGER NOT NULL DEFAULT 50,
+      phase2_question2_max_score INTEGER NOT NULL DEFAULT 50,
+      final_passing_score INTEGER NOT NULL DEFAULT 0,
+      phase1_operation_mode TEXT NOT NULL DEFAULT 'MANUAL',
+      phase2_operation_mode TEXT NOT NULL DEFAULT 'MANUAL',
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
@@ -96,6 +110,10 @@ async function init() {
       phase2_file_url TEXT DEFAULT '',
       phase2_text_answer TEXT DEFAULT '',
       is_instant_grade_pledged INTEGER DEFAULT 0, -- 즉시 채점 서약 여부
+      phase2_question1_score INTEGER DEFAULT 0, -- 2차 제1문 점수 (50점)
+      phase2_question2_score INTEGER DEFAULT 0, -- 2차 제2문 점수 (50점)
+      phase2_published INTEGER NOT NULL DEFAULT 0, -- 2차 답안 최종 게시 여부
+      phase2_published_at TEXT DEFAULT '',
       phase2_score INTEGER DEFAULT 0,
       phase2_feedback TEXT DEFAULT '',
       bonus_score INTEGER DEFAULT 0,
@@ -143,10 +161,14 @@ async function init() {
   `);
 
   try {
-    await db.execute("ALTER TABLE assembly_attendances ADD COLUMN firm_id TEXT DEFAULT NULL");
+    await db.execute(
+      "ALTER TABLE assembly_attendances ADD COLUMN firm_id TEXT DEFAULT NULL",
+    );
   } catch {}
   try {
-    await db.execute("ALTER TABLE assembly_attendances ADD COLUMN voting_power INTEGER DEFAULT 1");
+    await db.execute(
+      "ALTER TABLE assembly_attendances ADD COLUMN voting_power INTEGER DEFAULT 1",
+    );
   } catch {}
 
   // 총회 안건

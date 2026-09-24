@@ -19,7 +19,9 @@ export default function MyScorePage() {
     setScoreData(null);
 
     try {
-      const res = await fetch(`/api/exam/score?code=${encodeURIComponent(securityCode.trim().toUpperCase())}`);
+      const res = await fetch(
+        `/api/exam/score?code=${encodeURIComponent(securityCode.trim().toUpperCase())}`,
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "성적 조회 실패");
       setScoreData(data);
@@ -33,19 +35,30 @@ export default function MyScorePage() {
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-8">
       <div>
-        <Link href="/exam" className="text-slate-400 hover:text-white text-xs flex items-center gap-1 mb-1">
+        <Link
+          href="/exam"
+          className="text-slate-400 hover:text-white text-xs flex items-center gap-1 mb-1"
+        >
           <ArrowLeft className="w-3.5 h-3.5" /> 시험 센터 허브로
         </Link>
-        <h1 className="text-2xl font-extrabold text-white">변호사시험 성적 및 석차 조회</h1>
+        <h1 className="text-2xl font-extrabold text-white">
+          변호사시험 성적 및 석차 조회
+        </h1>
         <p className="text-xs text-slate-400 mt-0.5">
-          변호사법 제75조에 의거하여 합격자 공고일로부터 2개월간 본인의 성적 및 석차를 비공개 열람할 수 있습니다.
+          변호사법 제75조에 의거하여 합격자 공고일로부터 2개월간 본인의 성적 및
+          석차를 비공개 열람할 수 있습니다.
         </p>
       </div>
 
       {/* 보안코드 조회 폼 */}
-      <form onSubmit={handleLookup} className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-4">
+      <form
+        onSubmit={handleLookup}
+        className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-4"
+      >
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1.5">수험번호 / 개인 보안코드</label>
+          <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            수험번호 / 개인 보안코드
+          </label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -82,7 +95,9 @@ export default function MyScorePage() {
               <span className="text-xs font-mono px-2.5 py-1 bg-slate-800 text-blue-400 rounded-md">
                 #{scoreData.security_code}
               </span>
-              <h2 className="text-xl font-bold text-white mt-1.5">개인 종합 성적표</h2>
+              <h2 className="text-xl font-bold text-white mt-1.5">
+                개인 종합 성적표
+              </h2>
             </div>
             <div>
               <span
@@ -90,31 +105,49 @@ export default function MyScorePage() {
                   scoreData.final_passed
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                     : scoreData.phase1_passed
-                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                    : "bg-red-500/20 text-red-400 border border-red-500/30"
+                      ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                      : "bg-red-500/20 text-red-400 border border-red-500/30"
                 }`}
               >
                 {scoreData.final_passed
                   ? "🎉 최종 합격"
                   : scoreData.phase1_passed
-                  ? "2차 채점 대기중"
-                  : "1차 불합격"}
+                    ? "2차 채점 대기중"
+                    : "1차 불합격"}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
               <div className="text-[11px] text-slate-400">1차 필기</div>
-              <div className="text-base font-bold text-white mt-0.5">{scoreData.phase1_score}점</div>
+              <div className="text-base font-bold text-white mt-0.5">
+                {scoreData.phase1_score}점
+              </div>
             </div>
             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-              <div className="text-[11px] text-slate-400">2차 서술</div>
-              <div className="text-base font-bold text-white mt-0.5">{scoreData.phase2_score || "-"}점</div>
+              <div className="text-[11px] text-slate-400">2차 제1문</div>
+              <div className="text-base font-bold text-white mt-0.5">
+                {scoreData.phase2_question1_score || 0}점
+              </div>
+            </div>
+            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+              <div className="text-[11px] text-slate-400">2차 제2문</div>
+              <div className="text-base font-bold text-white mt-0.5">
+                {scoreData.phase2_question2_score || 0}점
+              </div>
+            </div>
+            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+              <div className="text-[11px] text-slate-400">2차 합계</div>
+              <div className="text-base font-bold text-white mt-0.5">
+                {scoreData.phase2_score || "-"}점
+              </div>
             </div>
             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
               <div className="text-[11px] text-slate-400">가산점 (10%)</div>
-              <div className="text-base font-bold text-amber-400 mt-0.5">+{scoreData.bonus_score}점</div>
+              <div className="text-base font-bold text-amber-400 mt-0.5">
+                +{scoreData.bonus_score}점
+              </div>
             </div>
             <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
               <div className="text-[11px] text-slate-400">전체 석차</div>
@@ -126,8 +159,12 @@ export default function MyScorePage() {
 
           {scoreData.phase2_feedback && (
             <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-1 text-xs">
-              <div className="font-semibold text-slate-300">출제위원 채점 코멘트:</div>
-              <p className="text-slate-400 leading-relaxed">{scoreData.phase2_feedback}</p>
+              <div className="font-semibold text-slate-300">
+                출제위원 채점 코멘트:
+              </div>
+              <p className="text-slate-400 leading-relaxed">
+                {scoreData.phase2_feedback}
+              </p>
             </div>
           )}
         </div>

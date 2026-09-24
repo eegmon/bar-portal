@@ -26,7 +26,11 @@ export async function GET(req: Request) {
       );
     }
 
-    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+    if (
+      !Number.isInteger(expiresInDays) ||
+      expiresInDays < 1 ||
+      expiresInDays > 365
+    ) {
       return NextResponse.json(
         { error: "링크 만료일은 1~365일 범위에서 지정해 주세요." },
         { status: 400 },
@@ -51,7 +55,10 @@ export async function GET(req: Request) {
       target.status !== "ACTIVE"
     ) {
       return NextResponse.json(
-        { error: "활성 상태의 변호사/관리자 회원만 투표 링크를 발급할 수 있습니다." },
+        {
+          error:
+            "활성 상태의 변호사/관리자 회원만 투표 링크를 발급할 수 있습니다.",
+        },
         { status: 400 },
       );
     }
@@ -97,7 +104,17 @@ export async function GET(req: Request) {
       expiresIn: `${expiresInDays}d`,
     });
 
-    const voteUrl = new URL("/assembly/vote", url.origin);
+    const configuredOrigin =
+      process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
+    const forwardedHost = req.headers.get("x-forwarded-host");
+    const forwardedProto = req.headers.get("x-forwarded-proto");
+    const requestHost = forwardedHost || req.headers.get("host");
+    const requestProto =
+      forwardedProto?.split(",")[0].trim() || url.protocol.replace(":", "");
+    const publicOrigin =
+      configuredOrigin?.trim().replace(/\/$/, "") ||
+      (requestHost ? `${requestProto}://${requestHost}` : url.origin);
+    const voteUrl = new URL("/assembly/vote", publicOrigin);
     if (assemblyId) voteUrl.searchParams.set("assemblyId", assemblyId);
     if (agendaId) voteUrl.searchParams.set("agendaId", agendaId);
     voteUrl.searchParams.set("accessToken", token);
@@ -114,9 +131,6 @@ export async function GET(req: Request) {
   } catch (err: unknown) {
     console.error("투표 링크 발급 에러:", err);
     const message = err instanceof Error ? err.message : "서버 오류";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

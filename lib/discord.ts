@@ -13,7 +13,10 @@ export interface DiscordEmbed {
   timestamp?: string;
 }
 
-export async function getSettingValue(key: string, envFallbackKey?: string): Promise<string> {
+export async function getSettingValue(
+  key: string,
+  envFallbackKey?: string,
+): Promise<string> {
   try {
     const res = await db.execute({
       sql: "SELECT value FROM settings WHERE key = ?",
@@ -43,11 +46,13 @@ export type WebhookType =
   | "ASSEMBLY_VOTE"
   | "ADMIN";
 
-export async function getWebhookUrl(type: WebhookType | string): Promise<string> {
+export async function getWebhookUrl(
+  type: WebhookType | string,
+): Promise<string> {
   const dbKey = `webhook_${type.toLowerCase()}`;
   const envKey = `DISCORD_WEBHOOK_${type.toUpperCase()}`;
   let url = await getSettingValue(dbKey, envKey);
-  
+
   // 1. LAWYER_APPROVAL 전용 웹훅이 없으면 NOTICE 웹훅으로 fallback
   if (!url && type === "LAWYER_APPROVAL") {
     url = await getSettingValue("webhook_notice", "DISCORD_WEBHOOK_NOTICE");
@@ -68,7 +73,10 @@ export async function getWebhookUrl(type: WebhookType | string): Promise<string>
 
   // 4. ASSEMBLY 기본 호출 시 ASSEMBLY_NOTICE 우선 참조
   if (!url && type === "ASSEMBLY") {
-    url = await getSettingValue("webhook_assembly_notice", "DISCORD_WEBHOOK_ASSEMBLY_NOTICE");
+    url = await getSettingValue(
+      "webhook_assembly_notice",
+      "DISCORD_WEBHOOK_ASSEMBLY_NOTICE",
+    );
   }
 
   // 5. 변호사시험 관리자 전용 웹훅 (EXAM_ADMIN) 없으면 ADMIN 관리자 웹훅으로 fallback
@@ -94,7 +102,7 @@ function sleep(ms: number) {
 export async function discordFetch(
   url: string,
   init: RequestInit,
-  maxRetries = 3
+  maxRetries = 3,
 ): Promise<Response> {
   const request = discordRequestQueue.then(async () => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -112,9 +120,13 @@ export async function discordFetch(
       let isGlobalLimit = res.headers.get("x-ratelimit-global") === "true";
       try {
         const body = await res.clone().json();
-        if (typeof body?.retry_after === "number") retryAfterSec = body.retry_after;
+        if (typeof body?.retry_after === "number")
+          retryAfterSec = body.retry_after;
         if (body?.global === true) isGlobalLimit = true;
-        if (typeof body?.message === "string" && body.message.includes("global rate limits")) {
+        if (
+          typeof body?.message === "string" &&
+          body.message.includes("global rate limits")
+        ) {
           isGlobalLimit = true;
         }
       } catch {
@@ -128,9 +140,12 @@ export async function discordFetch(
       // 전역 차단은 재시도가 차단 시간을 늘릴 수 있으므로 즉시 호출자에게 반환합니다.
       if (isGlobalLimit || attempt >= maxRetries) return res;
 
-      const waitMs = Math.min(Math.max((retryAfterSec || 1) * 1000 + 250, 1000), 60000);
+      const waitMs = Math.min(
+        Math.max((retryAfterSec || 1) * 1000 + 250, 1000),
+        60000,
+      );
       console.warn(
-        `[Discord Bot] 429 레이트리밋 감지, ${waitMs}ms 대기 후 재시도 (${attempt + 1}/${maxRetries})`
+        `[Discord Bot] 429 레이트리밋 감지, ${waitMs}ms 대기 후 재시도 (${attempt + 1}/${maxRetries})`,
       );
       await sleep(waitMs);
     }
@@ -139,17 +154,23 @@ export async function discordFetch(
   });
 
   // 한 요청의 실패가 다음 요청의 큐를 막지 않도록 큐 상태만 정상화합니다.
-  discordRequestQueue = request.then(() => undefined, () => undefined);
+  discordRequestQueue = request.then(
+    () => undefined,
+    () => undefined,
+  );
   return request;
 }
 
 export async function sendDiscordWebhook(
   type: WebhookType,
-  payload: { content?: string; embeds?: DiscordEmbed[] }
+  payload: { content?: string; embeds?: DiscordEmbed[] },
 ) {
   const url = await getWebhookUrl(type);
   if (!url) {
-    console.warn(`[Discord Webhook] ${type} Webhook URL이 설정되지 않아 콘솔에만 출력합니다.`, payload);
+    console.warn(
+      `[Discord Webhook] ${type} Webhook URL이 설정되지 않아 콘솔에만 출력합니다.`,
+      payload,
+    );
     return;
   }
 
@@ -168,15 +189,23 @@ export async function sendDiscordWebhook(
  * 디스코드 봇 설정 조회 (DB 또는 환경변수)
  */
 export async function getBotConfig() {
-  const token = (await getSettingValue("discord_bot_token")) || process.env.DISCORD_BOT_TOKEN || "";
-  const guildId = (await getSettingValue("discord_guild_id")) || process.env.DISCORD_GUILD_ID || "";
+  const token =
+    (await getSettingValue("discord_bot_token")) ||
+    process.env.DISCORD_BOT_TOKEN ||
+    "";
+  const guildId =
+    (await getSettingValue("discord_guild_id")) ||
+    process.env.DISCORD_GUILD_ID ||
+    "";
   return { token, guildId };
 }
 
 /**
  * 디스코드 유저 ID 해석 (숫자 ID, 멘션 태그, 또는 닉네임/사용자명 자동 검색)
  */
-export async function resolveDiscordUserId(discordInput: string): Promise<string | null> {
+export async function resolveDiscordUserId(
+  discordInput: string,
+): Promise<string | null> {
   if (!discordInput) return null;
   const trimmed = discordInput.trim();
 
@@ -202,11 +231,15 @@ export async function resolveDiscordUserId(discordInput: string): Promise<string
         headers: {
           Authorization: `Bot ${token}`,
         },
-      }
+      },
     );
     if (res.ok) {
       const members = await res.json();
-      if (Array.isArray(members) && members.length > 0 && members[0]?.user?.id) {
+      if (
+        Array.isArray(members) &&
+        members.length > 0 &&
+        members[0]?.user?.id
+      ) {
         return members[0].user.id;
       }
     }
@@ -223,7 +256,7 @@ export async function resolveDiscordUserId(discordInput: string): Promise<string
 export async function addDiscordRole(
   discordUserId: string,
   roleId: string,
-  resolvedUserId?: string
+  resolvedUserId?: string,
 ): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
@@ -231,13 +264,17 @@ export async function addDiscordRole(
 
   const userId = resolvedUserId || (await resolveDiscordUserId(discordUserId));
   if (!userId) {
-    console.warn(`[Discord Bot] 유효한 유저 ID를 찾을 수 없습니다: ${discordUserId}`);
+    console.warn(
+      `[Discord Bot] 유효한 유저 ID를 찾을 수 없습니다: ${discordUserId}`,
+    );
     return false;
   }
 
   const { token, guildId } = await getBotConfig();
   if (!token || !guildId) {
-    console.warn("[Discord Bot] Bot Token 또는 Guild ID가 설정되지 않았습니다.");
+    console.warn(
+      "[Discord Bot] Bot Token 또는 Guild ID가 설정되지 않았습니다.",
+    );
     return false;
   }
 
@@ -250,7 +287,7 @@ export async function addDiscordRole(
           Authorization: `Bot ${token}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
     if (!res.ok) {
       const errText = await res.text();
@@ -270,7 +307,7 @@ export async function addDiscordRole(
 export async function removeDiscordRole(
   discordUserId: string,
   roleId: string,
-  resolvedUserId?: string
+  resolvedUserId?: string,
 ): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
@@ -290,7 +327,7 @@ export async function removeDiscordRole(
         headers: {
           Authorization: `Bot ${token}`,
         },
-      }
+      },
     );
     return res.ok;
   } catch (err) {
@@ -314,45 +351,98 @@ export async function syncUserDiscordRoles(params: {
 
   const resolvedUserId = await resolveDiscordUserId(discordUserId);
   if (!resolvedUserId) return;
-  const addRole = (roleId: string) => addDiscordRole(discordUserId, roleId, resolvedUserId);
-  const removeRole = (roleId: string) => removeDiscordRole(discordUserId, roleId, resolvedUserId);
+  const addRole = (roleId: string) =>
+    addDiscordRole(discordUserId, roleId, resolvedUserId);
+  const removeRole = (roleId: string) =>
+    removeDiscordRole(discordUserId, roleId, resolvedUserId);
 
-  const lawyerRoleId = await getSettingValue("discord_role_lawyer", "DISCORD_ROLE_LAWYER");
-  const traineeRoleId = await getSettingValue("discord_role_trainee", "DISCORD_ROLE_TRAINEE");
-  
+  const lawyerRoleId = await getSettingValue(
+    "discord_role_lawyer",
+    "DISCORD_ROLE_LAWYER",
+  );
+  const traineeRoleId = await getSettingValue(
+    "discord_role_trainee",
+    "DISCORD_ROLE_TRAINEE",
+  );
+
   // 이사회 & 임원 그룹
-  const groupExecutiveRoleId = await getSettingValue("discord_role_group_executive", "DISCORD_ROLE_GROUP_EXECUTIVE");
-  const presidentRoleId = await getSettingValue("discord_role_president", "DISCORD_ROLE_PRESIDENT");
-  const vicePresidentRoleId = await getSettingValue("discord_role_vice_president", "DISCORD_ROLE_VICE_PRESIDENT");
-  const directorRoleId = await getSettingValue("discord_role_director", "DISCORD_ROLE_DIRECTOR");
-  const boardRoleId = await getSettingValue("discord_role_board", "DISCORD_ROLE_BOARD");
+  const groupExecutiveRoleId = await getSettingValue(
+    "discord_role_group_executive",
+    "DISCORD_ROLE_GROUP_EXECUTIVE",
+  );
+  const presidentRoleId = await getSettingValue(
+    "discord_role_president",
+    "DISCORD_ROLE_PRESIDENT",
+  );
+  const vicePresidentRoleId = await getSettingValue(
+    "discord_role_vice_president",
+    "DISCORD_ROLE_VICE_PRESIDENT",
+  );
+  const directorRoleId = await getSettingValue(
+    "discord_role_director",
+    "DISCORD_ROLE_DIRECTOR",
+  );
+  const boardRoleId = await getSettingValue(
+    "discord_role_board",
+    "DISCORD_ROLE_BOARD",
+  );
 
   // 총회 그룹
-  const groupAssemblyRoleId = await getSettingValue("discord_role_group_assembly", "DISCORD_ROLE_GROUP_ASSEMBLY");
-  const speakerRoleId = await getSettingValue("discord_role_speaker", "DISCORD_ROLE_SPEAKER");
-  const viceSpeakerRoleId = await getSettingValue("discord_role_vice_speaker", "DISCORD_ROLE_VICE_SPEAKER");
+  const groupAssemblyRoleId = await getSettingValue(
+    "discord_role_group_assembly",
+    "DISCORD_ROLE_GROUP_ASSEMBLY",
+  );
+  const speakerRoleId = await getSettingValue(
+    "discord_role_speaker",
+    "DISCORD_ROLE_SPEAKER",
+  );
+  const viceSpeakerRoleId = await getSettingValue(
+    "discord_role_vice_speaker",
+    "DISCORD_ROLE_VICE_SPEAKER",
+  );
 
   // 사무국 그룹
-  const groupSecretariatRoleId = await getSettingValue("discord_role_group_secretariat", "DISCORD_ROLE_GROUP_SECRETARIAT");
-  const secretaryGeneralRoleId = await getSettingValue("discord_role_secretary_general", "DISCORD_ROLE_SECRETARY_GENERAL");
-  const staffRoleId = await getSettingValue("discord_role_staff", "DISCORD_ROLE_STAFF");
+  const groupSecretariatRoleId = await getSettingValue(
+    "discord_role_group_secretariat",
+    "DISCORD_ROLE_GROUP_SECRETARIAT",
+  );
+  const secretaryGeneralRoleId = await getSettingValue(
+    "discord_role_secretary_general",
+    "DISCORD_ROLE_SECRETARY_GENERAL",
+  );
+  const staffRoleId = await getSettingValue(
+    "discord_role_staff",
+    "DISCORD_ROLE_STAFF",
+  );
 
   // 위원회
-  const examCommRoleId = await getSettingValue("discord_role_exam_comm", "DISCORD_ROLE_EXAM_COMM");
-  const disciplineCommRoleId = await getSettingValue("discord_role_discipline_comm", "DISCORD_ROLE_DISCIPLINE_COMM");
+  const examCommRoleId = await getSettingValue(
+    "discord_role_exam_comm",
+    "DISCORD_ROLE_EXAM_COMM",
+  );
+  const disciplineCommRoleId = await getSettingValue(
+    "discord_role_discipline_comm",
+    "DISCORD_ROLE_DISCIPLINE_COMM",
+  );
 
   // 1. 변호사/견습 역할 동기화
   if (status === "ACTIVE" && role === "LAWYER") {
     if (lawyerRoleId) await addRole(lawyerRoleId);
     if (isTrainee && traineeRoleId) await addRole(traineeRoleId);
     if (!isTrainee && traineeRoleId) await removeRole(traineeRoleId);
-  } else if (status === "SUSPENDED" || status === "EXPIRED" || status === "EXPELLED") {
+  } else if (
+    status === "SUSPENDED" ||
+    status === "EXPIRED" ||
+    status === "EXPELLED"
+  ) {
     if (lawyerRoleId) await removeRole(lawyerRoleId);
     if (traineeRoleId) await removeRole(traineeRoleId);
   }
 
   // 2. 이사회 & 【 🎓 · 임원 】 그룹
-  const isExecutive = positions.some((p) => ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR"].includes(p));
+  const isExecutive = positions.some((p) =>
+    ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR"].includes(p),
+  );
   if (groupExecutiveRoleId) {
     if (isExecutive) await addRole(groupExecutiveRoleId);
     else await removeRole(groupExecutiveRoleId);
@@ -366,7 +456,8 @@ export async function syncUserDiscordRoles(params: {
     else await removeRole(presidentRoleId);
   }
   if (vicePresidentRoleId) {
-    if (positions.includes("VICE_PRESIDENT")) await addRole(vicePresidentRoleId);
+    if (positions.includes("VICE_PRESIDENT"))
+      await addRole(vicePresidentRoleId);
     else await removeRole(vicePresidentRoleId);
   }
   if (directorRoleId) {
@@ -375,7 +466,9 @@ export async function syncUserDiscordRoles(params: {
   }
 
   // 3. 총회 의장단 & 【 📜 · 총회 】 그룹
-  const isAssemblyLeader = positions.some((p) => ["ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p));
+  const isAssemblyLeader = positions.some((p) =>
+    ["ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p),
+  );
   if (groupAssemblyRoleId) {
     if (isAssemblyLeader) await addRole(groupAssemblyRoleId);
     else await removeRole(groupAssemblyRoleId);
@@ -385,18 +478,22 @@ export async function syncUserDiscordRoles(params: {
     else await removeRole(speakerRoleId);
   }
   if (viceSpeakerRoleId) {
-    if (positions.includes("ASSEMBLY_VICE_SPEAKER")) await addRole(viceSpeakerRoleId);
+    if (positions.includes("ASSEMBLY_VICE_SPEAKER"))
+      await addRole(viceSpeakerRoleId);
     else await removeRole(viceSpeakerRoleId);
   }
 
   // 4. 사무국 & 【 📂 · 사무국 】 그룹
-  const isSecretariat = positions.some((p) => ["SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p));
+  const isSecretariat = positions.some((p) =>
+    ["SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p),
+  );
   if (groupSecretariatRoleId) {
     if (isSecretariat) await addRole(groupSecretariatRoleId);
     else await removeRole(groupSecretariatRoleId);
   }
   if (secretaryGeneralRoleId) {
-    if (positions.includes("SECRETARY_GENERAL")) await addRole(secretaryGeneralRoleId);
+    if (positions.includes("SECRETARY_GENERAL"))
+      await addRole(secretaryGeneralRoleId);
     else await removeRole(secretaryGeneralRoleId);
   }
   if (staffRoleId) {
@@ -410,7 +507,8 @@ export async function syncUserDiscordRoles(params: {
     else await removeRole(examCommRoleId);
   }
   if (disciplineCommRoleId) {
-    if (positions.includes("DISCIPLINE_COMM_MEMBER")) await addRole(disciplineCommRoleId);
+    if (positions.includes("DISCIPLINE_COMM_MEMBER"))
+      await addRole(disciplineCommRoleId);
     else await removeRole(disciplineCommRoleId);
   }
 }
@@ -418,7 +516,10 @@ export async function syncUserDiscordRoles(params: {
 /**
  * 디스코드 서버로부터 유저의 최신 역할(Role) 및 닉네임을 조회하여 포털 직책/권한 동기화 (Discord -> Site)
  */
-export async function syncUserFromDiscord(userId: string, customDiscordId?: string): Promise<{
+export async function syncUserFromDiscord(
+  userId: string,
+  customDiscordId?: string,
+): Promise<{
   success: boolean;
   message?: string;
   updatedPositions?: string[];
@@ -427,6 +528,8 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
   discordNick?: string;
 }> {
   try {
+    await ensureDiscordSyncColumn();
+
     // 1. DB에서 사용자 정보 조회
     const userRes = await db.execute({
       sql: "SELECT id, login_id, name, role, status, is_trainee, positions, discord_id, phone FROM users WHERE id = ?",
@@ -438,19 +541,33 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
     }
 
     const user = userRes.rows[0];
-    const targetDiscordInput = customDiscordId || (user.discord_id as string) || (user.phone as string) || "";
+    const targetDiscordInput =
+      customDiscordId ||
+      (user.discord_id as string) ||
+      (user.phone as string) ||
+      "";
     if (!targetDiscordInput) {
-      return { success: false, message: "등록된 디스코드 ID 또는 닉네임이 없습니다." };
+      return {
+        success: false,
+        message: "등록된 디스코드 ID 또는 닉네임이 없습니다.",
+      };
     }
 
-    const resolvedDiscordUserId = await resolveDiscordUserId(targetDiscordInput);
+    const resolvedDiscordUserId =
+      await resolveDiscordUserId(targetDiscordInput);
     if (!resolvedDiscordUserId) {
-      return { success: false, message: `디스코드 사용자를 찾을 수 없습니다: ${targetDiscordInput}` };
+      return {
+        success: false,
+        message: `디스코드 사용자를 찾을 수 없습니다: ${targetDiscordInput}`,
+      };
     }
 
     const { token, guildId } = await getBotConfig();
     if (!token || !guildId) {
-      return { success: false, message: "디스코드 봇 토큰 또는 서버 ID가 설정되지 않았습니다." };
+      return {
+        success: false,
+        message: "디스코드 봇 토큰 또는 서버 ID가 설정되지 않았습니다.",
+      };
     }
 
     // 2. 디스코드 Guild Member 정보 조회
@@ -460,45 +577,97 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
         headers: {
           Authorization: `Bot ${token}`,
         },
-      }
+      },
     );
 
     if (!memberRes.ok) {
       const errText = await memberRes.text();
-      return { success: false, message: `디스코드 서버 멤버 조회 실패 (${memberRes.status}): ${errText}` };
+      return {
+        success: false,
+        message: `디스코드 서버 멤버 조회 실패 (${memberRes.status}): ${errText}`,
+      };
     }
 
     const memberData = await memberRes.json();
-    const discordRoles: string[] = Array.isArray(memberData.roles) ? memberData.roles : [];
-    const discordNick: string = memberData.nick || memberData.user?.global_name || memberData.user?.username || "";
+    const discordRoles: string[] = Array.isArray(memberData.roles)
+      ? memberData.roles
+      : [];
+    const discordNick: string =
+      memberData.nick ||
+      memberData.user?.global_name ||
+      memberData.user?.username ||
+      "";
 
     // 3. 시스템에 등록된 디스코드 역할 ID 매핑 조회
-    const lawyerRoleId = await getSettingValue("discord_role_lawyer", "DISCORD_ROLE_LAWYER");
-    const traineeRoleId = await getSettingValue("discord_role_trainee", "DISCORD_ROLE_TRAINEE");
-    const presidentRoleId = await getSettingValue("discord_role_president", "DISCORD_ROLE_PRESIDENT");
-    const vicePresidentRoleId = await getSettingValue("discord_role_vice_president", "DISCORD_ROLE_VICE_PRESIDENT");
-    const directorRoleId = await getSettingValue("discord_role_director", "DISCORD_ROLE_DIRECTOR");
-    const speakerRoleId = await getSettingValue("discord_role_speaker", "DISCORD_ROLE_SPEAKER");
-    const viceSpeakerRoleId = await getSettingValue("discord_role_vice_speaker", "DISCORD_ROLE_VICE_SPEAKER");
-    const secretaryGeneralRoleId = await getSettingValue("discord_role_secretary_general", "DISCORD_ROLE_SECRETARY_GENERAL");
-    const staffRoleId = await getSettingValue("discord_role_staff", "DISCORD_ROLE_STAFF");
-    const examCommRoleId = await getSettingValue("discord_role_exam_comm", "DISCORD_ROLE_EXAM_COMM");
-    const disciplineCommRoleId = await getSettingValue("discord_role_discipline_comm", "DISCORD_ROLE_DISCIPLINE_COMM");
+    const lawyerRoleId = await getSettingValue(
+      "discord_role_lawyer",
+      "DISCORD_ROLE_LAWYER",
+    );
+    const traineeRoleId = await getSettingValue(
+      "discord_role_trainee",
+      "DISCORD_ROLE_TRAINEE",
+    );
+    const presidentRoleId = await getSettingValue(
+      "discord_role_president",
+      "DISCORD_ROLE_PRESIDENT",
+    );
+    const vicePresidentRoleId = await getSettingValue(
+      "discord_role_vice_president",
+      "DISCORD_ROLE_VICE_PRESIDENT",
+    );
+    const directorRoleId = await getSettingValue(
+      "discord_role_director",
+      "DISCORD_ROLE_DIRECTOR",
+    );
+    const speakerRoleId = await getSettingValue(
+      "discord_role_speaker",
+      "DISCORD_ROLE_SPEAKER",
+    );
+    const viceSpeakerRoleId = await getSettingValue(
+      "discord_role_vice_speaker",
+      "DISCORD_ROLE_VICE_SPEAKER",
+    );
+    const secretaryGeneralRoleId = await getSettingValue(
+      "discord_role_secretary_general",
+      "DISCORD_ROLE_SECRETARY_GENERAL",
+    );
+    const staffRoleId = await getSettingValue(
+      "discord_role_staff",
+      "DISCORD_ROLE_STAFF",
+    );
+    const examCommRoleId = await getSettingValue(
+      "discord_role_exam_comm",
+      "DISCORD_ROLE_EXAM_COMM",
+    );
+    const disciplineCommRoleId = await getSettingValue(
+      "discord_role_discipline_comm",
+      "DISCORD_ROLE_DISCIPLINE_COMM",
+    );
 
     // 4. 역할 매핑 계산
     const newPositions: string[] = [];
-    if (presidentRoleId && discordRoles.includes(presidentRoleId)) newPositions.push("PRESIDENT");
-    if (vicePresidentRoleId && discordRoles.includes(vicePresidentRoleId)) newPositions.push("VICE_PRESIDENT");
-    if (directorRoleId && discordRoles.includes(directorRoleId)) newPositions.push("DIRECTOR");
-    if (speakerRoleId && discordRoles.includes(speakerRoleId)) newPositions.push("ASSEMBLY_SPEAKER");
-    if (viceSpeakerRoleId && discordRoles.includes(viceSpeakerRoleId)) newPositions.push("ASSEMBLY_VICE_SPEAKER");
-    if (secretaryGeneralRoleId && discordRoles.includes(secretaryGeneralRoleId)) newPositions.push("SECRETARY_GENERAL");
-    if (staffRoleId && discordRoles.includes(staffRoleId)) newPositions.push("SECRETARIAT_STAFF");
-    if (examCommRoleId && discordRoles.includes(examCommRoleId)) newPositions.push("EXAM_COMM_MEMBER");
-    if (disciplineCommRoleId && discordRoles.includes(disciplineCommRoleId)) newPositions.push("DISCIPLINE_COMM_MEMBER");
+    if (presidentRoleId && discordRoles.includes(presidentRoleId))
+      newPositions.push("PRESIDENT");
+    if (vicePresidentRoleId && discordRoles.includes(vicePresidentRoleId))
+      newPositions.push("VICE_PRESIDENT");
+    if (directorRoleId && discordRoles.includes(directorRoleId))
+      newPositions.push("DIRECTOR");
+    if (speakerRoleId && discordRoles.includes(speakerRoleId))
+      newPositions.push("ASSEMBLY_SPEAKER");
+    if (viceSpeakerRoleId && discordRoles.includes(viceSpeakerRoleId))
+      newPositions.push("ASSEMBLY_VICE_SPEAKER");
+    if (secretaryGeneralRoleId && discordRoles.includes(secretaryGeneralRoleId))
+      newPositions.push("SECRETARY_GENERAL");
+    if (staffRoleId && discordRoles.includes(staffRoleId))
+      newPositions.push("SECRETARIAT_STAFF");
+    if (examCommRoleId && discordRoles.includes(examCommRoleId))
+      newPositions.push("EXAM_COMM_MEMBER");
+    if (disciplineCommRoleId && discordRoles.includes(disciplineCommRoleId))
+      newPositions.push("DISCIPLINE_COMM_MEMBER");
 
-    const isTrainee = (traineeRoleId && discordRoles.includes(traineeRoleId)) ? 1 : 0;
-    const hasLawyerRole = (lawyerRoleId && discordRoles.includes(lawyerRoleId));
+    const isTrainee =
+      traineeRoleId && discordRoles.includes(traineeRoleId) ? 1 : 0;
+    const hasLawyerRole = lawyerRoleId && discordRoles.includes(lawyerRoleId);
 
     // 참고: 임원/의장단(PRESIDENT, ASSEMBLY_SPEAKER 등)의 관리자 권한은
     // lib/types.ts의 hasAdminPanelAccess/canManageUsers 등이 positions 배열을
@@ -516,7 +685,8 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
             SET positions = ?, 
                 is_trainee = ?, 
                 role = ?,
-                discord_id = COALESCE(NULLIF(discord_id, ''), ?)
+                discord_id = COALESCE(NULLIF(discord_id, ''), ?),
+                discord_synced_at = datetime('now')
             WHERE id = ?`,
       args: [
         JSON.stringify(newPositions),
@@ -537,28 +707,73 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
     };
   } catch (err: any) {
     console.error("[Discord -> Site Sync Error]:", err);
-    return { success: false, message: err.message || "동기화 중 오류가 발생했습니다." };
+    return {
+      success: false,
+      message: err.message || "동기화 중 오류가 발생했습니다.",
+    };
   }
+}
+
+let discordSyncColumnReady: Promise<void> | null = null;
+
+async function ensureDiscordSyncColumn(): Promise<void> {
+  if (!discordSyncColumnReady) {
+    discordSyncColumnReady = db
+      .execute("ALTER TABLE users ADD COLUMN discord_synced_at TEXT")
+      .then(() => undefined)
+      .catch(() => undefined);
+  }
+  await discordSyncColumnReady;
 }
 
 /**
  * 전체 회원의 디스코드 역할을 일괄 동기화 (배치 작업)
  */
-export async function syncAllUsersFromDiscord(): Promise<{
+export async function syncAllUsersFromDiscord(
+  options: {
+    staleSinceHours?: number;
+  } = {},
+): Promise<{
   total: number;
   synced: number;
   failed: number;
+  skipped: number;
   logs: string[];
 }> {
-  const usersRes = await db.execute("SELECT id, name, login_id, discord_id, phone FROM users");
+  await ensureDiscordSyncColumn();
+  const usersRes = await db.execute(
+    "SELECT id, name, login_id, discord_id, phone, discord_synced_at FROM users",
+  );
+  const staleSinceHours =
+    typeof options.staleSinceHours === "number" && options.staleSinceHours > 0
+      ? options.staleSinceHours
+      : undefined;
+  const staleSinceTimestamp = staleSinceHours
+    ? Date.now() - staleSinceHours * 60 * 60 * 1000
+    : undefined;
   let synced = 0;
   let failed = 0;
+  let skipped = 0;
   const logs: string[] = [];
 
   for (const user of usersRes.rows) {
     const userId = user.id as string;
     const userName = (user.name as string) || (user.login_id as string);
-    const targetDiscord = (user.discord_id as string) || (user.phone as string) || "";
+    const targetDiscord =
+      (user.discord_id as string) || (user.phone as string) || "";
+
+    if (staleSinceTimestamp !== undefined && user.discord_synced_at) {
+      const syncedAt = Date.parse(
+        String(user.discord_synced_at).replace(" ", "T") + "Z",
+      );
+      if (!Number.isNaN(syncedAt) && syncedAt >= staleSinceTimestamp) {
+        skipped++;
+        logs.push(
+          `⏭️ [${userName}] 건너뜀 (최근 ${staleSinceHours}시간 이내 동기화됨)`,
+        );
+        continue;
+      }
+    }
 
     if (!targetDiscord) {
       failed++;
@@ -569,7 +784,9 @@ export async function syncAllUsersFromDiscord(): Promise<{
     const result = await syncUserFromDiscord(userId, targetDiscord);
     if (result.success) {
       synced++;
-      logs.push(`✅ [${userName}] 동기화 완료 (직책: ${result.updatedPositions?.join(", ") || "없음"}, 등급: ${result.updatedRole})`);
+      logs.push(
+        `✅ [${userName}] 동기화 완료 (직책: ${result.updatedPositions?.join(", ") || "없음"}, 등급: ${result.updatedRole})`,
+      );
     } else {
       failed++;
       logs.push(`❌ [${userName}] 실패: ${result.message}`);
@@ -583,6 +800,7 @@ export async function syncAllUsersFromDiscord(): Promise<{
     total: usersRes.rows.length,
     synced,
     failed,
+    skipped,
     logs,
   };
 }

@@ -134,6 +134,16 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+      const assemblyRes = await db.execute({
+        sql: "SELECT id, status FROM assemblies WHERE id = ?",
+        args: [assemblyId],
+      });
+      if (assemblyRes.rows.length === 0) {
+        return NextResponse.json(
+          { error: "총회를 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
       const choiceConfig =
         Array.isArray(choices) && choices.length >= 2
           ? [
@@ -239,13 +249,19 @@ export async function POST(req: Request) {
       const agenda = agRes.rows[0];
       if (!["READY", "ON_HOLD"].includes(String(agenda.status))) {
         return NextResponse.json(
-          { error: "표결이 시작되지 않은 안건(대기/보류)만 수정할 수 있습니다." },
+          {
+            error: "표결이 시작되지 않은 안건(대기/보류)만 수정할 수 있습니다.",
+          },
           { status: 400 },
         );
       }
       const choiceConfig =
         Array.isArray(choices) && choices.length >= 2
-          ? [...new Set(choices.map((c: string) => String(c).trim()).filter(Boolean))]
+          ? [
+              ...new Set(
+                choices.map((c: string) => String(c).trim()).filter(Boolean),
+              ),
+            ]
           : null;
       if (choiceConfig !== null && choiceConfig.length < 2) {
         return NextResponse.json(
@@ -261,7 +277,8 @@ export async function POST(req: Request) {
         );
       }
       const method =
-        votingMethod && ["MAJORITY", "TWO_THIRDS", "PLURALITY", "RANKED"].includes(votingMethod)
+        votingMethod &&
+        ["MAJORITY", "TWO_THIRDS", "PLURALITY", "RANKED"].includes(votingMethod)
           ? votingMethod
           : null;
 
@@ -281,7 +298,7 @@ export async function POST(req: Request) {
           isSecret !== undefined ? (isSecret ? 1 : 0) : null,
           choiceConfig !== null ? JSON.stringify(choiceConfig) : null,
           quorum !== null ? quorum : null,
-          votingDeadline !== undefined ? (votingDeadline || null) : null,
+          votingDeadline !== undefined ? String(votingDeadline) : null,
           method,
           agendaId,
         ],
@@ -345,45 +362,50 @@ export async function POST(req: Request) {
       }
       const targetAssembly = assRes.rows[0];
 
-      // 1. 투표함 및 투표참여로그 삭제
-      await db.execute({
-        sql: "DELETE FROM ballot_box WHERE agenda_id IN (SELECT id FROM agendas WHERE assembly_id = ?)",
-        args: [assemblyId],
-      });
-      await db.execute({
-        sql: "DELETE FROM voter_logs WHERE agenda_id IN (SELECT id FROM agendas WHERE assembly_id = ?)",
-        args: [assemblyId],
-      });
-      // 2. 안건 삭제
-      await db.execute({
-        sql: "DELETE FROM agendas WHERE assembly_id = ?",
-        args: [assemblyId],
-      });
-      // 3. 출석 및 위임 삭제
-      await db.execute({
-        sql: "DELETE FROM assembly_attendances WHERE assembly_id = ?",
-        args: [assemblyId],
-      });
-      // 4. 의결권 수동 설정 삭제
-      await db.execute({
-        sql: "DELETE FROM assembly_voting_rights WHERE assembly_id = ?",
-        args: [assemblyId],
-      });
-      // 5. 회의록 버전 삭제
-      await db.execute({
-        sql: "DELETE FROM assembly_minutes_versions WHERE assembly_id = ?",
-        args: [assemblyId],
-      });
-      // 6. 감사 로그 기록
-      await writeAudit(assemblyId, null, user.id, "DELETE_ASSEMBLY", {
-        title: targetAssembly.title,
-        roundNumber: targetAssembly.round_number,
-      });
-      // 7. 총회 삭제
-      await db.execute({
-        sql: "DELETE FROM assemblies WHERE id = ?",
-        args: [assemblyId],
-      });
+      const tx = await db.transaction("write");
+      try {
+        await tx.execute({
+          sql: "DELETE FROM ballot_box WHERE agenda_id IN (SELECT id FROM agendas WHERE assembly_id = ?)",
+          args: [assemblyId],
+        });
+        await tx.execute({
+          sql: "DELETE FROM voter_logs WHERE agenda_id IN (SELECT id FROM agendas WHERE assembly_id = ?)",
+          args: [assemblyId],
+        });
+        await tx.execute({
+          sql: "DELETE FROM agendas WHERE assembly_id = ?",
+          args: [assemblyId],
+        });
+        await tx.execute({
+          sql: "DELETE FROM assembly_attendances WHERE assembly_id = ?",
+          args: [assemblyId],
+        });
+        await tx.execute({
+          sql: "DELETE FROM assembly_voting_rights WHERE assembly_id = ?",
+          args: [assemblyId],
+        });
+        await tx.execute({
+          sql: "DELETE FROM assembly_minutes_versions WHERE assembly_id = ?",
+          args: [assemblyId],
+        });
+        await tx.execute({
+          sql: "DELETE FROM assemblies WHERE id = ?",
+          args: [assemblyId],
+        });
+        await tx.commit();
+      } catch (error) {
+        await tx.rollback();
+        throw error;
+      }
+
+      try {
+        await writeAudit(assemblyId, null, user.id, "DELETE_ASSEMBLY", {
+          title: targetAssembly.title,
+          roundNumber: targetAssembly.round_number,
+        });
+      } catch (auditError) {
+        console.error("총회 삭제 감사 로그 기록 실패:", auditError);
+      }
 
       return NextResponse.json({
         success: true,
@@ -431,6 +453,9 @@ export async function POST(req: Request) {
       await db.execute({
         sql: "UPDATE assemblies SET status = ? WHERE id = ?",
         args: [status, assemblyId],
+      });
+      await writeAudit(assemblyId, null, user.id, "UPDATE_ASSEMBLY_STATUS", {
+        status,
       });
 
       return NextResponse.json({ success: true, status });
@@ -503,6 +528,9 @@ export async function POST(req: Request) {
           args: [index, agendaId, assemblyId],
         });
       }
+      await writeAudit(assemblyId, null, user.id, "REORDER_AGENDAS", {
+        orderedAgendaIds: requestedIds,
+      });
       return NextResponse.json({
         success: true,
         orderedAgendaIds: requestedIds,
@@ -552,13 +580,28 @@ export async function POST(req: Request) {
         sql: "UPDATE agendas SET status = ? WHERE id = ?",
         args: [status, agendaId],
       });
+      const agendaAssembly = await db.execute({
+        sql: "SELECT assembly_id FROM agendas WHERE id = ?",
+        args: [agendaId],
+      });
+      await writeAudit(
+        agendaAssembly.rows[0]?.assembly_id,
+        agendaId,
+        user.id,
+        "UPDATE_AGENDA_STATUS",
+        { status },
+      );
       return NextResponse.json({ success: true, status });
     }
 
     // 6. 출석·위임장 승인/반려 및 출석 체크
     if (action === "UPDATE_ATTENDANCE") {
       const { attendanceId, status, attended } = body;
-      if (!attendanceId || !["APPROVED", "REJECTED"].includes(status)) {
+      if (
+        !attendanceId ||
+        !["APPROVED", "REJECTED"].includes(status) ||
+        typeof attended !== "boolean"
+      ) {
         return NextResponse.json(
           { error: "출석 기록과 승인 상태가 필요합니다." },
           { status: 400 },
@@ -584,11 +627,12 @@ export async function POST(req: Request) {
           { status: 403 },
         );
       }
+      const attendedValue = status === "APPROVED" && attended ? 1 : 0;
       await db.execute({
         sql: "UPDATE assembly_attendances SET approval_status = ?, attended = ?, attended_at = CASE WHEN ? = 1 THEN datetime('now') ELSE attended_at END WHERE id = ?",
-        args: [status, attended ? 1 : 0, attended ? 1 : 0, attendanceId],
+        args: [status, attendedValue, attendedValue, attendanceId],
       });
-      if (status === "APPROVED" && attended) {
+      if (status === "APPROVED" && attendedValue) {
         await db.execute({
           sql: "UPDATE users SET status = 'ACTIVE', last_renewed_at = datetime('now') WHERE id = ? AND role = 'LAWYER'",
           args: [attendance.user_id],
@@ -599,12 +643,12 @@ export async function POST(req: Request) {
         null,
         user.id,
         status === "APPROVED" ? "APPROVE_ATTENDANCE" : "REJECT_ATTENDANCE",
-        { attendanceId, attended: Boolean(attended) },
+        { attendanceId, attended: Boolean(attendedValue) },
       );
       return NextResponse.json({
         success: true,
         status,
-        attended: Boolean(attended),
+        attended: Boolean(attendedValue),
       });
     }
 
@@ -624,13 +668,19 @@ export async function POST(req: Request) {
         );
       }
       const assemblyRes = await db.execute({
-        sql: "SELECT id FROM assemblies WHERE id = ?",
+        sql: "SELECT id, status FROM assemblies WHERE id = ?",
         args: [assemblyId],
       });
       if (assemblyRes.rows.length === 0) {
         return NextResponse.json(
           { error: "총회를 찾을 수 없습니다." },
           { status: 404 },
+        );
+      }
+      if (assemblyRes.rows[0].status !== "IN_SESSION") {
+        return NextResponse.json(
+          { error: "개회 중인 총회에만 현장 출석을 등록할 수 있습니다." },
+          { status: 400 },
         );
       }
       const memberRes = await db.execute({
@@ -714,6 +764,12 @@ export async function POST(req: Request) {
         sql: "SELECT status FROM assemblies WHERE id = ?",
         args: [assemblyId],
       });
+      if (assemblyRes.rows.length === 0) {
+        return NextResponse.json(
+          { error: "총회를 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
       if (assemblyRes.rows[0]?.status === "IN_SESSION" && !isChair(user)) {
         return NextResponse.json(
           { error: "총회 개회 후 의결권 변경은 의장 허가가 필요합니다." },
@@ -966,11 +1022,24 @@ export async function POST(req: Request) {
         sql: "SELECT COALESCE(SUM(COALESCE(v.voting_power, 1)), 0) as total FROM users u LEFT JOIN assembly_voting_rights v ON v.user_id = u.id AND v.assembly_id = ? WHERE u.role = 'LAWYER' AND u.status = 'ACTIVE'",
         args: [agenda.assembly_id],
       });
+      const firmRightsRes = await db.execute({
+        sql: `SELECT COALESCE(SUM(partner_cnt / 2), 0) as firm_total
+              FROM (
+                SELECT f.id, COUNT(fm.lawyer_id) as partner_cnt
+                FROM law_firms f
+                JOIN firm_members fm ON fm.firm_id = f.id AND fm.is_partner = 1
+                WHERE f.status = 'APPROVED'
+                GROUP BY f.id
+              )`,
+        args: [],
+      });
       const presentRes = await db.execute({
         sql: "SELECT COALESCE(SUM(CASE WHEN attended = 1 OR is_proxy = 1 THEN COALESCE(voting_power, 1) ELSE 0 END), 0) as present_rights FROM assembly_attendances WHERE assembly_id = ? AND approval_status = 'APPROVED'",
         args: [agenda.assembly_id],
       });
-      const totalRights = Number(totalRightsRes.rows[0]?.total || 0);
+      const totalRights =
+        Number(totalRightsRes.rows[0]?.total || 0) +
+        Number(firmRightsRes.rows[0]?.firm_total || 0);
       const presentRights = Number(presentRes.rows[0]?.present_rights || 0);
       const quorumNeeded = Number(
         agenda.quorum_needed || Math.ceil(totalRights / 3),
@@ -1012,10 +1081,16 @@ export async function POST(req: Request) {
           ? "PASS"
           : "REJECT";
 
-      await db.execute({
-        sql: "UPDATE agendas SET status = 'CLOSED', voting_closed_at = datetime('now'), result_status = ? WHERE id = ?",
+      const closeRes = await db.execute({
+        sql: "UPDATE agendas SET status = 'CLOSED', voting_closed_at = datetime('now'), result_status = ? WHERE id = ? AND status = 'VOTING'",
         args: [resultStatus, agendaId],
       });
+      if (closeRes.rowsAffected !== 1) {
+        return NextResponse.json(
+          { error: "이미 종료 처리 중이거나 종료된 안건입니다." },
+          { status: 409 },
+        );
+      }
       const assemblyRes = await db.execute({
         sql: "SELECT minutes_text FROM assemblies WHERE id = ?",
         args: [agenda.assembly_id],
@@ -1141,6 +1216,17 @@ export async function POST(req: Request) {
         return NextResponse.json(
           { error: "총회 ID가 누락되었습니다." },
           { status: 400 },
+        );
+      }
+
+      const assemblyExists = await db.execute({
+        sql: "SELECT id FROM assemblies WHERE id = ?",
+        args: [assemblyId],
+      });
+      if (assemblyExists.rows.length === 0) {
+        return NextResponse.json(
+          { error: "총회를 찾을 수 없습니다." },
+          { status: 404 },
         );
       }
 

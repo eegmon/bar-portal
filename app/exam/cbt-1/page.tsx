@@ -30,6 +30,7 @@ export default function CBT1Page() {
   // 동적 문항 및 정정 공지 상태
   const [examId, setExamId] = useState("exam-2026-09");
   const [examTitle, setExamTitle] = useState("2026년도 제18회 도스변호사시험");
+  const [phase1MaxScore, setPhase1MaxScore] = useState(100);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [errataNotices, setErrataNotices] = useState<any[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
@@ -43,6 +44,7 @@ export default function CBT1Page() {
           setQuestions(data.questions);
           if (data.examId) setExamId(data.examId);
           if (data.title) setExamTitle(data.title);
+          if (data.phase1MaxScore) setPhase1MaxScore(data.phase1MaxScore);
           if (data.errataNotices) setErrataNotices(data.errataNotices);
         }
       })
@@ -159,7 +161,7 @@ export default function CBT1Page() {
             <div className="p-4 bg-slate-950 rounded-lg border border-slate-800 text-xs text-slate-400 space-y-1">
               <p className="font-semibold text-slate-300">시험 규칙 안내</p>
               <p>
-                • 시험 시간: 120분 (
+                • 시험 시간: 120분 · 만점 {phase1MaxScore}점 (
                 {questions.length > 0 ? questions.length : 10}문 객관식)
               </p>
               <p>
