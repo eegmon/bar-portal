@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { canManageAssembly, getSessionUser } from "@/lib/auth";
 import { sendDiscordWebhook } from "@/lib/discord";
+import { getVoteAccessUser } from "@/lib/vote-access";
 
 const DEFAULT_CHOICES = ["찬성", "반대", "기권"];
 
@@ -23,15 +24,30 @@ function getChoices(rawConfig: unknown): string[] {
   return DEFAULT_CHOICES;
 }
 
+async function resolveVotingUser(
+  req: Request,
+  constraints?: { assemblyId?: string; agendaId?: string },
+) {
+  const sessionUser = await getSessionUser();
+  if (sessionUser) return sessionUser;
+
+  const url = new URL(req.url);
+  const accessToken =
+    req.headers.get("x-vote-access-token") ||
+    url.searchParams.get("accessToken");
+
+  return getVoteAccessUser(accessToken, constraints);
+}
+
 export async function GET(req: Request) {
   try {
-    const user = await getSessionUser();
+    const agendaId = new URL(req.url).searchParams.get("agendaId");
+    const user = await resolveVotingUser(req, { agendaId: agendaId || undefined });
     if (!user)
       return NextResponse.json(
-        { error: "로그인이 필요합니다." },
+        { error: "로그인 또는 유효한 개인 투표 링크가 필요합니다." },
         { status: 401 },
       );
-    const agendaId = new URL(req.url).searchParams.get("agendaId");
     if (!agendaId)
       return NextResponse.json(
         { error: "안건 ID가 필요합니다." },
@@ -120,11 +136,24 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // 1. 필수 로그인 검증
-    const user = await getSessionUser();
+    const body = await req.json();
+    const { agendaId, allocations, ranking } = body;
+
+    if (!agendaId || !allocations || Object.keys(allocations).length === 0) {
+      return NextResponse.json(
+        { error: "투표 데이터가 누락되었습니다." },
+        { status: 400 },
+      );
+    }
+
+    // 1. 로그인 또는 개인 링크 인증 검증
+    const user = await resolveVotingUser(req, { agendaId });
     if (!user) {
       return NextResponse.json(
-        { error: "총회 전자투표는 로그인한 회원 변호사만 참여할 수 있습니다." },
+        {
+          error:
+            "총회 전자투표는 로그인한 회원 또는 유효한 개인별 투표 링크 사용자만 참여할 수 있습니다.",
+        },
         { status: 401 },
       );
     }
@@ -142,16 +171,6 @@ export async function POST(req: Request) {
           error: `현재 자격 상태(${user.status})로는 의결권을 행사할 수 없습니다.`,
         },
         { status: 403 },
-      );
-    }
-
-    const body = await req.json();
-    const { agendaId, allocations, ranking } = body;
-
-    if (!agendaId || !allocations || Object.keys(allocations).length === 0) {
-      return NextResponse.json(
-        { error: "투표 데이터가 누락되었습니다." },
-        { status: 400 },
       );
     }
 

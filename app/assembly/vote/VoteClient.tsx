@@ -27,6 +27,7 @@ interface VoteClientProps {
   agendas: any[];
   userVotedAgendas: string[];
   initialAgendaId?: string;
+  accessToken?: string;
 }
 
 export default function VoteClient({
@@ -36,6 +37,7 @@ export default function VoteClient({
   agendas,
   userVotedAgendas,
   initialAgendaId,
+  accessToken,
 }: VoteClientProps) {
   const isChair =
     user.role === "ADMIN" ||
@@ -83,8 +85,10 @@ export default function VoteClient({
     if (!selectedAgendaId) return;
     let active = true;
     const loadStats = async () => {
+      const params = new URLSearchParams({ agendaId: selectedAgendaId });
+      if (accessToken) params.set("accessToken", accessToken);
       const res = await fetch(
-        `/api/assembly/vote?agendaId=${encodeURIComponent(selectedAgendaId)}`,
+        `/api/assembly/vote?${params.toString()}`,
       );
       const data = await res.json();
       if (active && res.ok) setLiveStats(data.stats);
@@ -95,7 +99,7 @@ export default function VoteClient({
       active = false;
       window.clearInterval(timer);
     };
-  }, [selectedAgendaId]);
+  }, [selectedAgendaId, accessToken]);
 
   // 현재 배분된 총 표 수
   const allocatedSum = Object.values(allocations).reduce((a, b) => a + b, 0);
@@ -163,7 +167,12 @@ export default function VoteClient({
     try {
       const res = await fetch("/api/assembly/vote", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken
+            ? { "x-vote-access-token": accessToken }
+            : {}),
+        },
         body: JSON.stringify({
           agendaId: selectedAgendaId,
           allocations: isRanked ? { __RANKING__: votingPower } : allocations,
