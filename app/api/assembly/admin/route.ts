@@ -208,6 +208,121 @@ export async function POST(req: Request) {
       });
     }
 
+    // [신규] 상정된 안건 수정 (READY/ON_HOLD 상태에서만 허용)
+    if (action === "UPDATE_AGENDA") {
+      const {
+        agendaId,
+        title,
+        description,
+        isSecret,
+        choices,
+        quorumNeeded,
+        votingDeadline,
+        votingMethod,
+      } = body;
+      if (!agendaId || !title?.trim()) {
+        return NextResponse.json(
+          { error: "안건 ID와 제목은 필수입니다." },
+          { status: 400 },
+        );
+      }
+      const agRes = await db.execute({
+        sql: "SELECT a.*, ass.status as assembly_status FROM agendas a JOIN assemblies ass ON ass.id = a.assembly_id WHERE a.id = ?",
+        args: [agendaId],
+      });
+      if (agRes.rows.length === 0) {
+        return NextResponse.json(
+          { error: "안건을 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
+      const agenda = agRes.rows[0];
+      if (!["READY", "ON_HOLD"].includes(String(agenda.status))) {
+        return NextResponse.json(
+          { error: "표결이 시작되지 않은 안건(대기/보류)만 수정할 수 있습니다." },
+          { status: 400 },
+        );
+      }
+      const choiceConfig =
+        Array.isArray(choices) && choices.length >= 2
+          ? [...new Set(choices.map((c: string) => String(c).trim()).filter(Boolean))]
+          : null;
+      if (choiceConfig !== null && choiceConfig.length < 2) {
+        return NextResponse.json(
+          { error: "선택지는 2개 이상이어야 합니다." },
+          { status: 400 },
+        );
+      }
+      const quorum = quorumNeeded !== undefined ? Number(quorumNeeded) : null;
+      if (quorum !== null && (!Number.isInteger(quorum) || quorum < 0)) {
+        return NextResponse.json(
+          { error: "정족수는 0 이상의 정수여야 합니다." },
+          { status: 400 },
+        );
+      }
+      const method =
+        votingMethod && ["MAJORITY", "TWO_THIRDS", "PLURALITY", "RANKED"].includes(votingMethod)
+          ? votingMethod
+          : null;
+
+      await db.execute({
+        sql: `UPDATE agendas SET
+          title = COALESCE(?, title),
+          description = COALESCE(?, description),
+          is_secret = COALESCE(?, is_secret),
+          choice_config = COALESCE(?, choice_config),
+          quorum_needed = COALESCE(?, quorum_needed),
+          voting_deadline = COALESCE(?, voting_deadline),
+          voting_method = COALESCE(?, voting_method)
+          WHERE id = ?`,
+        args: [
+          title.trim(),
+          description !== undefined ? String(description) : null,
+          isSecret !== undefined ? (isSecret ? 1 : 0) : null,
+          choiceConfig !== null ? JSON.stringify(choiceConfig) : null,
+          quorum !== null ? quorum : null,
+          votingDeadline !== undefined ? (votingDeadline || null) : null,
+          method,
+          agendaId,
+        ],
+      });
+
+      await writeAudit(agenda.assembly_id, agendaId, user.id, "UPDATE_AGENDA", {
+        title: title.trim(),
+        isSecret,
+        votingMethod: method,
+      });
+
+      const updatedRes = await db.execute({
+        sql: "SELECT * FROM agendas WHERE id = ?",
+        args: [agendaId],
+      });
+
+      return NextResponse.json({
+        success: true,
+        agenda: updatedRes.rows[0],
+        message: "안건이 수정되었습니다.",
+      });
+    }
+
+    // [신규] 변호사 본인 출석 확인 (IN_SESSION 총회에서 직접 출석 등록)
+    if (action === "MARK_ATTENDED") {
+      const { assemblyId } = body;
+      if (!assemblyId) {
+        return NextResponse.json(
+          { error: "총회 ID가 필요합니다." },
+          { status: 400 },
+        );
+      }
+      // 이 액션은 canManageAssembly 체크 없이 일반 변호사도 가능
+      // 하지만 현재 user는 위에서 canManageAssembly로 걸렸으므로,
+      // 이 액션은 별도 공개 엔드포인트로 분리
+      return NextResponse.json(
+        { error: "이 액션은 /api/assembly/attend 를 사용하세요." },
+        { status: 400 },
+      );
+    }
+
     // [신규] 총회 삭제 (관련 안건, 투표함, 출석, 의결권, 회의록 정리)
     if (action === "DELETE_ASSEMBLY") {
       const { assemblyId } = body;

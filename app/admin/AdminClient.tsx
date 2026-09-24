@@ -1030,6 +1030,72 @@ export default function AdminClient({
     );
   };
 
+  // 안건 수정 모달 상태
+  const [editingAgenda, setEditingAgenda] = useState<any | null>(null);
+  const [editAgTitle, setEditAgTitle] = useState("");
+  const [editAgDesc, setEditAgDesc] = useState("");
+  const [editAgIsSecret, setEditAgIsSecret] = useState(false);
+  const [editAgChoices, setEditAgChoices] = useState("");
+  const [editAgQuorum, setEditAgQuorum] = useState(0);
+  const [editAgDeadline, setEditAgDeadline] = useState("");
+  const [editAgMethod, setEditAgMethod] = useState("MAJORITY");
+  const [isSavingAgenda, setIsSavingAgenda] = useState(false);
+
+  const openEditAgendaModal = (ag: any) => {
+    setEditingAgenda(ag);
+    setEditAgTitle(ag.title || "");
+    setEditAgDesc(ag.description || "");
+    setEditAgIsSecret(Boolean(ag.is_secret));
+    try {
+      const parsed = JSON.parse(ag.choice_config || "[]");
+      setEditAgChoices(Array.isArray(parsed) ? parsed.join(", ") : "찬성, 반대, 기권");
+    } catch {
+      setEditAgChoices("찬성, 반대, 기권");
+    }
+    setEditAgQuorum(Number(ag.quorum_needed || 0));
+    setEditAgDeadline(ag.voting_deadline || "");
+    setEditAgMethod(ag.voting_method || "MAJORITY");
+  };
+
+  const handleSaveAgenda = async () => {
+    if (!editingAgenda || !editAgTitle.trim()) {
+      alert("안건명은 필수입니다.");
+      return;
+    }
+    setIsSavingAgenda(true);
+    try {
+      const res = await fetch("/api/assembly/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_AGENDA",
+          agendaId: editingAgenda.id,
+          title: editAgTitle.trim(),
+          description: editAgDesc,
+          isSecret: editAgIsSecret,
+          choices: editAgChoices.split(",").map((c) => c.trim()).filter(Boolean),
+          quorumNeeded: editAgQuorum,
+          votingDeadline: editAgDeadline || null,
+          votingMethod: editAgMethod,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "안건 수정 실패");
+
+      alert("✅ 안건이 성공적으로 수정되었습니다.");
+      if (data.agenda) {
+        setAgendas((prev) =>
+          prev.map((ag) => (ag.id === editingAgenda.id ? { ...ag, ...data.agenda } : ag)),
+        );
+      }
+      setEditingAgenda(null);
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsSavingAgenda(false);
+    }
+  };
+
   // 총회 의사록 모달 열기
   const openMinutesModal = (ass: any) => {
     setSelectedAssemblyForMinutes(ass);
@@ -2789,10 +2855,7 @@ export default function AdminClient({
                                 {ag.status === "CLOSED" && (
                                   <button
                                     onClick={() =>
-                                      handleConfirmResult(
-                                        ag.id,
-                                        "CONFIRM_RESULT",
-                                      )
+                                      handleConfirmResult(ag.id, "CONFIRM_RESULT")
                                     }
                                     className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-bold shadow"
                                   >
@@ -2802,14 +2865,22 @@ export default function AdminClient({
                                 {ag.status === "RESULT_CONFIRMED" && (
                                   <button
                                     onClick={() =>
-                                      handleConfirmResult(
-                                        ag.id,
-                                        "REOPEN_RESULT",
-                                      )
+                                      handleConfirmResult(ag.id, "REOPEN_RESULT")
                                     }
                                     className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-bold shadow"
                                   >
                                     결과 재개
+                                  </button>
+                                )}
+                                {/* 안건 수정 버튼 — READY / ON_HOLD 상태에서만 */}
+                                {["READY", "ON_HOLD"].includes(ag.status) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditAgendaModal(ag)}
+                                    className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-amber-300 border border-amber-500/30 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                    안건 수정
                                   </button>
                                 )}
                               </div>
@@ -3171,6 +3242,132 @@ export default function AdminClient({
                 {isSavingMinutes
                   ? "저장 및 공표중..."
                   : "총회 의사록 저장 및 공표"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 안건 수정 모달 */}
+      {editingAgenda && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Edit className="w-4 h-4 text-amber-400" />
+                안건 수정
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingAgenda(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-[11px] leading-relaxed">
+              ⚠️ 표결이 시작되지 않은 안건(대기/보류)만 수정할 수 있습니다. 수정 후 즉시 반영됩니다.
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">안건명 <span className="text-rose-400">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={editAgTitle}
+                  onChange={(e) => setEditAgTitle(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  placeholder="예: 제1호 안건: 예산안 승인의 건"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">제안 이유 및 설명</label>
+                <textarea
+                  rows={3}
+                  value={editAgDesc}
+                  onChange={(e) => setEditAgDesc(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  placeholder="안건의 주요 골자 및 제안 이유"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">투표 선택지 (쉼표 구분)</label>
+                <input
+                  type="text"
+                  value={editAgChoices}
+                  onChange={(e) => setEditAgChoices(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  placeholder="찬성, 반대, 기권"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">투표 의결 방식</label>
+                <select
+                  value={editAgMethod}
+                  onChange={(e) => setEditAgMethod(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="MAJORITY">일반의결 (과반수)</option>
+                  <option value="TWO_THIRDS">특별의결 (2/3 이상)</option>
+                  <option value="PLURALITY">최다득표제</option>
+                  <option value="RANKED">선호투표제 (순위투표)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">정족수 (0=전체 1/3)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editAgQuorum}
+                    onChange={(e) => setEditAgQuorum(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-bold mb-1">투표 마감 시각 (선택)</label>
+                  <input
+                    type="datetime-local"
+                    value={editAgDeadline}
+                    onChange={(e) => setEditAgDeadline(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={editAgIsSecret}
+                  onChange={(e) => setEditAgIsSecret(e.target.checked)}
+                  className="rounded text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-slate-300 font-semibold">무기명 비밀투표로 진행</span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingAgenda(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={isSavingAgenda}
+                onClick={handleSaveAgenda}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow-md flex items-center gap-1.5"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                {isSavingAgenda ? "저장 중..." : "안건 수정 저장"}
               </button>
             </div>
           </div>
