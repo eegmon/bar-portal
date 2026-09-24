@@ -913,7 +913,7 @@ export async function POST(req: Request) {
 
       // 디스코드 총회 채널 실시간 알림
       await sendDiscordWebhook("ASSEMBLY_VOTE", {
-        content: "@everyone **[총회 의장] 안건 표결 개시 선언**",
+        content: "**[총회 의장] 안건 표결 개시 선언**",
         embeds: [
           {
             title: `🗳️ 의장의 표결 선포: ${agenda.title}`,
@@ -1117,7 +1117,7 @@ export async function POST(req: Request) {
 
       // 디스코드 결과 선포
       await sendDiscordWebhook("ASSEMBLY_VOTE", {
-        content: "@everyone **[총회 의장] 안건 표결 종료 및 결과 선포**",
+        content: "**[총회 의장] 안건 표결 종료 및 결과 선포**",
         embeds: [
           {
             title: `📊 표결 집계 결과 선포: ${agenda.title}`,
@@ -1265,7 +1265,7 @@ export async function POST(req: Request) {
 
       if (broadcastDiscord && ass) {
         await sendDiscordWebhook("ASSEMBLY_NOTICE", {
-          content: `@everyone 📜 **[총회 공식 의사록 공표] ${ass.title} 의사록**`,
+          content: `📜 **[총회 공식 의사록 공표] ${ass.title} 의사록**`,
           embeds: [
             {
               title: `🏛️ 도스변호사협회 ${ass.title} 공식 의사록 (회칙 제18조)`,
