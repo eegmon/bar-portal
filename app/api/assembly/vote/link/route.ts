@@ -111,10 +111,11 @@ export async function GET(req: Request) {
       voteLink: voteUrl.toString(),
       accessToken: token,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("투표 링크 발급 에러:", err);
+    const message = err instanceof Error ? err.message : "서버 오류";
     return NextResponse.json(
-      { error: err.message || "서버 오류" },
+      { error: message },
       { status: 500 },
     );
   }
