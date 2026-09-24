@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
     // ── 프로필 수정 ──────────────────────────────────────────────
     if (action === "UPDATE_PROFILE") {
-      const { officeName, officeAddress, bio, selfIntroduction, specialties, discordId, phone, contact, isAvailable } = body;
+      const { officeName, officeAddress, selfIntroduction, specialties, discordId, phone, contact, isAvailable } = body;
 
       // 컬럼 auto-migrate
       for (const sql of [
@@ -25,13 +25,12 @@ export async function POST(req: Request) {
 
       await db.execute({
         sql: `UPDATE users
-              SET office_name = ?, office_address = ?, bio = ?, self_introduction = ?, specialties = ?,
+              SET office_name = ?, office_address = ?, self_introduction = ?, specialties = ?,
                   discord_id = ?, phone = ?, contact = ?, is_available = ?
               WHERE id = ?`,
         args: [
           officeName ?? "",
           officeAddress ?? "",
-          bio ?? "",
           selfIntroduction ?? "",
           JSON.stringify(Array.isArray(specialties) ? specialties : []),
           discordId ?? "",

@@ -19,7 +19,6 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
   // 프로필 편집 상태
   const [officeName, setOfficeName] = useState(lawyerProfile?.office_name || "");
   const [officeAddress, setOfficeAddress] = useState(lawyerProfile?.office_address || "");
-  const [bio, setBio] = useState(lawyerProfile?.bio || "");
   const [selfIntroduction, setSelfIntroduction] = useState(lawyerProfile?.self_introduction || "");
   const [discordId, setDiscordId] = useState(lawyerProfile?.discord_id || "");
   const [phone, setPhone] = useState(lawyerProfile?.phone || "");
@@ -67,7 +66,7 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
       const res = await fetch("/api/portal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "UPDATE_PROFILE", officeName, officeAddress, bio, selfIntroduction, specialties, discordId, phone, contact, isAvailable }),
+        body: JSON.stringify({ action: "UPDATE_PROFILE", officeName, officeAddress, selfIntroduction, specialties, discordId, phone, contact, isAvailable }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -374,11 +373,6 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
                 placeholder="의뢰인의 기본적 인권 옹호와 신뢰를 최우선으로 하는 변호사입니다."
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
               />
-            </div>
-
-            <div>
-              <label className="block text-slate-400 mb-1 font-semibold">내부 자기소개 / 주요 경력</label>
-              <textarea rows={4} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="주요 경력, 수임 실적, 학력 등 내부 기록용" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500" />
             </div>
 
             <div>
