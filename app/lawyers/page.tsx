@@ -253,7 +253,7 @@ export default async function LawyersSearchPage({
                 )}
               </div>
 
-              {isActive && lawyer.contact && (
+              {isActive && lawyer.contact && !(lawyer.hide_contact_when_unavailable && !lawyer.is_available) && (
                 <div className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-[11px] text-slate-300 flex items-center gap-1.5">
                   <span className="text-slate-500">📞</span>
                   <span className="font-mono">{lawyer.contact}</span>

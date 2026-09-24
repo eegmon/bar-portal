@@ -13,7 +13,9 @@ export default function Footer() {
               도스변호사협회 (DOS BAR ASSOCIATION)
             </div>
             <p className="text-slate-400 leading-relaxed max-w-md text-xs">
-              도스변호사협회는 「변호사법」에 의하여 설립된 법인으로서 기본적 인권의 옹호와 사회정의 실현, 법률문화의 창달 및 변호사의 지도·감독을 관장합니다.
+              도스변호사협회는 「변호사법」에 의하여 설립된 법인으로서 기본적
+              인권의 옹호와 사회정의 실현, 법률문화의 창달 및 변호사의
+              지도·감독을 관장합니다.
             </p>
             <div className="flex items-center gap-4 text-[11px] text-slate-500 pt-2">
               <span>근거법령: 변호사법 (법률 제18호)</span>
@@ -30,22 +32,34 @@ export default function Footer() {
             </h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/lawyers" className="hover:text-amber-400 transition-colors">
+                <Link
+                  href="/lawyers"
+                  className="hover:text-amber-400 transition-colors"
+                >
                   공인 변호사·법무법인 검색
                 </Link>
               </li>
               <li>
-                <Link href="/exam" className="hover:text-amber-400 transition-colors">
+                <Link
+                  href="/exam"
+                  className="hover:text-amber-400 transition-colors"
+                >
                   월간 변호사시험 시행계획
                 </Link>
               </li>
               <li>
-                <Link href="/assembly" className="hover:text-amber-400 transition-colors">
+                <Link
+                  href="/assembly"
+                  className="hover:text-amber-400 transition-colors"
+                >
                   정기총회 및 의결권 위임
                 </Link>
               </li>
               <li>
-                <Link href="/discipline" className="hover:text-amber-400 transition-colors">
+                <Link
+                  href="/discipline"
+                  className="hover:text-amber-400 transition-colors"
+                >
                   변호사 징계처분 및 업무정지 공시
                 </Link>
               </li>
@@ -59,11 +73,14 @@ export default function Footer() {
               도스온라인 커뮤니티
             </h4>
             <p className="text-[11px] text-slate-400 mb-3">
-              실시간 질의응답 및 총회 음성 참여는 도스온라인 공식 디스코드에서 진행됩니다.
+              실시간 질의응답 및 총회 음성 참여는 도스온라인 공식 디스코드에서
+              진행됩니다.
             </p>
             <div className="flex flex-col gap-2">
               <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-between">
-                <span className="text-slate-300 font-medium">디스코드 실시간 연동</span>
+                <span className="text-slate-300 font-medium">
+                  디스코드 실시간 연동
+                </span>
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               </div>
             </div>
@@ -71,11 +88,13 @@ export default function Footer() {
         </div>
 
         <div className="pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-400">
-          <p>© 2026 DOS BAR ASSOCIATION. All rights reserved. (도스온라인 RP)</p>
+          <p>
+            © 2026 DOS BAR ASSOCIATION. All rights reserved. (도스온라인 RP)
+          </p>
           <div className="flex items-center gap-4">
             <span className="text-slate-400 flex items-center gap-1">
               <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
-              검찰총장 감독기관 연계 시스템
+              전산운영 담당자 : eegmon(discord@eeg_mon)
             </span>
           </div>
         </div>

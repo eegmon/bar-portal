@@ -4,6 +4,52 @@ import db from "@/lib/db";
 import { getSessionUser, canManageExam } from "@/lib/auth";
 import { sendDiscordWebhook } from "@/lib/discord";
 
+// GET — 클레임된 수험번호 목록 (가산점 승인 관리용)
+export async function GET(req: Request) {
+  try {
+    const user = await getSessionUser();
+    if (!user || !canManageExam(user)) {
+      return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+    }
+    const { searchParams } = new URL(req.url);
+    const examId = searchParams.get("examId");
+    if (!examId) {
+      return NextResponse.json({ error: "examId가 필요합니다." }, { status: 400 });
+    }
+
+    // auto-migrate
+    for (const sql of [
+      "ALTER TABLE exam_submissions ADD COLUMN bonus_approved INTEGER DEFAULT 0",
+      "ALTER TABLE exam_submissions ADD COLUMN claimed_user_id TEXT DEFAULT NULL",
+      "ALTER TABLE exams ADD COLUMN bonus_multiplier REAL DEFAULT 0.1",
+    ]) {
+      try { await db.execute(sql); } catch { /* 이미 존재 */ }
+    }
+
+    const res = await db.execute({
+      sql: `SELECT es.id, es.security_code, es.phase1_score, es.phase2_score,
+                   es.bonus_score, es.total_score, es.bonus_approved, es.claimed_user_id,
+                   u.name AS claimed_name, u.login_id AS claimed_login_id,
+                   u.bonus_eligible
+            FROM exam_submissions es
+            LEFT JOIN users u ON u.id = es.claimed_user_id
+            WHERE es.exam_id = ? AND es.claimed_user_id IS NOT NULL
+            ORDER BY u.bonus_eligible DESC, es.security_code ASC`,
+      args: [examId],
+    });
+
+    const examRes = await db.execute({
+      sql: "SELECT bonus_multiplier FROM exams WHERE id = ?",
+      args: [examId],
+    });
+    const bonusMultiplier = Number(examRes.rows[0]?.bonus_multiplier ?? 0.1);
+
+    return NextResponse.json({ success: true, submissions: res.rows, bonusMultiplier });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "서버 오류" }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getSessionUser();
@@ -17,20 +63,15 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action } = body;
 
-    // 컬럼 auto-migrate: phase1_pass_score, phase1_rules (없을 수 있으므로 조용히 처리)
-    try {
-      await db.execute(
-        "ALTER TABLE exams ADD COLUMN phase1_pass_score INTEGER",
-      );
-    } catch {
-      // 이미 존재하면 무시
-    }
-    try {
-      await db.execute(
-        "ALTER TABLE exams ADD COLUMN phase1_rules TEXT",
-      );
-    } catch {
-      // 이미 존재하면 무시
+    // 컬럼 auto-migrate
+    for (const sql of [
+      "ALTER TABLE exams ADD COLUMN phase1_pass_score INTEGER",
+      "ALTER TABLE exams ADD COLUMN phase1_rules TEXT",
+      "ALTER TABLE exams ADD COLUMN bonus_multiplier REAL DEFAULT 0.1",
+      "ALTER TABLE exam_submissions ADD COLUMN bonus_approved INTEGER DEFAULT 0",
+      "ALTER TABLE exam_submissions ADD COLUMN claimed_user_id TEXT DEFAULT NULL",
+    ]) {
+      try { await db.execute(sql); } catch { /* 이미 존재 */ }
     }
 
     // [신규] 0-1. 신규 변호사시험 회차 개설
@@ -200,6 +241,7 @@ export async function POST(req: Request) {
         phase1Rules,
         phase1OperationMode,
         phase2OperationMode,
+        bonusMultiplier,
       } = body;
 
       if (!examId) {
@@ -242,7 +284,8 @@ export async function POST(req: Request) {
                   phase1_pass_score = ?,
                   phase1_rules = COALESCE(?, phase1_rules),
                   phase1_operation_mode = COALESCE(?, phase1_operation_mode),
-                  phase2_operation_mode = COALESCE(?, phase2_operation_mode)
+                  phase2_operation_mode = COALESCE(?, phase2_operation_mode),
+                  bonus_multiplier = COALESCE(?, bonus_multiplier)
               WHERE id = ?`,
         args: [
           title || null,
@@ -255,21 +298,14 @@ export async function POST(req: Request) {
           phase2Doc1PdfUrl !== undefined ? phase2Doc1PdfUrl : null,
           phase2Doc2PdfUrl !== undefined ? phase2Doc2PdfUrl : null,
           phase1MaxScore !== undefined ? Number(phase1MaxScore) : null,
-          phase2Question1MaxScore !== undefined
-            ? Number(phase2Question1MaxScore)
-            : null,
-          phase2Question2MaxScore !== undefined
-            ? Number(phase2Question2MaxScore)
-            : null,
+          phase2Question1MaxScore !== undefined ? Number(phase2Question1MaxScore) : null,
+          phase2Question2MaxScore !== undefined ? Number(phase2Question2MaxScore) : null,
           finalPassingScore !== undefined ? Number(finalPassingScore) : null,
-          // phase1_pass_score: 빈 문자열/undefined면 null(자동 60% 사용), 숫자면 직접 설정값
-          phase1PassScore !== undefined && phase1PassScore !== ""
-            ? Number(phase1PassScore)
-            : null,
-          // phase1_rules: undefined면 null(COALESCE로 기존값 유지)
+          phase1PassScore !== undefined && phase1PassScore !== "" ? Number(phase1PassScore) : null,
           phase1Rules !== undefined ? String(phase1Rules) : null,
           phase1OperationMode !== undefined ? phase1OperationMode : null,
           phase2OperationMode !== undefined ? phase2OperationMode : null,
+          bonusMultiplier !== undefined && bonusMultiplier !== "" ? Number(bonusMultiplier) : null,
           examId,
         ],
       });
@@ -279,8 +315,6 @@ export async function POST(req: Request) {
         message: "시험 정보 및 진행 상태가 성공적으로 갱신되었습니다.",
       });
     }
-
-    // 0. 관리자 발급 수험번호 생성
     if (action === "ISSUE_CANDIDATE_CODES") {
       const { examId, count } = body;
       const issueCount = Number(count);
@@ -509,27 +543,84 @@ export async function POST(req: Request) {
       }
       const p2Score = p2Question1Score + p2Question2Score;
       const p1Score = Number(sub.phase1_score || 0);
-      const totalScore = p1Score + p2Score;
+
+      // 가산점 계산: claimed_user_id + bonus_approved + 회차 bonus_multiplier 모두 충족 시 적용
+      let bonusScore = 0;
+      if (sub.claimed_user_id && sub.bonus_approved) {
+        const examBonusRes = await db.execute({
+          sql: "SELECT bonus_multiplier FROM exams WHERE id = ?",
+          args: [sub.exam_id],
+        });
+        const multiplier = Number(examBonusRes.rows[0]?.bonus_multiplier ?? 0.1);
+        const userRes = await db.execute({
+          sql: "SELECT bonus_eligible FROM users WHERE id = ?",
+          args: [sub.claimed_user_id],
+        });
+        if (Number(userRes.rows[0]?.bonus_eligible) === 1) {
+          bonusScore = Math.round(p1Score * multiplier);
+        }
+      }
+
+      const totalScore = p1Score + p2Score + bonusScore;
 
       await db.execute({
         sql: `UPDATE exam_submissions 
               SET phase2_question1_score = ?, phase2_question2_score = ?,
-                  phase2_score = ?, phase2_feedback = ?, total_score = ?, final_passed = 0
+                  phase2_score = ?, phase2_feedback = ?, bonus_score = ?,
+                  total_score = ?, final_passed = 0
               WHERE id = ?`,
         args: [
           p2Question1Score,
           p2Question2Score,
           p2Score,
           feedback || "",
+          bonusScore,
           totalScore,
           submissionId,
         ],
       });
 
-      return NextResponse.json({ success: true, totalScore, passed: false });
+      return NextResponse.json({ success: true, totalScore, bonusScore, passed: false });
     }
 
-    // 4. 최종 합격자 명단 공개 발표 (포털 + 디스코드)
+    // 3-1. 수험번호별 가산점 승인/취소
+    if (action === "SET_BONUS_APPROVAL") {
+      const { submissionId, approved } = body;
+      if (!submissionId) {
+        return NextResponse.json({ error: "submissionId가 필요합니다." }, { status: 400 });
+      }
+
+      const subRes = await db.execute({
+        sql: `SELECT es.*, u.name AS claimed_name, u.bonus_eligible
+              FROM exam_submissions es
+              LEFT JOIN users u ON u.id = es.claimed_user_id
+              WHERE es.id = ?`,
+        args: [submissionId],
+      });
+      if (subRes.rows.length === 0) {
+        return NextResponse.json({ error: "수험 기록을 찾을 수 없습니다." }, { status: 404 });
+      }
+      const sub = subRes.rows[0];
+
+      if (!sub.claimed_user_id) {
+        return NextResponse.json({ error: "클레임된 수험번호가 아닙니다." }, { status: 400 });
+      }
+      if (Number(sub.bonus_eligible) !== 1) {
+        return NextResponse.json({ error: "해당 응시자는 가산점 자격이 없습니다." }, { status: 400 });
+      }
+
+      await db.execute({
+        sql: "UPDATE exam_submissions SET bonus_approved = ? WHERE id = ?",
+        args: [approved ? 1 : 0, submissionId],
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: approved
+          ? `${sub.claimed_name} 응시자의 가산점이 승인되었습니다.`
+          : `${sub.claimed_name} 응시자의 가산점이 취소되었습니다.`,
+      });
+    }
     if (action === "RELEASE_RESULTS") {
       const { examId, passingScore } = body;
       if (!examId)

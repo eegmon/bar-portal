@@ -9,12 +9,13 @@ import Link from "next/link";
 
 interface PortalClientProps {
   lawyerProfile: any;
+  activeExams?: any[];
 }
 
 const DEFAULT_SPECIALTIES = ["형사", "민사", "행정", "헌법"];
 
-export default function PortalClient({ lawyerProfile }: PortalClientProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "profile" | "security" | "bonus">("overview");
+export default function PortalClient({ lawyerProfile, activeExams = [] }: PortalClientProps) {
+  const [activeTab, setActiveTab] = useState<"overview" | "profile" | "security" | "bonus" | "exam">("overview");
 
   // 프로필 편집 상태
   const [officeName, setOfficeName] = useState(lawyerProfile?.office_name || "");
@@ -24,6 +25,7 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
   const [phone, setPhone] = useState(lawyerProfile?.phone || "");
   const [contact, setContact] = useState(lawyerProfile?.contact || "");
   const [isAvailable, setIsAvailable] = useState(Boolean(lawyerProfile?.is_available));
+  const [hideContactWhenUnavailable, setHideContactWhenUnavailable] = useState(Boolean(lawyerProfile?.hide_contact_when_unavailable));
   const [specialties, setSpecialties] = useState<string[]>(
     (() => { try { return JSON.parse(lawyerProfile?.specialties || "[]"); } catch { return []; } })()
   );
@@ -42,6 +44,16 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
   const [bonusEvidence, setBonusEvidence] = useState("");
   const [isApplyingBonus, setIsApplyingBonus] = useState(false);
   const bonusStatus = lawyerProfile?.bonus_eligible;
+
+  // 수험번호 클레임 상태
+  const [claimExamId, setClaimExamId] = useState(activeExams[0]?.id || "");
+  const [claimCode, setClaimCode] = useState("");
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [isUnclaiming, setIsUnclaiming] = useState(false);
+  // 클레임 결과를 로컬에서 즉시 반영하기 위한 상태
+  const [examClaims, setExamClaims] = useState<Record<string, { security_code: string; bonus_approved: number } | null>>(
+    () => Object.fromEntries(activeExams.map((e) => [e.id, e.myClaim ?? null]))
+  );
 
   const toggleSpecialty = (s: string) => {
     setSpecialties((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -66,7 +78,7 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
       const res = await fetch("/api/portal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "UPDATE_PROFILE", officeName, officeAddress, selfIntroduction, specialties, discordId, phone, contact, isAvailable }),
+        body: JSON.stringify({ action: "UPDATE_PROFILE", officeName, officeAddress, selfIntroduction, specialties, discordId, phone, contact, isAvailable, hideContactWhenUnavailable }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -142,6 +154,53 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
     }
   };
 
+  const handleClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!claimExamId || !claimCode.trim()) {
+      alert("시험 회차와 수험번호를 입력해 주세요.");
+      return;
+    }
+    setIsClaiming(true);
+    try {
+      const res = await fetch("/api/exam/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ examId: claimExamId, securityCode: claimCode.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setExamClaims((prev) => ({
+        ...prev,
+        [claimExamId]: { security_code: claimCode.trim().toUpperCase(), bonus_approved: 0 },
+      }));
+      setClaimCode("");
+      const bonusMsg = data.bonusEligible
+        ? "\n\n⭐ 법학과정 가산점 자격이 확인되었습니다. 관리위원회의 승인 후 채점 시 자동 반영됩니다."
+        : "";
+      alert(`✅ ${data.message}${bonusMsg}`);
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const handleUnclaim = async (examId: string) => {
+    if (!confirm("이 시험의 수험번호 등록을 취소하시겠습니까?")) return;
+    setIsUnclaiming(true);
+    try {
+      const res = await fetch(`/api/exam/claim?examId=${examId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setExamClaims((prev) => ({ ...prev, [examId]: null }));
+      alert("✅ 수험번호 등록이 취소되었습니다.");
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsUnclaiming(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* 상단 프로필 카드 */}
@@ -200,6 +259,7 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
           { id: "profile", label: "프로필 수정", icon: <Edit className="w-4 h-4" /> },
           { id: "security", label: "비밀번호 변경", icon: <Lock className="w-4 h-4" /> },
           { id: "bonus", label: "법학과정 가산점", icon: <Award className="w-4 h-4" /> },
+          { id: "exam", label: "수험번호 등록", icon: <Scale className="w-4 h-4" /> },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -344,6 +404,19 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
                     <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${isAvailable ? "left-4" : "left-0.5"}`} />
                   </span>
                 </button>
+                {!isAvailable && (
+                  <label className="flex items-center gap-2 cursor-pointer mt-1.5 px-1">
+                    <input
+                      type="checkbox"
+                      checked={hideContactWhenUnavailable}
+                      onChange={(e) => setHideContactWhenUnavailable(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-slate-600 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-900"
+                    />
+                    <span className="text-[11px] text-slate-400">
+                      상담 중단 시 공개 연락처 숨기기
+                    </span>
+                  </label>
+                )}
               </div>
             </div>
 
@@ -541,6 +614,91 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
                 </button>
               </div>
             </form>
+          )}
+        </div>
+      )}
+
+      {/* ── 탭 5: 수험번호 등록 (클레임) ── */}
+      {activeTab === "exam" && (
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6 max-w-lg">
+          <div className="border-b border-slate-800 pb-3">
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Scale className="w-5 h-5 text-blue-400" />
+              수험번호 등록
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              관리위원회로부터 발급받은 수험번호를 내 계정에 등록합니다.
+              법학과정 가산점 자격이 있는 경우 등록 후 관리위원회 승인을 통해 가산점이 반영됩니다.
+            </p>
+          </div>
+
+          {activeExams.length === 0 ? (
+            <div className="py-10 text-center text-slate-500 text-sm">
+              현재 수험번호를 등록할 수 있는 진행 중인 시험이 없습니다.
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {activeExams.map((exam) => {
+                const myClaim = examClaims[exam.id];
+                return (
+                  <div key={exam.id} className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-white">{exam.title}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">상태: {exam.status}</p>
+                      </div>
+                      {myClaim && (
+                        <span className="px-2 py-0.5 bg-blue-500/15 text-blue-300 border border-blue-500/30 rounded text-[10px] font-bold">
+                          등록됨
+                        </span>
+                      )}
+                    </div>
+
+                    {myClaim ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs">
+                          <span className="text-slate-400">등록된 수험번호:</span>
+                          <span className="font-mono text-white font-bold">#{myClaim.security_code}</span>
+                          {Number(myClaim.bonus_approved) === 1 && (
+                            <span className="ml-auto px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[10px] font-bold">
+                              ⭐ 가산점 승인됨
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isUnclaiming}
+                          onClick={() => handleUnclaim(exam.id)}
+                          className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-red-400 text-xs font-semibold rounded-lg border border-slate-700 transition-colors"
+                        >
+                          {isUnclaiming ? "취소 중..." : "등록 취소"}
+                        </button>
+                      </div>
+                    ) : (
+                      <form
+                        onSubmit={(e) => { setClaimExamId(exam.id); handleClaim(e); }}
+                        className="flex gap-2"
+                      >
+                        <input
+                          type="text"
+                          value={claimExamId === exam.id ? claimCode : ""}
+                          onChange={(e) => { setClaimExamId(exam.id); setClaimCode(e.target.value); }}
+                          placeholder="수험번호 입력 (예: DOS-XXXXXXXXXX)"
+                          className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-blue-500 uppercase placeholder-slate-600"
+                        />
+                        <button
+                          type="submit"
+                          disabled={isClaiming}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors shrink-0"
+                        >
+                          {isClaiming ? "등록중..." : "등록"}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

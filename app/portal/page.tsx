@@ -27,6 +27,38 @@ export default async function LawyerPortalPage() {
     console.error("Portal fetch error:", err);
   }
 
+  // 클레임 가능한 시험 목록 (SCHEDULED 제외, FINISHED 제외)
+  let activeExams: any[] = [];
+  try {
+    // auto-migrate
+    for (const sql of [
+      "ALTER TABLE exam_submissions ADD COLUMN claimed_user_id TEXT DEFAULT NULL",
+      "ALTER TABLE exam_submissions ADD COLUMN bonus_approved INTEGER DEFAULT 0",
+    ]) {
+      try { await db.execute(sql); } catch { /* 이미 존재 */ }
+    }
+
+    const examRes = await db.execute({
+      sql: `SELECT id, round_number, title, status FROM exams
+            WHERE status NOT IN ('FINISHED')
+            ORDER BY round_number DESC`,
+      args: [],
+    });
+    activeExams = examRes.rows as any[];
+
+    // 각 시험에서 이 유저가 클레임한 수험번호 확인
+    for (const exam of activeExams) {
+      const claimRes = await db.execute({
+        sql: `SELECT security_code, bonus_approved FROM exam_submissions
+              WHERE exam_id = ? AND claimed_user_id = ?`,
+        args: [exam.id, user.id],
+      });
+      exam.myClaim = claimRes.rows[0] ?? null;
+    }
+  } catch (err) {
+    console.error("Active exams fetch error:", err);
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
       {/* 헤더 */}
@@ -41,7 +73,7 @@ export default async function LawyerPortalPage() {
         </p>
       </div>
 
-      <PortalClient lawyerProfile={lawyerProfile} />
+      <PortalClient lawyerProfile={lawyerProfile} activeExams={activeExams} />
     </div>
   );
 }
