@@ -264,6 +264,43 @@ export default function ExamAdminClient({
   >({});
   const [isGrading, setIsGrading] = useState<string | null>(null);
   const [isReleasing, setIsReleasing] = useState(false);
+  const [isDeletingExam, setIsDeletingExam] = useState(false);
+
+  const handleDeleteExam = async () => {
+    if (!exam?.id) return;
+    if (
+      !confirm(
+        `⚠️ 삭제 확인\n제${exam.round_number}회 시험(${exam.title})을 삭제하시겠습니까?\n\n수험생 제출 기록 전체가 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.`,
+      )
+    )
+      return;
+    // 2차 확인
+    const input = prompt(
+      `삭제를 확인하려면 시험 제목을 정확히 입력하세요:\n"${exam.title}"`,
+    );
+    if (input?.trim() !== exam.title.trim()) {
+      alert("시험 제목이 일치하지 않아 삭제가 취소되었습니다.");
+      return;
+    }
+
+    setIsDeletingExam(true);
+    try {
+      const res = await fetch("/api/exam/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "DELETE_EXAM", examId: exam.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "삭제 실패");
+      alert(data.message);
+      router.push("/exam/admin");
+      window.location.reload();
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsDeletingExam(false);
+    }
+  };
 
   // [신규] 0-1. 신규 시험 회차 개설
   const handleCreateExam = async (e: React.FormEvent) => {
@@ -720,6 +757,18 @@ export default function ExamAdminClient({
             >
               <Settings className="w-3.5 h-3.5 text-amber-400" />
               시험 일정·상태 변경
+            </button>
+          )}
+
+          {exam && (
+            <button
+              type="button"
+              onClick={handleDeleteExam}
+              disabled={isDeletingExam}
+              className="px-3.5 py-2 bg-red-900/40 hover:bg-red-800/60 disabled:bg-slate-800 text-red-400 hover:text-red-300 text-xs font-bold rounded-xl border border-red-700/40 transition-colors flex items-center gap-1.5 shadow"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {isDeletingExam ? "삭제중..." : "시험 삭제"}
             </button>
           )}
 

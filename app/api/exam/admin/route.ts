@@ -606,6 +606,55 @@ export async function POST(req: Request) {
       });
     }
 
+    // 5. 시험 회차 삭제
+    if (action === "DELETE_EXAM") {
+      const { examId } = body;
+      if (!examId) {
+        return NextResponse.json(
+          { error: "examId가 필요합니다." },
+          { status: 400 },
+        );
+      }
+
+      const examRes = await db.execute({
+        sql: "SELECT round_number, title, status FROM exams WHERE id = ?",
+        args: [examId],
+      });
+      if (examRes.rows.length === 0) {
+        return NextResponse.json(
+          { error: "시험을 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
+      const target = examRes.rows[0];
+
+      // 관련 제출 기록도 함께 삭제
+      await db.execute({
+        sql: "DELETE FROM exam_submissions WHERE exam_id = ?",
+        args: [examId],
+      });
+      await db.execute({
+        sql: "DELETE FROM exams WHERE id = ?",
+        args: [examId],
+      });
+
+      await sendDiscordWebhook("EXAM_ADMIN", {
+        embeds: [
+          {
+            title: `🗑️ [변호사시험 관리자] 시험 회차 삭제`,
+            description: `**${user.name}** 위원이 제${target.round_number}회 시험(${target.title})을 삭제하였습니다.\n관련 수험생 제출 기록도 함께 삭제되었습니다.`,
+            color: 0xef4444,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `제${target.round_number}회 시험이 삭제되었습니다.`,
+      });
+    }
+
     return NextResponse.json(
       { error: "알 수 없는 작업입니다." },
       { status: 400 },

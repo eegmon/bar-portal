@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { isExamPhaseOpen } from "@/lib/exam-timing";
 
 export async function POST(req: Request) {
   try {
@@ -42,12 +43,32 @@ export async function POST(req: Request) {
       );
     }
 
-    // exam 테이블에서 2차 문제지 PDF URL 조회
+    // exam 테이블에서 2차 오픈 여부 및 PDF URL 조회
     const examRes = await db.execute({
-      sql: "SELECT phase2_doc1_pdf_url, phase2_doc2_pdf_url FROM exams WHERE id = ?",
+      sql: "SELECT * FROM exams WHERE id = ?",
       args: [sub.exam_id as string],
     });
+
+    if (examRes.rows.length === 0) {
+      return NextResponse.json(
+        { eligible: false, error: "시험 정보를 찾을 수 없습니다." },
+        { status: 404 },
+      );
+    }
+
     const examRow = examRes.rows[0];
+
+    // PHASE2가 열려 있지 않으면 입장 차단
+    if (!isExamPhaseOpen(examRow, "PHASE2")) {
+      return NextResponse.json(
+        {
+          eligible: false,
+          error:
+            "현재 제2차 시험 응시 기간이 아닙니다. 2차 시험 시작 후 다시 접속해 주세요.",
+        },
+        { status: 403 },
+      );
+    }
 
     return NextResponse.json({
       eligible: true,
