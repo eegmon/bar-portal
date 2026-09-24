@@ -16,7 +16,6 @@ export async function POST(req: Request) {
     }
 
     const code = String(securityCode).trim().toUpperCase();
-    const userId = `anonymous-${code}`;
 
     // 기존 제출 기록 확인
     const subRes = await db.execute({
@@ -27,6 +26,28 @@ export async function POST(req: Request) {
     if (subRes.rows.length === 0) {
       return NextResponse.json(
         { error: "관리자가 발급한 유효한 수험번호가 아닙니다." },
+        { status: 403 },
+      );
+    }
+
+    const examRes = await db.execute({
+      sql: "SELECT status, phase2_start, phase2_end FROM exams WHERE id = ?",
+      args: [examId],
+    });
+    const exam = examRes.rows[0];
+    const now = Date.now();
+    const startAt = new Date(String(exam?.phase2_start || "")).getTime();
+    const endAt = new Date(String(exam?.phase2_end || "")).getTime();
+    if (
+      !exam ||
+      exam.status !== "PHASE2" ||
+      !Number.isFinite(startAt) ||
+      !Number.isFinite(endAt) ||
+      now < startAt ||
+      now > endAt
+    ) {
+      return NextResponse.json(
+        { error: "현재 제2차 시험 답안 제출 시간이 아닙니다." },
         { status: 403 },
       );
     }

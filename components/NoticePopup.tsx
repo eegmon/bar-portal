@@ -3,13 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  Bell,
   AlertTriangle,
   AlertOctagon,
   Info,
   X,
   ArrowRight,
-  Sparkles,
 } from "lucide-react";
 
 export interface PopupData {

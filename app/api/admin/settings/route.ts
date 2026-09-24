@@ -31,7 +31,8 @@ export async function GET() {
         webhook_admin: settingsMap["webhook_admin"] || process.env.DISCORD_WEBHOOK_ADMIN || "",
 
         // 디스코드 봇 & 자동 역할 지급 설정
-        discord_bot_token: settingsMap["discord_bot_token"] || process.env.DISCORD_BOT_TOKEN || "",
+        // 봇 토큰은 브라우저로 내려보내지 않습니다. 저장하지 않은 경우 서버의 기존 값을 유지합니다.
+        discord_bot_token: "",
         discord_guild_id: settingsMap["discord_guild_id"] || process.env.DISCORD_GUILD_ID || "",
         discord_role_lawyer: settingsMap["discord_role_lawyer"] || process.env.DISCORD_ROLE_LAWYER || "",
         discord_role_trainee: settingsMap["discord_role_trainee"] || process.env.DISCORD_ROLE_TRAINEE || "",
@@ -186,6 +187,7 @@ export async function POST(req: Request) {
     }
 
     for (const [key, value] of Object.entries(settings)) {
+      if (key === "discord_bot_token" && !String(value || "").trim()) continue;
       await db.execute({
         sql: `INSERT INTO settings (key, value, updated_at)
               VALUES (?, ?, datetime('now'))

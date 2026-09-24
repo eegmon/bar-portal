@@ -1,6 +1,5 @@
-import { Scale, Search, ShieldCheck, MapPin, Building, Award } from "lucide-react";
+import { Scale, Search, MapPin } from "lucide-react";
 import db from "@/lib/db";
-import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 

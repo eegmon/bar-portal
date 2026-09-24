@@ -2,16 +2,11 @@
 
 import { useState } from "react";
 import {
-  ShieldAlert,
   ShieldCheck,
-  AlertTriangle,
-  Scale,
   Calendar,
-  Plus,
   XCircle,
   Gavel,
   Search,
-  Send,
   Eye,
   EyeOff,
   RotateCcw,
@@ -47,7 +42,6 @@ interface DisciplineClientProps {
 }
 
 export default function DisciplineClient({
-  currentUser,
   canManage,
   initialDisciplines,
   lawyerList,

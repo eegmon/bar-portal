@@ -31,6 +31,21 @@ export async function POST(req: Request) {
     }
 
     const exam = examRes.rows[0];
+    const now = Date.now();
+    const startAt = new Date(String(exam.phase1_start)).getTime();
+    const endAt = new Date(String(exam.phase1_end)).getTime();
+    if (
+      exam.status !== "PHASE1" ||
+      !Number.isFinite(startAt) ||
+      !Number.isFinite(endAt) ||
+      now < startAt ||
+      now > endAt
+    ) {
+      return NextResponse.json(
+        { error: "현재 제1차 시험 응시 시간이 아닙니다." },
+        { status: 403 },
+      );
+    }
     const questions = JSON.parse((exam.phase1_questions as string) || "[]");
 
     // 중복 제출 여부 확인

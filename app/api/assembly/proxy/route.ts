@@ -3,7 +3,7 @@ import db from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { sendDiscordWebhook } from "@/lib/discord";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const sessionUser = await getSessionUser();
 
@@ -94,6 +94,15 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     }
+    if (
+      !["LAWYER", "ADMIN"].includes(sessionUser.role) ||
+      !["ACTIVE", "SUSPENDED", "EXPIRED"].includes(sessionUser.status)
+    ) {
+      return NextResponse.json(
+        { error: "등록된 변호사만 총회 재등록 또는 위임 신청을 제출할 수 있습니다." },
+        { status: 403 },
+      );
+    }
     const userId = sessionUser.id;
     const assemblyRes = await db.execute({
       sql: "SELECT status FROM assemblies WHERE id = ?",
@@ -134,6 +143,12 @@ export async function POST(req: Request) {
 
     // 1. 단독 자격 재등록 신청서인 경우
     if (type === "REREGISTER") {
+      if (sessionUser.status === "ACTIVE") {
+        return NextResponse.json(
+          { error: "현재 이미 활성 상태인 변호사는 재등록 신청을 할 수 없습니다." },
+          { status: 400 },
+        );
+      }
       await db.execute({
         sql: `INSERT OR REPLACE INTO assembly_attendances (id, assembly_id, user_id, attended, is_proxy, proxy_to_user_id, signature, evidence_url)
             VALUES (?, ?, ?, 0, 0, NULL, ?, ?)`,
@@ -269,6 +284,10 @@ export async function POST(req: Request) {
           signature,
           evidenceUrl.trim(),
         ],
+      });
+      await db.execute({
+        sql: "UPDATE users SET status = 'ACTIVE', last_renewed_at = datetime('now') WHERE id = ? AND role = 'LAWYER'",
+        args: [userId],
       });
 
       // 디스코드 사무국 관리자 알림

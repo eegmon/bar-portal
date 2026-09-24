@@ -219,7 +219,7 @@ export default async function HomePage() {
                 변호사법 제9조 · 변호방해 금지
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-white">
-                "누구든지 변호사로서의 직무수행을 한다는 이유로 불이익한 처우를 하여서는 아니 된다."
+                &quot;누구든지 변호사로서의 직무수행을 한다는 이유로 불이익한 처우를 하여서는 아니 된다.&quot;
               </h3>
               <p className="text-xs text-slate-400">
                 도스변호사협회는 소속 변호사의 독립적인 변론권 보장과 시민의 정당한 재판청구권 수호를 위해 최선을 다합니다.

@@ -1,5 +1,5 @@
 import db from "@/lib/db";
-import { Scale, Trophy, Lock } from "lucide-react";
+import { Trophy, Lock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 

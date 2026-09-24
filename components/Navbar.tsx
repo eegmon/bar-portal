@@ -16,7 +16,6 @@ import {
   Sun,
   Moon,
   Building,
-  Award,
 } from "lucide-react";
 import { OFFICER_POSITIONS, SessionUser, hasAdminPanelAccess } from "@/lib/types";
 

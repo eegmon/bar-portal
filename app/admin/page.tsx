@@ -206,10 +206,7 @@ export default async function AdminDashboardPage() {
             "",
 
           // 디스코드 봇 & 서버
-          discord_bot_token:
-            settingsMap["discord_bot_token"] ||
-            process.env.DISCORD_BOT_TOKEN ||
-            "",
+          discord_bot_token: "",
           discord_guild_id:
             settingsMap["discord_guild_id"] ||
             process.env.DISCORD_GUILD_ID ||

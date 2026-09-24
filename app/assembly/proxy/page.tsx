@@ -10,7 +10,6 @@ import {
   Scale,
   Building,
   AlertTriangle,
-  Info,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -102,7 +101,7 @@ export default function ProxyPage() {
         }
       })
       .catch((err) => console.error("위임장 초기 데이터 로드 실패:", err));
-  }, []);
+  }, [proxyLawyerName, reLawyerName]);
 
   // 선택된 법인 정보
   const currentFirm = myFirms.find((f) => f.id === selectedFirmId);

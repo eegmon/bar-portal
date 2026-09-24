@@ -33,7 +33,7 @@ export default function FirmsClient({
   const [activeTab, setActiveTab] = useState<"list" | "my" | "register" | "pending">("list");
   const [firms, setFirms] = useState(initialFirms);
   const [pendingFirms, setPendingFirms] = useState(initialPending);
-  const [myFirm, setMyFirm] = useState(initialMyFirm);
+  const [myFirm] = useState(initialMyFirm);
   const [members, setMembers] = useState(initialMembers);
   const [searchQuery, setSearchQuery] = useState("");
 

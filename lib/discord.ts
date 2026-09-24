@@ -79,6 +79,70 @@ export async function getWebhookUrl(type: WebhookType | string): Promise<string>
   return url;
 }
 
+/**
+ * 디스코드 API 레이트리밋(429)을 감지해 자동으로 대기 후 재시도하는 fetch 래퍼.
+ * 요청 사이에도 최소 간격을 둬서 전역 레이트리밋(Cloudflare 차단)을 예방합니다.
+ */
+const DISCORD_MIN_INTERVAL_MS = 300;
+let lastDiscordCallAt = 0;
+let discordRequestQueue = Promise.resolve();
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function discordFetch(
+  url: string,
+  init: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  const request = discordRequestQueue.then(async () => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const elapsed = Date.now() - lastDiscordCallAt;
+      if (elapsed < DISCORD_MIN_INTERVAL_MS) {
+        await sleep(DISCORD_MIN_INTERVAL_MS - elapsed);
+      }
+      lastDiscordCallAt = Date.now();
+
+      const res = await fetch(url, init);
+
+      if (res.status !== 429) return res;
+
+      let retryAfterSec: number | undefined;
+      let isGlobalLimit = res.headers.get("x-ratelimit-global") === "true";
+      try {
+        const body = await res.clone().json();
+        if (typeof body?.retry_after === "number") retryAfterSec = body.retry_after;
+        if (body?.global === true) isGlobalLimit = true;
+        if (typeof body?.message === "string" && body.message.includes("global rate limits")) {
+          isGlobalLimit = true;
+        }
+      } catch {
+        // 응답 본문이 JSON이 아니면 헤더 값을 사용합니다.
+      }
+      if (retryAfterSec === undefined) {
+        const header = res.headers.get("retry-after");
+        if (header) retryAfterSec = Number(header);
+      }
+
+      // 전역 차단은 재시도가 차단 시간을 늘릴 수 있으므로 즉시 호출자에게 반환합니다.
+      if (isGlobalLimit || attempt >= maxRetries) return res;
+
+      const waitMs = Math.min(Math.max((retryAfterSec || 1) * 1000 + 250, 1000), 60000);
+      console.warn(
+        `[Discord Bot] 429 레이트리밋 감지, ${waitMs}ms 대기 후 재시도 (${attempt + 1}/${maxRetries})`
+      );
+      await sleep(waitMs);
+    }
+
+    throw new Error("Discord API 요청 재시도 횟수를 초과했습니다.");
+  });
+
+  // 한 요청의 실패가 다음 요청의 큐를 막지 않도록 큐 상태만 정상화합니다.
+  discordRequestQueue = request.then(() => undefined, () => undefined);
+  return request;
+}
+
 export async function sendDiscordWebhook(
   type: WebhookType,
   payload: { content?: string; embeds?: DiscordEmbed[] }
@@ -132,7 +196,7 @@ export async function resolveDiscordUserId(discordInput: string): Promise<string
   if (!token || !guildId) return null;
 
   try {
-    const res = await fetch(
+    const res = await discordFetch(
       `https://discord.com/api/v10/guilds/${guildId}/members/search?query=${encodeURIComponent(trimmed)}&limit=1`,
       {
         headers: {
@@ -156,13 +220,17 @@ export async function resolveDiscordUserId(discordInput: string): Promise<string
 /**
  * 디스코드 봇을 통한 유저 역할(Role) 추가
  */
-export async function addDiscordRole(discordUserId: string, roleId: string): Promise<boolean> {
+export async function addDiscordRole(
+  discordUserId: string,
+  roleId: string,
+  resolvedUserId?: string
+): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
   if (!cleanRoleId) return false;
 
-  const resolvedUserId = await resolveDiscordUserId(discordUserId);
-  if (!resolvedUserId) {
+  const userId = resolvedUserId || (await resolveDiscordUserId(discordUserId));
+  if (!userId) {
     console.warn(`[Discord Bot] 유효한 유저 ID를 찾을 수 없습니다: ${discordUserId}`);
     return false;
   }
@@ -174,8 +242,8 @@ export async function addDiscordRole(discordUserId: string, roleId: string): Pro
   }
 
   try {
-    const res = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
+    const res = await discordFetch(
+      `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${cleanRoleId}`,
       {
         method: "PUT",
         headers: {
@@ -199,20 +267,24 @@ export async function addDiscordRole(discordUserId: string, roleId: string): Pro
 /**
  * 디스코드 봇을 통한 유저 역할(Role) 제거
  */
-export async function removeDiscordRole(discordUserId: string, roleId: string): Promise<boolean> {
+export async function removeDiscordRole(
+  discordUserId: string,
+  roleId: string,
+  resolvedUserId?: string
+): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
   if (!cleanRoleId) return false;
 
-  const resolvedUserId = await resolveDiscordUserId(discordUserId);
-  if (!resolvedUserId) return false;
+  const userId = resolvedUserId || (await resolveDiscordUserId(discordUserId));
+  if (!userId) return false;
 
   const { token, guildId } = await getBotConfig();
   if (!token || !guildId) return false;
 
   try {
-    const res = await fetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
+    const res = await discordFetch(
+      `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${cleanRoleId}`,
       {
         method: "DELETE",
         headers: {
@@ -240,6 +312,11 @@ export async function syncUserDiscordRoles(params: {
   const { discordUserId, role, status, isTrainee, positions = [] } = params;
   if (!discordUserId) return;
 
+  const resolvedUserId = await resolveDiscordUserId(discordUserId);
+  if (!resolvedUserId) return;
+  const addRole = (roleId: string) => addDiscordRole(discordUserId, roleId, resolvedUserId);
+  const removeRole = (roleId: string) => removeDiscordRole(discordUserId, roleId, resolvedUserId);
+
   const lawyerRoleId = await getSettingValue("discord_role_lawyer", "DISCORD_ROLE_LAWYER");
   const traineeRoleId = await getSettingValue("discord_role_trainee", "DISCORD_ROLE_TRAINEE");
   
@@ -266,75 +343,75 @@ export async function syncUserDiscordRoles(params: {
 
   // 1. 변호사/견습 역할 동기화
   if (status === "ACTIVE" && role === "LAWYER") {
-    if (lawyerRoleId) await addDiscordRole(discordUserId, lawyerRoleId);
-    if (isTrainee && traineeRoleId) await addDiscordRole(discordUserId, traineeRoleId);
-    if (!isTrainee && traineeRoleId) await removeDiscordRole(discordUserId, traineeRoleId);
+    if (lawyerRoleId) await addRole(lawyerRoleId);
+    if (isTrainee && traineeRoleId) await addRole(traineeRoleId);
+    if (!isTrainee && traineeRoleId) await removeRole(traineeRoleId);
   } else if (status === "SUSPENDED" || status === "EXPIRED" || status === "EXPELLED") {
-    if (lawyerRoleId) await removeDiscordRole(discordUserId, lawyerRoleId);
-    if (traineeRoleId) await removeDiscordRole(discordUserId, traineeRoleId);
+    if (lawyerRoleId) await removeRole(lawyerRoleId);
+    if (traineeRoleId) await removeRole(traineeRoleId);
   }
 
   // 2. 이사회 & 【 🎓 · 임원 】 그룹
   const isExecutive = positions.some((p) => ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR"].includes(p));
   if (groupExecutiveRoleId) {
-    if (isExecutive) await addDiscordRole(discordUserId, groupExecutiveRoleId);
-    else await removeDiscordRole(discordUserId, groupExecutiveRoleId);
+    if (isExecutive) await addRole(groupExecutiveRoleId);
+    else await removeRole(groupExecutiveRoleId);
   }
   if (boardRoleId) {
-    if (isExecutive) await addDiscordRole(discordUserId, boardRoleId);
-    else await removeDiscordRole(discordUserId, boardRoleId);
+    if (isExecutive) await addRole(boardRoleId);
+    else await removeRole(boardRoleId);
   }
   if (presidentRoleId) {
-    if (positions.includes("PRESIDENT")) await addDiscordRole(discordUserId, presidentRoleId);
-    else await removeDiscordRole(discordUserId, presidentRoleId);
+    if (positions.includes("PRESIDENT")) await addRole(presidentRoleId);
+    else await removeRole(presidentRoleId);
   }
   if (vicePresidentRoleId) {
-    if (positions.includes("VICE_PRESIDENT")) await addDiscordRole(discordUserId, vicePresidentRoleId);
-    else await removeDiscordRole(discordUserId, vicePresidentRoleId);
+    if (positions.includes("VICE_PRESIDENT")) await addRole(vicePresidentRoleId);
+    else await removeRole(vicePresidentRoleId);
   }
   if (directorRoleId) {
-    if (positions.includes("DIRECTOR")) await addDiscordRole(discordUserId, directorRoleId);
-    else await removeDiscordRole(discordUserId, directorRoleId);
+    if (positions.includes("DIRECTOR")) await addRole(directorRoleId);
+    else await removeRole(directorRoleId);
   }
 
   // 3. 총회 의장단 & 【 📜 · 총회 】 그룹
   const isAssemblyLeader = positions.some((p) => ["ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p));
   if (groupAssemblyRoleId) {
-    if (isAssemblyLeader) await addDiscordRole(discordUserId, groupAssemblyRoleId);
-    else await removeDiscordRole(discordUserId, groupAssemblyRoleId);
+    if (isAssemblyLeader) await addRole(groupAssemblyRoleId);
+    else await removeRole(groupAssemblyRoleId);
   }
   if (speakerRoleId) {
-    if (positions.includes("ASSEMBLY_SPEAKER")) await addDiscordRole(discordUserId, speakerRoleId);
-    else await removeDiscordRole(discordUserId, speakerRoleId);
+    if (positions.includes("ASSEMBLY_SPEAKER")) await addRole(speakerRoleId);
+    else await removeRole(speakerRoleId);
   }
   if (viceSpeakerRoleId) {
-    if (positions.includes("ASSEMBLY_VICE_SPEAKER")) await addDiscordRole(discordUserId, viceSpeakerRoleId);
-    else await removeDiscordRole(discordUserId, viceSpeakerRoleId);
+    if (positions.includes("ASSEMBLY_VICE_SPEAKER")) await addRole(viceSpeakerRoleId);
+    else await removeRole(viceSpeakerRoleId);
   }
 
   // 4. 사무국 & 【 📂 · 사무국 】 그룹
   const isSecretariat = positions.some((p) => ["SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p));
   if (groupSecretariatRoleId) {
-    if (isSecretariat) await addDiscordRole(discordUserId, groupSecretariatRoleId);
-    else await removeDiscordRole(discordUserId, groupSecretariatRoleId);
+    if (isSecretariat) await addRole(groupSecretariatRoleId);
+    else await removeRole(groupSecretariatRoleId);
   }
   if (secretaryGeneralRoleId) {
-    if (positions.includes("SECRETARY_GENERAL")) await addDiscordRole(discordUserId, secretaryGeneralRoleId);
-    else await removeDiscordRole(discordUserId, secretaryGeneralRoleId);
+    if (positions.includes("SECRETARY_GENERAL")) await addRole(secretaryGeneralRoleId);
+    else await removeRole(secretaryGeneralRoleId);
   }
   if (staffRoleId) {
-    if (positions.includes("SECRETARIAT_STAFF")) await addDiscordRole(discordUserId, staffRoleId);
-    else await removeDiscordRole(discordUserId, staffRoleId);
+    if (positions.includes("SECRETARIAT_STAFF")) await addRole(staffRoleId);
+    else await removeRole(staffRoleId);
   }
 
   // 5. 위원회
   if (examCommRoleId) {
-    if (positions.includes("EXAM_COMM_MEMBER")) await addDiscordRole(discordUserId, examCommRoleId);
-    else await removeDiscordRole(discordUserId, examCommRoleId);
+    if (positions.includes("EXAM_COMM_MEMBER")) await addRole(examCommRoleId);
+    else await removeRole(examCommRoleId);
   }
   if (disciplineCommRoleId) {
-    if (positions.includes("DISCIPLINE_COMM_MEMBER")) await addDiscordRole(discordUserId, disciplineCommRoleId);
-    else await removeDiscordRole(discordUserId, disciplineCommRoleId);
+    if (positions.includes("DISCIPLINE_COMM_MEMBER")) await addRole(disciplineCommRoleId);
+    else await removeRole(disciplineCommRoleId);
   }
 }
 
@@ -377,7 +454,7 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
     }
 
     // 2. 디스코드 Guild Member 정보 조회
-    const memberRes = await fetch(
+    const memberRes = await discordFetch(
       `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedDiscordUserId}`,
       {
         headers: {
@@ -423,14 +500,13 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
     const isTrainee = (traineeRoleId && discordRoles.includes(traineeRoleId)) ? 1 : 0;
     const hasLawyerRole = (lawyerRoleId && discordRoles.includes(lawyerRoleId));
 
+    // 참고: 임원/의장단(PRESIDENT, ASSEMBLY_SPEAKER 등)의 관리자 권한은
+    // lib/types.ts의 hasAdminPanelAccess/canManageUsers 등이 positions 배열을
+    // 별도로 확인해 이미 부여하므로, 여기서 role을 "ADMIN"으로 덮어쓸 필요가 없습니다.
+    // role을 ADMIN으로 바꾸면 "LAWYER"를 요구하는 화면(예: 법인 등록 신청)에서
+    // 정작 변호사인 임원이 접근하지 못하는 부작용이 있어 제거했습니다.
     let newRole = user.role as string;
-    // 임원/의장단/사무총장은 관리자 권한 부여
-    const hasAdminLeadership = newPositions.some(p =>
-      ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR", "SECRETARY_GENERAL", "ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p)
-    );
-    if (hasAdminLeadership) {
-      newRole = "ADMIN";
-    } else if (hasLawyerRole) {
+    if (hasLawyerRole) {
       newRole = "LAWYER";
     }
 
@@ -499,6 +575,9 @@ export async function syncAllUsersFromDiscord(): Promise<{
       failed++;
       logs.push(`❌ [${userName}] 실패: ${result.message}`);
     }
+
+    // 회원 간 간격을 둬서 디스코드 전역 레이트리밋(Cloudflare 차단)을 예방합니다.
+    await sleep(400);
   }
 
   return {

@@ -13,7 +13,6 @@ import {
   Send,
   Plus,
   Calendar,
-  Lock,
   ExternalLink,
   Search,
   Scale,
@@ -899,6 +898,33 @@ export default function AdminClient({
       );
     } catch (err: any) {
       alert(`오류: ${err.message}`);
+    }
+  };
+
+  const [offlineAttendeeId, setOfflineAttendeeId] = useState("");
+  const [isAddingAttendance, setIsAddingAttendance] = useState(false);
+
+  const handleAddOfflineAttendance = async () => {
+    if (!selectedAssemblyId || !offlineAttendeeId) return;
+    setIsAddingAttendance(true);
+    try {
+      const res = await fetch("/api/assembly/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ADD_ATTENDANCE",
+          assemblyId: selectedAssemblyId,
+          userId: offlineAttendeeId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "출석 등록 실패");
+      alert("✅ 현장 출석이 등록되었습니다.");
+      setOfflineAttendeeId("");
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsAddingAttendance(false);
     }
   };
 
@@ -2284,6 +2310,41 @@ export default function AdminClient({
               </button>
             </div>
           </div>
+
+          {selectedAssemblyId && (
+            <div className="p-4 bg-slate-950 border border-emerald-800/40 rounded-xl space-y-2">
+              <div className="text-xs font-bold text-white">
+                🏛️ 오프라인(현장) 참석자 수동 출석 등록
+              </div>
+              <p className="text-[11px] text-slate-500">
+                온라인으로 출석/위임을 신청하지 않았지만 현장에 나온 회원을 의장이 직접 출석 처리합니다.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={offlineAttendeeId}
+                  onChange={(e) => setOfflineAttendeeId(e.target.value)}
+                  className="flex-1 min-w-[200px] px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                >
+                  <option value="">회원 선택...</option>
+                  {users
+                    .filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.office_name || "개인/미기재"})
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={handleAddOfflineAttendance}
+                  disabled={!offlineAttendeeId || isAddingAttendance}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {isAddingAttendance ? "등록 중..." : "현장 출석 등록"}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
             <div className="text-xs font-bold text-white">

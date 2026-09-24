@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { canManageUsers } from "@/lib/types";
 import { syncAllUsersFromDiscord } from "@/lib/discord";
 import db from "@/lib/db";
 
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
     const currentUser = await getSessionUser();
     if (!currentUser) {
