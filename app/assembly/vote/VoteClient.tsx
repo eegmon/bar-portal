@@ -20,6 +20,7 @@ interface VoteClientProps {
     id: string;
     name: string;
     role: string;
+    positions?: string[];
   };
   votingPower: number;
   proxyList: any[];
@@ -36,6 +37,12 @@ export default function VoteClient({
   userVotedAgendas,
   initialAgendaId,
 }: VoteClientProps) {
+  const isChair =
+    user.role === "ADMIN" ||
+    (user.positions || []).some((p) =>
+      ["PRESIDENT", "ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p)
+    );
+
   const [selectedAgendaId, setSelectedAgendaId] = useState(
     initialAgendaId || agendas[0]?.id || "",
   );
@@ -243,8 +250,8 @@ export default function VoteClient({
         ))}
       </div>
 
-      {/* 의장/관리자 전용 제어 바 (ADMIN 권한 보유 시 표시) */}
-      {user.role === "ADMIN" && (
+      {/* 의장/관리자 전용 제어 바 (ADMIN 권한 또는 총회 의장단 직책 보유 시 표시) */}
+      {isChair && (
         <div className="p-4 bg-slate-900 border border-amber-500/40 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-md">
           <div className="flex items-center gap-2 text-xs text-amber-300 font-bold">
             <Shield className="w-4 h-4 text-amber-400" />

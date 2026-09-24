@@ -79,6 +79,57 @@ export async function getWebhookUrl(type: WebhookType | string): Promise<string>
   return url;
 }
 
+/**
+ * 디스코드 API 레이트리밋(429)을 감지해 자동으로 대기 후 재시도하는 fetch 래퍼.
+ * 요청 사이에도 최소 간격을 둬서 전역 레이트리밋(Cloudflare 차단)을 예방합니다.
+ */
+const DISCORD_MIN_INTERVAL_MS = 300;
+let lastDiscordCallAt = 0;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function discordFetch(
+  url: string,
+  init: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const elapsed = Date.now() - lastDiscordCallAt;
+    if (elapsed < DISCORD_MIN_INTERVAL_MS) {
+      await sleep(DISCORD_MIN_INTERVAL_MS - elapsed);
+    }
+    lastDiscordCallAt = Date.now();
+
+    const res = await fetch(url, init);
+
+    if (res.status === 429) {
+      let retryAfterSec = 1;
+      try {
+        const body = await res.clone().json();
+        if (typeof body?.retry_after === "number") retryAfterSec = body.retry_after;
+      } catch {
+        const header = res.headers.get("retry-after");
+        if (header) retryAfterSec = Number(header) || 1;
+      }
+      // 약간의 여유를 더해 대기 (너무 짧게 재시도하면 또 차단될 수 있음)
+      const waitMs = Math.min(retryAfterSec * 1000 + 250, 15000);
+      console.warn(
+        `[Discord Bot] 429 레이트리밋 감지, ${waitMs}ms 대기 후 재시도 (${attempt + 1}/${maxRetries})`
+      );
+      if (attempt < maxRetries) {
+        await sleep(waitMs);
+        continue;
+      }
+    }
+
+    return res;
+  }
+  // 이론상 도달하지 않음
+  return fetch(url, init);
+}
+
 export async function sendDiscordWebhook(
   type: WebhookType,
   payload: { content?: string; embeds?: DiscordEmbed[] }
@@ -132,7 +183,7 @@ export async function resolveDiscordUserId(discordInput: string): Promise<string
   if (!token || !guildId) return null;
 
   try {
-    const res = await fetch(
+    const res = await discordFetch(
       `https://discord.com/api/v10/guilds/${guildId}/members/search?query=${encodeURIComponent(trimmed)}&limit=1`,
       {
         headers: {
@@ -174,7 +225,7 @@ export async function addDiscordRole(discordUserId: string, roleId: string): Pro
   }
 
   try {
-    const res = await fetch(
+    const res = await discordFetch(
       `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
       {
         method: "PUT",
@@ -211,7 +262,7 @@ export async function removeDiscordRole(discordUserId: string, roleId: string): 
   if (!token || !guildId) return false;
 
   try {
-    const res = await fetch(
+    const res = await discordFetch(
       `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
       {
         method: "DELETE",
@@ -377,7 +428,7 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
     }
 
     // 2. 디스코드 Guild Member 정보 조회
-    const memberRes = await fetch(
+    const memberRes = await discordFetch(
       `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedDiscordUserId}`,
       {
         headers: {
@@ -423,14 +474,13 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
     const isTrainee = (traineeRoleId && discordRoles.includes(traineeRoleId)) ? 1 : 0;
     const hasLawyerRole = (lawyerRoleId && discordRoles.includes(lawyerRoleId));
 
+    // 참고: 임원/의장단(PRESIDENT, ASSEMBLY_SPEAKER 등)의 관리자 권한은
+    // lib/types.ts의 hasAdminPanelAccess/canManageUsers 등이 positions 배열을
+    // 별도로 확인해 이미 부여하므로, 여기서 role을 "ADMIN"으로 덮어쓸 필요가 없습니다.
+    // role을 ADMIN으로 바꾸면 "LAWYER"를 요구하는 화면(예: 법인 등록 신청)에서
+    // 정작 변호사인 임원이 접근하지 못하는 부작용이 있어 제거했습니다.
     let newRole = user.role as string;
-    // 임원/의장단/사무총장은 관리자 권한 부여
-    const hasAdminLeadership = newPositions.some(p =>
-      ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR", "SECRETARY_GENERAL", "ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p)
-    );
-    if (hasAdminLeadership) {
-      newRole = "ADMIN";
-    } else if (hasLawyerRole) {
+    if (hasLawyerRole) {
       newRole = "LAWYER";
     }
 
@@ -499,6 +549,9 @@ export async function syncAllUsersFromDiscord(): Promise<{
       failed++;
       logs.push(`❌ [${userName}] 실패: ${result.message}`);
     }
+
+    // 회원 간 간격을 둬서 디스코드 전역 레이트리밋(Cloudflare 차단)을 예방합니다.
+    await sleep(400);
   }
 
   return {

@@ -487,6 +487,72 @@ export async function POST(req: Request) {
       });
     }
 
+    // 6-1. 오프라인(현장) 참석자 수동 출석 등록 - 온라인 신청 없이 현장에 나온 회원을 의장이 직접 등록
+    if (action === "ADD_ATTENDANCE") {
+      if (!isChair(user)) {
+        return NextResponse.json(
+          { error: "현장 출석 수동 등록은 총회 의장단만 수행할 수 있습니다." },
+          { status: 403 },
+        );
+      }
+      const { assemblyId, userId } = body;
+      if (!assemblyId || !userId) {
+        return NextResponse.json(
+          { error: "총회와 회원이 필요합니다." },
+          { status: 400 },
+        );
+      }
+      const assemblyRes = await db.execute({
+        sql: "SELECT id FROM assemblies WHERE id = ?",
+        args: [assemblyId],
+      });
+      if (assemblyRes.rows.length === 0) {
+        return NextResponse.json(
+          { error: "총회를 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
+      const memberRes = await db.execute({
+        sql: "SELECT id, name, role, status FROM users WHERE id = ?",
+        args: [userId],
+      });
+      if (
+        memberRes.rows.length === 0 ||
+        memberRes.rows[0].role !== "LAWYER" ||
+        memberRes.rows[0].status !== "ACTIVE"
+      ) {
+        return NextResponse.json(
+          { error: "활성 변호사 회원만 출석 등록할 수 있습니다." },
+          { status: 400 },
+        );
+      }
+      // 이미 해당 총회에 (위임/재등록 포함) 출석 기록이 있으면 그 기록을 출석 처리로 갱신,
+      // 없으면 새로 생성합니다.
+      const existing = await db.execute({
+        sql: "SELECT id FROM assembly_attendances WHERE assembly_id = ? AND user_id = ? AND is_proxy = 0",
+        args: [assemblyId, userId],
+      });
+      if (existing.rows.length > 0) {
+        await db.execute({
+          sql: "UPDATE assembly_attendances SET attended = 1, approval_status = 'APPROVED', attended_at = datetime('now') WHERE id = ?",
+          args: [existing.rows[0].id],
+        });
+      } else {
+        const attId = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        await db.execute({
+          sql: `INSERT INTO assembly_attendances (id, assembly_id, user_id, attended, is_proxy, approval_status, signature)
+                VALUES (?, ?, ?, 1, 0, 'APPROVED', ?)`,
+          args: [attId, assemblyId, userId, `${user.name} 의장 현장 출석 확인`],
+        });
+      }
+      await writeAudit(assemblyId, null, user.id, "ADD_ATTENDANCE", {
+        userId,
+        userName: memberRes.rows[0].name,
+        note: "오프라인(현장) 출석 수동 등록",
+      });
+      return NextResponse.json({ success: true, assemblyId, userId });
+    }
+
     // 7. 특정 총회의 회원별 의결권 수동 설정
     if (action === "SET_VOTING_RIGHT") {
       const { assemblyId, userId, votingPower, reason } = body;
@@ -776,7 +842,7 @@ export async function POST(req: Request) {
         args: [agenda.assembly_id],
       });
       const presentRes = await db.execute({
-        sql: "SELECT COALESCE(SUM(CASE WHEN attended = 1 OR is_proxy = 1 THEN 1 ELSE 0 END), 0) as present_rights FROM assembly_attendances WHERE assembly_id = ? AND approval_status = 'APPROVED'",
+        sql: "SELECT COALESCE(SUM(CASE WHEN attended = 1 OR is_proxy = 1 THEN COALESCE(voting_power, 1) ELSE 0 END), 0) as present_rights FROM assembly_attendances WHERE assembly_id = ? AND approval_status = 'APPROVED'",
         args: [agenda.assembly_id],
       });
       const totalRights = Number(totalRightsRes.rows[0]?.total || 0);
