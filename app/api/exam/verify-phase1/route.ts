@@ -42,6 +42,13 @@ export async function POST(req: Request) {
       );
     }
 
+    // exam 테이블에서 2차 문제지 PDF URL 조회
+    const examRes = await db.execute({
+      sql: "SELECT phase2_doc1_pdf_url, phase2_doc2_pdf_url FROM exams WHERE id = ?",
+      args: [sub.exam_id as string],
+    });
+    const examRow = examRes.rows[0];
+
     return NextResponse.json({
       eligible: true,
       examId: sub.exam_id,
@@ -52,6 +59,8 @@ export async function POST(req: Request) {
       isPledged: Boolean(sub.is_instant_grade_pledged),
       isPublished: Boolean(sub.phase2_published),
       publishedAt: sub.phase2_published_at || "",
+      phase2Doc1PdfUrl: (examRow?.phase2_doc1_pdf_url as string) || "",
+      phase2Doc2PdfUrl: (examRow?.phase2_doc2_pdf_url as string) || "",
     });
   } catch (err: any) {
     return NextResponse.json(

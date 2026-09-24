@@ -9,6 +9,8 @@ import {
   ArrowLeft,
   Send,
   Loader2,
+  FileText,
+  Download,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -34,6 +36,8 @@ export default function CBT1Page() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [errataNotices, setErrataNotices] = useState<any[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [phase1PdfUrl, setPhase1PdfUrl] = useState("");
+  const [phase1Rules, setPhase1Rules] = useState("");
 
   // 최신 문항 및 정오표 비동기 조회
   useEffect(() => {
@@ -46,6 +50,8 @@ export default function CBT1Page() {
           if (data.title) setExamTitle(data.title);
           if (data.phase1MaxScore) setPhase1MaxScore(data.phase1MaxScore);
           if (data.errataNotices) setErrataNotices(data.errataNotices);
+          if (data.phase1PdfUrl) setPhase1PdfUrl(data.phase1PdfUrl);
+          if (data.phase1Rules) setPhase1Rules(data.phase1Rules);
         }
       })
       .catch((err) => {
@@ -160,19 +166,47 @@ export default function CBT1Page() {
 
             <div className="p-4 bg-slate-950 rounded-lg border border-slate-800 text-xs text-slate-400 space-y-1">
               <p className="font-semibold text-slate-300">시험 규칙 안내</p>
-              <p>
-                • 시험 시간: 120분 · 만점 {phase1MaxScore}점 (
-                {questions.length > 0 ? questions.length : 10}문 객관식)
-              </p>
-              <p>
-                • 답안 제출은 <strong>단 1회만 허용</strong>되며 중복 제출은
-                불가합니다.
-              </p>
-              <p>
-                • 문제에 질의가 있을 경우 디스코드 [⚠️┃이의제기] 채널을 이용해
-                주십시오.
-              </p>
+              {phase1Rules ? (
+                // 관리자가 입력한 규칙: 줄바꿈 보존
+                <div className="whitespace-pre-line leading-relaxed">
+                  {phase1Rules}
+                </div>
+              ) : (
+                // 기본 안내 (규칙 미설정 시 fallback)
+                <>
+                  <p>
+                    • 시험 시간: 120분 · 만점 {phase1MaxScore}점 (
+                    {questions.length > 0 ? questions.length : 10}문 객관식)
+                  </p>
+                  <p>
+                    • 답안 제출은 <strong>단 1회만 허용</strong>되며 중복 제출은
+                    불가합니다.
+                  </p>
+                  <p>
+                    • 문제에 질의가 있을 경우 디스코드 [⚠️┃이의제기] 채널을 이용해
+                    주십시오.
+                  </p>
+                </>
+              )}
             </div>
+
+            {phase1PdfUrl && (
+              <a
+                href={phase1PdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 p-3.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-xl text-xs text-blue-300 font-semibold transition-colors"
+              >
+                <Download className="w-4 h-4 shrink-0" />
+                <div>
+                  <div>1차 필기 문제지 PDF 다운로드</div>
+                  <div className="text-[11px] text-blue-400/70 font-normal mt-0.5">
+                    시험 시작 전 문제지를 미리 확인하세요
+                  </div>
+                </div>
+                <FileText className="w-4 h-4 shrink-0 ml-auto opacity-60" />
+              </a>
+            )}
 
             <button
               type="button"

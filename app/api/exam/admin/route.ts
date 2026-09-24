@@ -17,6 +17,22 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action } = body;
 
+    // 컬럼 auto-migrate: phase1_pass_score, phase1_rules (없을 수 있으므로 조용히 처리)
+    try {
+      await db.execute(
+        "ALTER TABLE exams ADD COLUMN phase1_pass_score INTEGER",
+      );
+    } catch {
+      // 이미 존재하면 무시
+    }
+    try {
+      await db.execute(
+        "ALTER TABLE exams ADD COLUMN phase1_rules TEXT",
+      );
+    } catch {
+      // 이미 존재하면 무시
+    }
+
     // [신규] 0-1. 신규 변호사시험 회차 개설
     if (action === "CREATE_EXAM") {
       const {
@@ -33,10 +49,12 @@ export async function POST(req: Request) {
         phase2Question1MaxScore = 50,
         phase2Question2MaxScore = 50,
         finalPassingScore = 0,
+        phase1PassScore = null,
         phase1OperationMode = "MANUAL",
         phase2OperationMode = "MANUAL",
         status = "SCHEDULED",
         broadcastNotice = true,
+        phase1Rules = "",
       } = body;
 
       const round = Number(roundNumber);
@@ -98,8 +116,8 @@ export async function POST(req: Request) {
 
       await db.execute({
         sql: `INSERT INTO exams 
-              (id, round_number, title, phase1_start, phase1_end, phase2_start, phase2_end, phase1_questions, phase1_pdf_url, phase2_doc1_pdf_url, phase2_doc2_pdf_url, status, phase1_max_score, phase2_question1_max_score, phase2_question2_max_score, final_passing_score, phase1_operation_mode, phase2_operation_mode)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (id, round_number, title, phase1_start, phase1_end, phase2_start, phase2_end, phase1_questions, phase1_pdf_url, phase2_doc1_pdf_url, phase2_doc2_pdf_url, status, phase1_max_score, phase2_question1_max_score, phase2_question2_max_score, final_passing_score, phase1_pass_score, phase1_rules, phase1_operation_mode, phase2_operation_mode)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           examId,
           round,
@@ -117,6 +135,10 @@ export async function POST(req: Request) {
           maxScores[1],
           maxScores[2],
           Number(finalPassingScore) || 0,
+          phase1PassScore !== null && phase1PassScore !== ""
+            ? Number(phase1PassScore)
+            : null,
+          String(phase1Rules || ""),
           phase1OperationMode,
           phase2OperationMode,
         ],
@@ -174,6 +196,8 @@ export async function POST(req: Request) {
         phase2Question1MaxScore,
         phase2Question2MaxScore,
         finalPassingScore,
+        phase1PassScore,
+        phase1Rules,
         phase1OperationMode,
         phase2OperationMode,
       } = body;
@@ -215,6 +239,8 @@ export async function POST(req: Request) {
                   phase2_question1_max_score = COALESCE(?, phase2_question1_max_score),
                   phase2_question2_max_score = COALESCE(?, phase2_question2_max_score),
                   final_passing_score = COALESCE(?, final_passing_score),
+                  phase1_pass_score = ?,
+                  phase1_rules = COALESCE(?, phase1_rules),
                   phase1_operation_mode = COALESCE(?, phase1_operation_mode),
                   phase2_operation_mode = COALESCE(?, phase2_operation_mode)
               WHERE id = ?`,
@@ -236,6 +262,12 @@ export async function POST(req: Request) {
             ? Number(phase2Question2MaxScore)
             : null,
           finalPassingScore !== undefined ? Number(finalPassingScore) : null,
+          // phase1_pass_score: 빈 문자열/undefined면 null(자동 60% 사용), 숫자면 직접 설정값
+          phase1PassScore !== undefined && phase1PassScore !== ""
+            ? Number(phase1PassScore)
+            : null,
+          // phase1_rules: undefined면 null(COALESCE로 기존값 유지)
+          phase1Rules !== undefined ? String(phase1Rules) : null,
           phase1OperationMode !== undefined ? phase1OperationMode : null,
           phase2OperationMode !== undefined ? phase2OperationMode : null,
           examId,

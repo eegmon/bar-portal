@@ -33,6 +33,8 @@ export default function Session2Page() {
   const [submittedStatus, setSubmittedStatus] = useState<any>(null);
   const [isPublished, setIsPublished] = useState(false);
   const [publishedAt, setPublishedAt] = useState("");
+  const [phase2Doc1PdfUrl, setPhase2Doc1PdfUrl] = useState("");
+  const [phase2Doc2PdfUrl, setPhase2Doc2PdfUrl] = useState("");
 
   // 1차 합격 여부 검증
   const handleVerify = async (e: React.FormEvent) => {
@@ -62,6 +64,8 @@ export default function Session2Page() {
       if (data.isPledged) setIsInstantPledged(true);
       setIsPublished(Boolean(data.isPublished));
       setPublishedAt(data.publishedAt || "");
+      setPhase2Doc1PdfUrl(data.phase2Doc1PdfUrl || "");
+      setPhase2Doc2PdfUrl(data.phase2Doc2PdfUrl || "");
     } catch (err: any) {
       setVerifyError(err.message);
     } finally {
@@ -263,16 +267,22 @@ export default function Session2Page() {
             분량 제한은 없으나 지나치게 과도하거나 적은 분량은 감점 사유가
             됩니다.
           </p>
-          <button
-            type="button"
-            onClick={() =>
-              alert("제1문 논술형 문제지 PDF 다운로드 링크입니다.")
-            }
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            제1문_논술형_문제지.pdf
-          </button>
+          {phase2Doc1PdfUrl ? (
+            <a
+              href={phase2Doc1PdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs font-semibold rounded-lg border border-blue-500/40 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              제1문_논술형_문제지.pdf
+            </a>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 text-slate-500 text-xs rounded-lg border border-slate-700">
+              <Download className="w-3.5 h-3.5" />
+              문제지 미등록 (관리자 문의)
+            </div>
+          )}
         </div>
 
         <div className="p-5 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
@@ -284,16 +294,22 @@ export default function Session2Page() {
             표, 서류, 직인이 포함되어 있으므로 반드시 원본 PDF 형식으로
             열람하시기 바랍니다.
           </p>
-          <button
-            type="button"
-            onClick={() =>
-              alert("제2문 실무기록 문제지 PDF 다운로드 링크입니다.")
-            }
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            제2문_실무기록_문제지.pdf
-          </button>
+          {phase2Doc2PdfUrl ? (
+            <a
+              href={phase2Doc2PdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-xs font-semibold rounded-lg border border-amber-500/40 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              제2문_실무기록_문제지.pdf
+            </a>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 text-slate-500 text-xs rounded-lg border border-slate-700">
+              <Download className="w-3.5 h-3.5" />
+              문제지 미등록 (관리자 문의)
+            </div>
+          )}
         </div>
       </div>
 

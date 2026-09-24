@@ -5,7 +5,7 @@ import { isExamPhaseOpen } from "@/lib/exam-timing";
 export async function GET() {
   try {
     const res = await db.execute({
-      sql: "SELECT id, title, round_number, phase1_start, phase1_end, phase1_max_score, phase1_questions, errata_notices, status, phase1_operation_mode FROM exams ORDER BY round_number DESC LIMIT 1",
+      sql: "SELECT id, title, round_number, phase1_start, phase1_end, phase1_max_score, phase1_questions, errata_notices, status, phase1_operation_mode, phase1_pdf_url, phase1_rules FROM exams ORDER BY round_number DESC LIMIT 1",
     });
 
     if (res.rows.length === 0) {
@@ -48,6 +48,8 @@ export async function GET() {
       title: exam.title,
       roundNumber: exam.round_number,
       phase1MaxScore,
+      phase1PdfUrl: (exam.phase1_pdf_url as string) || "",
+      phase1Rules: (exam.phase1_rules as string) || "",
       questions,
       errataNotices,
     });

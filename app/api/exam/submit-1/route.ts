@@ -57,15 +57,23 @@ export async function POST(req: Request) {
       (sum: number, questionScore: number) => sum + questionScore,
       0,
     );
-    const phase1PassScore = Math.ceil(totalQuestionScore * 0.6);
+
+    // 과락 컷: DB에 직접 설정된 값이 있으면 사용, 없으면 60% 자동 계산
+    const dbPassScore = Number(exam.phase1_pass_score ?? -1);
+    const phase1PassScore =
+      dbPassScore >= 0 ? dbPassScore : Math.ceil(totalQuestionScore * 0.6);
 
     // 자동 채점: 정답 문항의 개별 배점 합산
+    // answers 객체의 key는 JSON 직렬화 후 문자열이므로 String(q.num)으로 조회
     let score = 0;
     const gradingDetails = questions.map((q: any, idx: number) => {
-      const userChoice = answers[idx + 1];
-      const validAnswers = q.altAnswers || [q.answer];
-      const isCorrect = validAnswers.includes(userChoice);
-      if (isCorrect) score += questionScores[idx] || defaultQuestionScore;
+      const userChoice =
+        answers[String(q.num)] ?? answers[q.num] ?? answers[idx + 1];
+      const correctAnswer = Number(q.answer);
+      const altAnswers: number[] = (q.altAnswers || []).map(Number);
+      const validAnswers = [correctAnswer, ...altAnswers];
+      const isCorrect = validAnswers.includes(Number(userChoice));
+      if (isCorrect) score += questionScores[idx] ?? defaultQuestionScore;
       return {
         num: q.num,
         userChoice,
@@ -73,7 +81,7 @@ export async function POST(req: Request) {
       };
     });
 
-    // 1차 합격 기준 (예: 60점 이상)
+    // 1차 합격 기준
     const passed = score >= phase1PassScore ? 1 : 0;
 
     if (existingSub.rows.length === 0) {
@@ -103,7 +111,7 @@ export async function POST(req: Request) {
         embeds: [
           {
             title: `📝 제1차 변호사시험 답안 제출 (#${code})`,
-            description: `익명 수험번호 #${code} 답안이 접수되었습니다.\n• 득점: **${score}점 / ${totalQuestionScore}점**\n• 1차 통과 여부: **${passed ? "🟢 통과 (합격)" : "🔴 과락 (불합격)"}**`,
+            description: `익명 수험번호 #${code} 답안이 접수되었습니다.\n• 득점: **${score}점 / ${totalQuestionScore}점** (과락 컷: ${phase1PassScore}점)\n• 1차 통과 여부: **${passed ? "🟢 통과 (합격)" : "🔴 과락 (불합격)"}**`,
             color: passed ? 0x10b981 : 0xef4444,
             timestamp: new Date().toISOString(),
           },

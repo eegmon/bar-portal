@@ -19,6 +19,8 @@ import {
   Sparkles,
   Settings,
   XCircle,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
 
 interface QuestionData {
@@ -85,6 +87,8 @@ export default function ExamAdminClient({
   const [newPhase2Doc1Pdf, setNewPhase2Doc1Pdf] = useState("");
   const [newPhase2Doc2Pdf, setNewPhase2Doc2Pdf] = useState("");
   const [newPhase1MaxScore, setNewPhase1MaxScore] = useState(100);
+  const [newPhase1PassScore, setNewPhase1PassScore] = useState<string>("");
+  const [newPhase1Rules, setNewPhase1Rules] = useState("");
   const [newPhase2Question1MaxScore, setNewPhase2Question1MaxScore] =
     useState(50);
   const [newPhase2Question2MaxScore, setNewPhase2Question2MaxScore] =
@@ -127,6 +131,13 @@ export default function ExamAdminClient({
   const [editPhase1MaxScore, setEditPhase1MaxScore] = useState(
     Number(exam?.phase1_max_score || 100),
   );
+  // phase1_pass_score: null이면 빈 문자열(자동 60%), 숫자면 직접 설정값
+  const [editPhase1PassScore, setEditPhase1PassScore] = useState<string>(
+    exam?.phase1_pass_score != null ? String(exam.phase1_pass_score) : "",
+  );
+  const [editPhase1Rules, setEditPhase1Rules] = useState<string>(
+    exam?.phase1_rules || "",
+  );
   const [editPhase2Question1MaxScore, setEditPhase2Question1MaxScore] =
     useState(Number(exam?.phase2_question1_max_score || 50));
   const [editPhase2Question2MaxScore, setEditPhase2Question2MaxScore] =
@@ -144,6 +155,68 @@ export default function ExamAdminClient({
     Number(exam?.final_passing_score || 0),
   );
   const [isUpdatingSchedule, setIsUpdatingSchedule] = useState(false);
+
+  // [Phase 빠른 전환] 현재 상태에서 다음/이전 단계로 원클릭 전환
+  const PHASE_ORDER = ["SCHEDULED", "PHASE1", "PHASE2", "GRADING", "FINISHED"];
+  const [isChangingPhase, setIsChangingPhase] = useState(false);
+
+  const handleQuickPhaseChange = async (targetStatus: string) => {
+    if (!exam?.id) return;
+    const label =
+      targetStatus === "SCHEDULED"
+        ? "시험 대기중 (SCHEDULED)"
+        : targetStatus === "PHASE1"
+          ? "제1차 CBT 필기 진행중 (PHASE1)"
+          : targetStatus === "PHASE2"
+            ? "제2차 서술형 제출 진행중 (PHASE2)"
+            : targetStatus === "GRADING"
+              ? "2차 채점표 사정 진행중 (GRADING)"
+              : "최종 합격자 공고 완료 (FINISHED)";
+
+    if (!confirm(`시험 진행 단계를 [${label}](으)로 변경하시겠습니까?`)) return;
+
+    setIsChangingPhase(true);
+    try {
+      const res = await fetch("/api/exam/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "UPDATE_EXAM_SCHEDULE",
+          examId: exam.id,
+          title: exam.title,
+          status: targetStatus,
+          phase1Start: toDateTimeLocal(exam.phase1_start),
+          phase1End: toDateTimeLocal(exam.phase1_end),
+          phase2Start: toDateTimeLocal(exam.phase2_start),
+          phase2End: toDateTimeLocal(exam.phase2_end),
+          phase1PdfUrl: exam.phase1_pdf_url || "",
+          phase2Doc1PdfUrl: exam.phase2_doc1_pdf_url || "",
+          phase2Doc2PdfUrl: exam.phase2_doc2_pdf_url || "",
+          phase1MaxScore: Number(exam.phase1_max_score || 100),
+          phase1PassScore:
+            exam.phase1_pass_score != null ? Number(exam.phase1_pass_score) : null,
+          phase2Question1MaxScore: Number(
+            exam.phase2_question1_max_score || 50,
+          ),
+          phase2Question2MaxScore: Number(
+            exam.phase2_question2_max_score || 50,
+          ),
+          finalPassingScore: Number(exam.final_passing_score || 0),
+          phase1OperationMode:
+            exam.phase1_operation_mode === "TIME" ? "TIME" : "MANUAL",
+          phase2OperationMode:
+            exam.phase2_operation_mode === "TIME" ? "TIME" : "MANUAL",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "단계 변경 실패");
+      window.location.reload();
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsChangingPhase(false);
+    }
+  };
 
   // 1. 실시간 문제 정정 방송 상태
   const [errataText, setErrataText] = useState("");
@@ -226,6 +299,8 @@ export default function ExamAdminClient({
           phase2Doc1PdfUrl: newPhase2Doc1Pdf,
           phase2Doc2PdfUrl: newPhase2Doc2Pdf,
           phase1MaxScore: newPhase1MaxScore,
+          phase1PassScore: newPhase1PassScore !== "" ? Number(newPhase1PassScore) : null,
+          phase1Rules: newPhase1Rules,
           phase2Question1MaxScore: newPhase2Question1MaxScore,
           phase2Question2MaxScore: newPhase2Question2MaxScore,
           finalPassingScore: newFinalPassingScore,
@@ -268,6 +343,8 @@ export default function ExamAdminClient({
           phase2Doc1PdfUrl: editPhase2Doc1Pdf,
           phase2Doc2PdfUrl: editPhase2Doc2Pdf,
           phase1MaxScore: editPhase1MaxScore,
+          phase1PassScore: editPhase1PassScore !== "" ? Number(editPhase1PassScore) : null,
+          phase1Rules: editPhase1Rules,
           phase2Question1MaxScore: editPhase2Question1MaxScore,
           phase2Question2MaxScore: editPhase2Question2MaxScore,
           finalPassingScore: editFinalPassingScore,
@@ -618,6 +695,12 @@ export default function ExamAdminClient({
                 setEditPhase2Doc1Pdf(exam.phase2_doc1_pdf_url || "");
                 setEditPhase2Doc2Pdf(exam.phase2_doc2_pdf_url || "");
                 setEditPhase1MaxScore(Number(exam.phase1_max_score || 100));
+                setEditPhase1PassScore(
+                  exam.phase1_pass_score != null
+                    ? String(exam.phase1_pass_score)
+                    : "",
+                );
+                setEditPhase1Rules(exam.phase1_rules || "");
                 setEditPhase2Question1MaxScore(
                   Number(exam.phase2_question1_max_score || 50),
                 );
@@ -650,6 +733,69 @@ export default function ExamAdminClient({
           </button>
         </div>
       </div>
+
+      {/* Phase 빠른 전환 버튼 바 */}
+      {exam && (
+        <div className="px-5 py-3 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-slate-500 font-semibold mr-1 shrink-0">
+            진행 단계 빠른 전환:
+          </span>
+          {PHASE_ORDER.map((phase, idx) => {
+            const isCurrent = exam.status === phase;
+            const labels: Record<string, string> = {
+              SCHEDULED: "대기중",
+              PHASE1: "1차 CBT",
+              PHASE2: "2차 서술형",
+              GRADING: "채점 사정",
+              FINISHED: "공고 완료",
+            };
+            const colors: Record<string, string> = {
+              SCHEDULED:
+                "bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600",
+              PHASE1:
+                "bg-blue-600/80 border-blue-500/60 text-white hover:bg-blue-500",
+              PHASE2:
+                "bg-purple-600/80 border-purple-500/60 text-white hover:bg-purple-500",
+              GRADING:
+                "bg-amber-600/80 border-amber-500/60 text-white hover:bg-amber-500",
+              FINISHED:
+                "bg-emerald-600/80 border-emerald-500/60 text-white hover:bg-emerald-500",
+            };
+            const currentColors: Record<string, string> = {
+              SCHEDULED: "bg-slate-600 border-slate-400 text-white ring-2 ring-slate-400/50",
+              PHASE1: "bg-blue-500 border-blue-300 text-white ring-2 ring-blue-400/50",
+              PHASE2: "bg-purple-500 border-purple-300 text-white ring-2 ring-purple-400/50",
+              GRADING: "bg-amber-500 border-amber-300 text-slate-950 ring-2 ring-amber-400/50",
+              FINISHED: "bg-emerald-500 border-emerald-300 text-white ring-2 ring-emerald-400/50",
+            };
+            return (
+              <div key={phase} className="flex items-center gap-1">
+                {idx > 0 && (
+                  <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
+                )}
+                <button
+                  type="button"
+                  disabled={isCurrent || isChangingPhase}
+                  onClick={() => handleQuickPhaseChange(phase)}
+                  className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
+                    isCurrent
+                      ? currentColors[phase]
+                      : colors[phase] +
+                        " disabled:opacity-40"
+                  }`}
+                >
+                  {isChangingPhase && !isCurrent ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : isCurrent ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                  ) : null}
+                  {labels[phase]}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {!exam ? (
         <div className="p-12 bg-slate-900 border border-slate-800 rounded-3xl text-center space-y-4 shadow-xl">
@@ -1485,6 +1631,30 @@ export default function ExamAdminClient({
                   최종 합격선은 게시 시 다시 입력할 수 있으며, 총점은 1차 +
                   제1문 + 제2문입니다.
                 </p>
+                {/* 1차 과락 컷 (별도) */}
+                <label className="text-[11px] text-slate-400 block">
+                  1차 과락 컷 (비워두면 만점의 60% 자동)
+                  <input
+                    type="number"
+                    min={0}
+                    value={newPhase1PassScore}
+                    onChange={(e) => setNewPhase1PassScore(e.target.value)}
+                    placeholder={`자동 (${Math.ceil(newPhase1MaxScore * 0.6)}점)`}
+                    className="mt-1 w-full bg-slate-900 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
+                  />
+                </label>
+                {/* 시험 규칙 안내 */}
+                <label className="text-[11px] text-slate-400 block">
+                  시험 규칙 안내 (수험생 입장 화면에 표시됨)
+                  <textarea
+                    rows={4}
+                    value={newPhase1Rules}
+                    onChange={(e) => setNewPhase1Rules(e.target.value)}
+                    placeholder={`예:\n• 시험 시간: 120분 · 만점 100점 (10문 객관식)\n• 답안 제출은 단 1회만 허용됩니다.\n• 이의제기는 디스코드 채널을 이용해 주십시오.`}
+                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">비워두면 기본 안내 텍스트가 자동 표시됩니다.</p>
+                </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="text-[11px] text-slate-400">
                     1차 운영 방식
@@ -1590,23 +1760,37 @@ export default function ExamAdminClient({
                 <label className="block text-xs font-bold text-slate-400">
                   문제지 PDF URL (선택 사항)
                 </label>
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-[11px] text-slate-400 leading-relaxed">
+                  <p>
+                    <span className="text-blue-400 font-bold">1차 PDF:</span>{" "}
+                    저장만 되며 현재는 수험생에게 노출되지 않습니다. (향후
+                    배포용 예약)
+                  </p>
+                  <p>
+                    <span className="text-purple-400 font-bold">2차 제1문 / 제2문 PDF:</span>{" "}
+                    2차 서술형 제출실(
+                    <span className="font-mono">/exam/session-2</span>)에서
+                    수험생에게 문제지 다운로드 버튼으로 제공됩니다. Google
+                    Drive 공유 링크 또는 외부 공개 URL을 입력하세요.
+                  </p>
+                </div>
                 <input
                   type="text"
-                  placeholder="1차 필기 문제지 PDF 링크 (선택)"
+                  placeholder="1차 필기 문제지 PDF 링크 (선택 · 현재 비노출)"
                   value={newPhase1Pdf}
                   onChange={(e) => setNewPhase1Pdf(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
                 />
                 <input
                   type="text"
-                  placeholder="2차 제1문 논술 문제지 PDF 링크 (선택)"
+                  placeholder="2차 제1문 논술 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨"
                   value={newPhase2Doc1Pdf}
                   onChange={(e) => setNewPhase2Doc1Pdf(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
                 />
                 <input
                   type="text"
-                  placeholder="2차 제2문 실무기록 문제지 PDF 링크 (선택)"
+                  placeholder="2차 제2문 실무기록 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨"
                   value={newPhase2Doc2Pdf}
                   onChange={(e) => setNewPhase2Doc2Pdf(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
@@ -1752,6 +1936,30 @@ export default function ExamAdminClient({
                     </label>
                   ))}
                 </div>
+                {/* 1차 과락 컷 */}
+                <label className="text-[11px] text-slate-400 block">
+                  1차 과락 컷 (비워두면 만점의 60% 자동)
+                  <input
+                    type="number"
+                    min={0}
+                    value={editPhase1PassScore}
+                    onChange={(e) => setEditPhase1PassScore(e.target.value)}
+                    placeholder={`자동 (${Math.ceil(editPhase1MaxScore * 0.6)}점)`}
+                    className="mt-1 w-full bg-slate-900 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-500"
+                  />
+                </label>
+                {/* 시험 규칙 안내 */}
+                <label className="text-[11px] text-slate-400 block">
+                  시험 규칙 안내 (수험생 입장 화면에 표시됨)
+                  <textarea
+                    rows={4}
+                    value={editPhase1Rules}
+                    onChange={(e) => setEditPhase1Rules(e.target.value)}
+                    placeholder={`예:\n• 시험 시간: 120분 · 만점 100점 (10문 객관식)\n• 답안 제출은 단 1회만 허용됩니다.\n• 이의제기는 디스코드 채널을 이용해 주십시오.`}
+                    className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-0.5">비워두면 기본 안내 텍스트가 자동 표시됩니다.</p>
+                </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="text-[11px] text-slate-400">
                     1차 운영 방식
@@ -1840,23 +2048,31 @@ export default function ExamAdminClient({
                 <label className="block text-xs font-bold text-slate-400">
                   문제지 PDF URL
                 </label>
+                <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-400 leading-relaxed space-y-1">
+                  <p>
+                    <span className="text-blue-400 font-bold">1차:</span> 저장만 되며 현재 수험생에게 노출되지 않습니다.
+                  </p>
+                  <p>
+                    <span className="text-purple-400 font-bold">2차 제1문 / 제2문:</span> 2차 서술형 제출실에서 수험생 다운로드 버튼에 직접 연결됩니다. Google Drive 등 공개 URL을 입력하세요.
+                  </p>
+                </div>
                 <input
                   type="text"
-                  placeholder="1차 필기 PDF URL"
+                  placeholder="1차 필기 PDF URL (현재 비노출)"
                   value={editPhase1Pdf}
                   onChange={(e) => setEditPhase1Pdf(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
                 />
                 <input
                   type="text"
-                  placeholder="2차 제1문 논술 PDF URL"
+                  placeholder="2차 제1문 논술 PDF URL → 2차 제출실 다운로드 버튼"
                   value={editPhase2Doc1Pdf}
                   onChange={(e) => setEditPhase2Doc1Pdf(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
                 />
                 <input
                   type="text"
-                  placeholder="2차 제2문 실무기록 PDF URL"
+                  placeholder="2차 제2문 실무기록 PDF URL → 2차 제출실 다운로드 버튼"
                   value={editPhase2Doc2Pdf}
                   onChange={(e) => setEditPhase2Doc2Pdf(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"

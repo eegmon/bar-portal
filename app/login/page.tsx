@@ -107,6 +107,16 @@ export default function LoginPage() {
           {loading ? "로그인 중..." : "로그인"}
         </button>
       </form>
+
+      <p className="text-center text-xs text-slate-500">
+        아직 회원이 아니신가요?{" "}
+        <a
+          href="/register"
+          className="text-amber-400 hover:text-amber-300 font-semibold transition-colors"
+        >
+          회원가입 →
+        </a>
+      </p>
     </div>
   );
 }

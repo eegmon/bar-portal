@@ -11,7 +11,10 @@ export async function POST(req: Request) {
     const { loginId, password } = await req.json();
 
     if (!loginId || !password) {
-      return NextResponse.json({ error: "아이디와 비밀번호를 입력해 주세요." }, { status: 400 });
+      return NextResponse.json(
+        { error: "아이디와 비밀번호를 입력해 주세요." },
+        { status: 400 },
+      );
     }
 
     const res = await db.execute({
@@ -20,14 +23,20 @@ export async function POST(req: Request) {
     });
 
     if (res.rows.length === 0) {
-      return NextResponse.json({ error: "존재하지 않는 회원입니다." }, { status: 401 });
+      return NextResponse.json(
+        { error: "회원정보가 불일치 합니다." },
+        { status: 401 },
+      );
     }
 
     const user = res.rows[0];
     const isMatch = await bcrypt.compare(password, user.password as string);
 
     if (!isMatch) {
-      return NextResponse.json({ error: "비밀번호가 일치하지 않습니다." }, { status: 401 });
+      return NextResponse.json(
+        { error: "회원정보가 불일치 합니다." },
+        { status: 401 },
+      );
     }
 
     let positions: string[] = [];
@@ -38,17 +47,26 @@ export async function POST(req: Request) {
     }
 
     // 로그인 시 디스코드 역할 최신 동기화 시도 (Discord -> Site)
-    const targetDiscord = (user.discord_id as string) || (user.phone as string) || "";
+    const targetDiscord =
+      (user.discord_id as string) || (user.phone as string) || "";
     const lastSyncedAt = recentDiscordLoginSync.get(user.id as string) || 0;
-    if (targetDiscord && Date.now() - lastSyncedAt >= DISCORD_LOGIN_SYNC_TTL_MS) {
+    if (
+      targetDiscord &&
+      Date.now() - lastSyncedAt >= DISCORD_LOGIN_SYNC_TTL_MS
+    ) {
       try {
         const { syncUserFromDiscord } = await import("@/lib/discord");
-        const syncResult = await syncUserFromDiscord(user.id as string, targetDiscord);
+        const syncResult = await syncUserFromDiscord(
+          user.id as string,
+          targetDiscord,
+        );
         recentDiscordLoginSync.set(user.id as string, Date.now());
         if (syncResult.success && syncResult.updatedPositions) {
           positions = syncResult.updatedPositions;
-          if (syncResult.updatedRole) (user as any).role = syncResult.updatedRole;
-          if (syncResult.isTrainee !== undefined) (user as any).is_trainee = syncResult.isTrainee;
+          if (syncResult.updatedRole)
+            (user as any).role = syncResult.updatedRole;
+          if (syncResult.isTrainee !== undefined)
+            (user as any).is_trainee = syncResult.isTrainee;
         }
       } catch (syncErr) {
         console.warn("로그인 시 디스코드 동기화 무시:", syncErr);
@@ -83,6 +101,9 @@ export async function POST(req: Request) {
     return response;
   } catch (err: any) {
     console.error("로그인 에러:", err);
-    return NextResponse.json({ error: err.message || "로그인 실패" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "로그인 실패" },
+      { status: 500 },
+    );
   }
 }
