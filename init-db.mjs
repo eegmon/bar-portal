@@ -34,6 +34,18 @@ async function init() {
   `);
   console.log("✓ users (변호사 명부) 테이블 생성 완료");
 
+  // 회원/시스템 작업 감사 로그
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      action TEXT NOT NULL,
+      details TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  console.log("✓ audit_logs (회원/시스템 감사 로그) 테이블 생성 완료");
+
   // 기존 DB에도 Discord 동기화 시각 컬럼을 추가합니다.
   try {
     await db.execute("ALTER TABLE users ADD COLUMN discord_synced_at TEXT");
