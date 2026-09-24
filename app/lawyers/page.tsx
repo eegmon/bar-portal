@@ -1,5 +1,6 @@
 import { Scale, Search, MapPin, AlertTriangle } from "lucide-react";
 import db from "@/lib/db";
+import LawyerAvatar from "./LawyerAvatar";
 
 export const dynamic = "force-dynamic";
 
@@ -195,13 +196,7 @@ export default async function LawyersSearchPage({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold text-lg ${
-                    isActive
-                      ? "bg-slate-800 border-slate-700 text-amber-400"
-                      : "bg-slate-800/50 border-slate-700/50 text-slate-500"
-                  }`}>
-                    {lawyer.name[0]}
-                  </div>
+                  <LawyerAvatar name={lawyer.name as string} isActive={isActive} />
                   <div>
                     <h3 className="text-base font-bold text-white flex items-center gap-1.5 flex-wrap">
                       {lawyer.name}
