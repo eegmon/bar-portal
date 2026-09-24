@@ -323,7 +323,8 @@ export async function POST(req: Request) {
       }));
       if (
         normalizedQuestions.some(
-          (question) => !Number.isInteger(question.score) || question.score <= 0,
+          (question) =>
+            !Number.isInteger(question.score) || question.score <= 0,
         )
       ) {
         return NextResponse.json(
@@ -395,7 +396,7 @@ export async function POST(req: Request) {
       // 디스코드 시험 공지 채널로 즉시 발송
       await sendDiscordWebhook("EXAM", {
         content:
-          "@everyone **[긴급 정정 공지] 제1차 변호사시험 문제 정정 안내**",
+          "<@&1484536893336060074> **[긴급 정정 공지] 제1차 변호사시험 문제 정정 안내**",
         embeds: [
           {
             title: "⚠️ 변호사시험 제1차 문제 정정 공지",
