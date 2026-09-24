@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Edit, Save, ChevronDown } from "lucide-react";
+import { BookOpen, Edit, Save } from "lucide-react";
 
 const TAB_LABELS: Record<string, string> = {
   rules_charter: "📜 회칙 전문",

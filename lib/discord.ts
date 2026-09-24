@@ -85,6 +85,7 @@ export async function getWebhookUrl(type: WebhookType | string): Promise<string>
  */
 const DISCORD_MIN_INTERVAL_MS = 300;
 let lastDiscordCallAt = 0;
+let discordRequestQueue = Promise.resolve();
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -95,39 +96,51 @@ export async function discordFetch(
   init: RequestInit,
   maxRetries = 3
 ): Promise<Response> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const elapsed = Date.now() - lastDiscordCallAt;
-    if (elapsed < DISCORD_MIN_INTERVAL_MS) {
-      await sleep(DISCORD_MIN_INTERVAL_MS - elapsed);
-    }
-    lastDiscordCallAt = Date.now();
+  const request = discordRequestQueue.then(async () => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const elapsed = Date.now() - lastDiscordCallAt;
+      if (elapsed < DISCORD_MIN_INTERVAL_MS) {
+        await sleep(DISCORD_MIN_INTERVAL_MS - elapsed);
+      }
+      lastDiscordCallAt = Date.now();
 
-    const res = await fetch(url, init);
+      const res = await fetch(url, init);
 
-    if (res.status === 429) {
-      let retryAfterSec = 1;
+      if (res.status !== 429) return res;
+
+      let retryAfterSec: number | undefined;
+      let isGlobalLimit = res.headers.get("x-ratelimit-global") === "true";
       try {
         const body = await res.clone().json();
         if (typeof body?.retry_after === "number") retryAfterSec = body.retry_after;
+        if (body?.global === true) isGlobalLimit = true;
+        if (typeof body?.message === "string" && body.message.includes("global rate limits")) {
+          isGlobalLimit = true;
+        }
       } catch {
-        const header = res.headers.get("retry-after");
-        if (header) retryAfterSec = Number(header) || 1;
+        // 응답 본문이 JSON이 아니면 헤더 값을 사용합니다.
       }
-      // 약간의 여유를 더해 대기 (너무 짧게 재시도하면 또 차단될 수 있음)
-      const waitMs = Math.min(retryAfterSec * 1000 + 250, 15000);
+      if (retryAfterSec === undefined) {
+        const header = res.headers.get("retry-after");
+        if (header) retryAfterSec = Number(header);
+      }
+
+      // 전역 차단은 재시도가 차단 시간을 늘릴 수 있으므로 즉시 호출자에게 반환합니다.
+      if (isGlobalLimit || attempt >= maxRetries) return res;
+
+      const waitMs = Math.min(Math.max((retryAfterSec || 1) * 1000 + 250, 1000), 60000);
       console.warn(
         `[Discord Bot] 429 레이트리밋 감지, ${waitMs}ms 대기 후 재시도 (${attempt + 1}/${maxRetries})`
       );
-      if (attempt < maxRetries) {
-        await sleep(waitMs);
-        continue;
-      }
+      await sleep(waitMs);
     }
 
-    return res;
-  }
-  // 이론상 도달하지 않음
-  return fetch(url, init);
+    throw new Error("Discord API 요청 재시도 횟수를 초과했습니다.");
+  });
+
+  // 한 요청의 실패가 다음 요청의 큐를 막지 않도록 큐 상태만 정상화합니다.
+  discordRequestQueue = request.then(() => undefined, () => undefined);
+  return request;
 }
 
 export async function sendDiscordWebhook(
@@ -207,13 +220,17 @@ export async function resolveDiscordUserId(discordInput: string): Promise<string
 /**
  * 디스코드 봇을 통한 유저 역할(Role) 추가
  */
-export async function addDiscordRole(discordUserId: string, roleId: string): Promise<boolean> {
+export async function addDiscordRole(
+  discordUserId: string,
+  roleId: string,
+  resolvedUserId?: string
+): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
   if (!cleanRoleId) return false;
 
-  const resolvedUserId = await resolveDiscordUserId(discordUserId);
-  if (!resolvedUserId) {
+  const userId = resolvedUserId || (await resolveDiscordUserId(discordUserId));
+  if (!userId) {
     console.warn(`[Discord Bot] 유효한 유저 ID를 찾을 수 없습니다: ${discordUserId}`);
     return false;
   }
@@ -226,7 +243,7 @@ export async function addDiscordRole(discordUserId: string, roleId: string): Pro
 
   try {
     const res = await discordFetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
+      `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${cleanRoleId}`,
       {
         method: "PUT",
         headers: {
@@ -250,20 +267,24 @@ export async function addDiscordRole(discordUserId: string, roleId: string): Pro
 /**
  * 디스코드 봇을 통한 유저 역할(Role) 제거
  */
-export async function removeDiscordRole(discordUserId: string, roleId: string): Promise<boolean> {
+export async function removeDiscordRole(
+  discordUserId: string,
+  roleId: string,
+  resolvedUserId?: string
+): Promise<boolean> {
   if (!discordUserId || !roleId) return false;
   const cleanRoleId = roleId.replace(/[^0-9]/g, "");
   if (!cleanRoleId) return false;
 
-  const resolvedUserId = await resolveDiscordUserId(discordUserId);
-  if (!resolvedUserId) return false;
+  const userId = resolvedUserId || (await resolveDiscordUserId(discordUserId));
+  if (!userId) return false;
 
   const { token, guildId } = await getBotConfig();
   if (!token || !guildId) return false;
 
   try {
     const res = await discordFetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/${resolvedUserId}/roles/${cleanRoleId}`,
+      `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles/${cleanRoleId}`,
       {
         method: "DELETE",
         headers: {
@@ -291,6 +312,11 @@ export async function syncUserDiscordRoles(params: {
   const { discordUserId, role, status, isTrainee, positions = [] } = params;
   if (!discordUserId) return;
 
+  const resolvedUserId = await resolveDiscordUserId(discordUserId);
+  if (!resolvedUserId) return;
+  const addRole = (roleId: string) => addDiscordRole(discordUserId, roleId, resolvedUserId);
+  const removeRole = (roleId: string) => removeDiscordRole(discordUserId, roleId, resolvedUserId);
+
   const lawyerRoleId = await getSettingValue("discord_role_lawyer", "DISCORD_ROLE_LAWYER");
   const traineeRoleId = await getSettingValue("discord_role_trainee", "DISCORD_ROLE_TRAINEE");
   
@@ -317,75 +343,75 @@ export async function syncUserDiscordRoles(params: {
 
   // 1. 변호사/견습 역할 동기화
   if (status === "ACTIVE" && role === "LAWYER") {
-    if (lawyerRoleId) await addDiscordRole(discordUserId, lawyerRoleId);
-    if (isTrainee && traineeRoleId) await addDiscordRole(discordUserId, traineeRoleId);
-    if (!isTrainee && traineeRoleId) await removeDiscordRole(discordUserId, traineeRoleId);
+    if (lawyerRoleId) await addRole(lawyerRoleId);
+    if (isTrainee && traineeRoleId) await addRole(traineeRoleId);
+    if (!isTrainee && traineeRoleId) await removeRole(traineeRoleId);
   } else if (status === "SUSPENDED" || status === "EXPIRED" || status === "EXPELLED") {
-    if (lawyerRoleId) await removeDiscordRole(discordUserId, lawyerRoleId);
-    if (traineeRoleId) await removeDiscordRole(discordUserId, traineeRoleId);
+    if (lawyerRoleId) await removeRole(lawyerRoleId);
+    if (traineeRoleId) await removeRole(traineeRoleId);
   }
 
   // 2. 이사회 & 【 🎓 · 임원 】 그룹
   const isExecutive = positions.some((p) => ["PRESIDENT", "VICE_PRESIDENT", "DIRECTOR"].includes(p));
   if (groupExecutiveRoleId) {
-    if (isExecutive) await addDiscordRole(discordUserId, groupExecutiveRoleId);
-    else await removeDiscordRole(discordUserId, groupExecutiveRoleId);
+    if (isExecutive) await addRole(groupExecutiveRoleId);
+    else await removeRole(groupExecutiveRoleId);
   }
   if (boardRoleId) {
-    if (isExecutive) await addDiscordRole(discordUserId, boardRoleId);
-    else await removeDiscordRole(discordUserId, boardRoleId);
+    if (isExecutive) await addRole(boardRoleId);
+    else await removeRole(boardRoleId);
   }
   if (presidentRoleId) {
-    if (positions.includes("PRESIDENT")) await addDiscordRole(discordUserId, presidentRoleId);
-    else await removeDiscordRole(discordUserId, presidentRoleId);
+    if (positions.includes("PRESIDENT")) await addRole(presidentRoleId);
+    else await removeRole(presidentRoleId);
   }
   if (vicePresidentRoleId) {
-    if (positions.includes("VICE_PRESIDENT")) await addDiscordRole(discordUserId, vicePresidentRoleId);
-    else await removeDiscordRole(discordUserId, vicePresidentRoleId);
+    if (positions.includes("VICE_PRESIDENT")) await addRole(vicePresidentRoleId);
+    else await removeRole(vicePresidentRoleId);
   }
   if (directorRoleId) {
-    if (positions.includes("DIRECTOR")) await addDiscordRole(discordUserId, directorRoleId);
-    else await removeDiscordRole(discordUserId, directorRoleId);
+    if (positions.includes("DIRECTOR")) await addRole(directorRoleId);
+    else await removeRole(directorRoleId);
   }
 
   // 3. 총회 의장단 & 【 📜 · 총회 】 그룹
   const isAssemblyLeader = positions.some((p) => ["ASSEMBLY_SPEAKER", "ASSEMBLY_VICE_SPEAKER"].includes(p));
   if (groupAssemblyRoleId) {
-    if (isAssemblyLeader) await addDiscordRole(discordUserId, groupAssemblyRoleId);
-    else await removeDiscordRole(discordUserId, groupAssemblyRoleId);
+    if (isAssemblyLeader) await addRole(groupAssemblyRoleId);
+    else await removeRole(groupAssemblyRoleId);
   }
   if (speakerRoleId) {
-    if (positions.includes("ASSEMBLY_SPEAKER")) await addDiscordRole(discordUserId, speakerRoleId);
-    else await removeDiscordRole(discordUserId, speakerRoleId);
+    if (positions.includes("ASSEMBLY_SPEAKER")) await addRole(speakerRoleId);
+    else await removeRole(speakerRoleId);
   }
   if (viceSpeakerRoleId) {
-    if (positions.includes("ASSEMBLY_VICE_SPEAKER")) await addDiscordRole(discordUserId, viceSpeakerRoleId);
-    else await removeDiscordRole(discordUserId, viceSpeakerRoleId);
+    if (positions.includes("ASSEMBLY_VICE_SPEAKER")) await addRole(viceSpeakerRoleId);
+    else await removeRole(viceSpeakerRoleId);
   }
 
   // 4. 사무국 & 【 📂 · 사무국 】 그룹
   const isSecretariat = positions.some((p) => ["SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p));
   if (groupSecretariatRoleId) {
-    if (isSecretariat) await addDiscordRole(discordUserId, groupSecretariatRoleId);
-    else await removeDiscordRole(discordUserId, groupSecretariatRoleId);
+    if (isSecretariat) await addRole(groupSecretariatRoleId);
+    else await removeRole(groupSecretariatRoleId);
   }
   if (secretaryGeneralRoleId) {
-    if (positions.includes("SECRETARY_GENERAL")) await addDiscordRole(discordUserId, secretaryGeneralRoleId);
-    else await removeDiscordRole(discordUserId, secretaryGeneralRoleId);
+    if (positions.includes("SECRETARY_GENERAL")) await addRole(secretaryGeneralRoleId);
+    else await removeRole(secretaryGeneralRoleId);
   }
   if (staffRoleId) {
-    if (positions.includes("SECRETARIAT_STAFF")) await addDiscordRole(discordUserId, staffRoleId);
-    else await removeDiscordRole(discordUserId, staffRoleId);
+    if (positions.includes("SECRETARIAT_STAFF")) await addRole(staffRoleId);
+    else await removeRole(staffRoleId);
   }
 
   // 5. 위원회
   if (examCommRoleId) {
-    if (positions.includes("EXAM_COMM_MEMBER")) await addDiscordRole(discordUserId, examCommRoleId);
-    else await removeDiscordRole(discordUserId, examCommRoleId);
+    if (positions.includes("EXAM_COMM_MEMBER")) await addRole(examCommRoleId);
+    else await removeRole(examCommRoleId);
   }
   if (disciplineCommRoleId) {
-    if (positions.includes("DISCIPLINE_COMM_MEMBER")) await addDiscordRole(discordUserId, disciplineCommRoleId);
-    else await removeDiscordRole(discordUserId, disciplineCommRoleId);
+    if (positions.includes("DISCIPLINE_COMM_MEMBER")) await addRole(disciplineCommRoleId);
+    else await removeRole(disciplineCommRoleId);
   }
 }
 

@@ -40,7 +40,7 @@ export function signVoteAccessToken(input: {
     },
     JWT_SECRET,
     {
-      expiresIn: input.expiresIn || "30d",
+      expiresIn: input.expiresIn as jwt.SignOptions["expiresIn"] || "30d",
     },
   );
 }

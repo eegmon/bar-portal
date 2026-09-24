@@ -473,6 +473,12 @@ export async function POST(req: Request) {
         sql: "UPDATE assembly_attendances SET approval_status = ?, attended = ?, attended_at = CASE WHEN ? = 1 THEN datetime('now') ELSE attended_at END WHERE id = ?",
         args: [status, attended ? 1 : 0, attended ? 1 : 0, attendanceId],
       });
+      if (status === "APPROVED" && attended) {
+        await db.execute({
+          sql: "UPDATE users SET status = 'ACTIVE', last_renewed_at = datetime('now') WHERE id = ? AND role = 'LAWYER'",
+          args: [attendance.user_id],
+        });
+      }
       await writeAudit(
         attendance.assembly_id,
         null,
@@ -545,6 +551,10 @@ export async function POST(req: Request) {
           args: [attId, assemblyId, userId, `${user.name} 의장 현장 출석 확인`],
         });
       }
+      await db.execute({
+        sql: "UPDATE users SET status = 'ACTIVE', last_renewed_at = datetime('now') WHERE id = ? AND role = 'LAWYER'",
+        args: [userId],
+      });
       await writeAudit(assemblyId, null, user.id, "ADD_ATTENDANCE", {
         userId,
         userName: memberRes.rows[0].name,

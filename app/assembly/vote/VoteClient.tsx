@@ -12,7 +12,6 @@ import {
   Send,
   Play,
   Square,
-  Users,
 } from "lucide-react";
 
 interface VoteClientProps {
@@ -76,10 +75,11 @@ export default function VoteClient({
   };
 
   const choices = getChoicesForAgenda(currentAgenda);
+  const choiceConfig = currentAgenda?.choice_config;
 
   useEffect(() => {
-    setRanking(choices);
-  }, [selectedAgendaId, currentAgenda?.choice_config]);
+    setRanking(getChoicesForAgenda({ choice_config: choiceConfig }));
+  }, [selectedAgendaId, choiceConfig]);
 
   useEffect(() => {
     if (!selectedAgendaId) return;

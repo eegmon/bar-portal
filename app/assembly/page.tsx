@@ -1,12 +1,9 @@
 import Link from "next/link";
 import {
   Vote,
-  Users,
   Calendar,
-  ArrowRight,
   ShieldCheck,
   CheckCircle2,
-  AlertCircle,
   FileCheck,
   FileText,
   ScrollText,

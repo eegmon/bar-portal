@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Award, Search, CheckCircle2, AlertCircle, ArrowLeft, BarChart3 } from "lucide-react";
+import { Search, AlertCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function MyScorePage() {

@@ -12,6 +12,21 @@ export async function GET() {
     }
 
     const exam = res.rows[0];
+    const now = Date.now();
+    const startAt = new Date(String(exam.phase1_start)).getTime();
+    const endAt = new Date(String(exam.phase1_end)).getTime();
+    if (
+      exam.status !== "PHASE1" ||
+      !Number.isFinite(startAt) ||
+      !Number.isFinite(endAt) ||
+      now < startAt ||
+      now > endAt
+    ) {
+      return NextResponse.json(
+        { error: "현재 공개할 수 있는 시험 문항이 없습니다." },
+        { status: 403 },
+      );
+    }
     const rawQuestions = JSON.parse((exam.phase1_questions as string) || "[]");
     const errataNotices = JSON.parse((exam.errata_notices as string) || "[]");
 

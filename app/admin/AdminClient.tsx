@@ -13,7 +13,6 @@ import {
   Send,
   Plus,
   Calendar,
-  Lock,
   ExternalLink,
   Search,
   Scale,

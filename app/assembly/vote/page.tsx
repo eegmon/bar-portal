@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Vote, ArrowLeft, LogIn, AlertCircle } from "lucide-react";
+import { Vote, ArrowLeft, LogIn } from "lucide-react";
 import db from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { getVoteAccessUser } from "@/lib/vote-access";

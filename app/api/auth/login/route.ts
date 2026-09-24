@@ -3,6 +3,9 @@ import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { signToken, SessionUser } from "@/lib/auth";
 
+const DISCORD_LOGIN_SYNC_TTL_MS = 5 * 60 * 1000;
+const recentDiscordLoginSync = new Map<string, number>();
+
 export async function POST(req: Request) {
   try {
     const { loginId, password } = await req.json();
@@ -36,10 +39,12 @@ export async function POST(req: Request) {
 
     // 로그인 시 디스코드 역할 최신 동기화 시도 (Discord -> Site)
     const targetDiscord = (user.discord_id as string) || (user.phone as string) || "";
-    if (targetDiscord) {
+    const lastSyncedAt = recentDiscordLoginSync.get(user.id as string) || 0;
+    if (targetDiscord && Date.now() - lastSyncedAt >= DISCORD_LOGIN_SYNC_TTL_MS) {
       try {
         const { syncUserFromDiscord } = await import("@/lib/discord");
         const syncResult = await syncUserFromDiscord(user.id as string, targetDiscord);
+        recentDiscordLoginSync.set(user.id as string, Date.now());
         if (syncResult.success && syncResult.updatedPositions) {
           positions = syncResult.updatedPositions;
           if (syncResult.updatedRole) (user as any).role = syncResult.updatedRole;

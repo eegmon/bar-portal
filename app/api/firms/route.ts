@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q") || "";
-    const statusFilter = searchParams.get("status") || "APPROVED";
+    const statusFilter = "APPROVED";
 
     let firms: any[] = [];
     if (q.trim()) {
@@ -77,6 +77,12 @@ export async function POST(req: Request) {
 
     // ── 1. 법인 등록 신청 ──────────────────────────────────────
     if (action === "CREATE_FIRM") {
+      if (user.role !== "LAWYER" && user.role !== "ADMIN") {
+        return NextResponse.json({ error: "변호사만 법인 등록을 신청할 수 있습니다." }, { status: 403 });
+      }
+      if (user.status !== "ACTIVE") {
+        return NextResponse.json({ error: "활성 상태의 변호사만 법인 등록을 신청할 수 있습니다." }, { status: 403 });
+      }
       const { name, type, address, contact, isNotary } = body;
       if (!name || !type) {
         return NextResponse.json({ error: "법인명과 종류는 필수입니다." }, { status: 400 });

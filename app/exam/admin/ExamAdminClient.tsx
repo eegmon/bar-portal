@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Send,
@@ -14,9 +15,7 @@ import {
   Plus,
   Trash2,
   Download,
-  FileUp,
   Calendar,
-  Clock,
   Sparkles,
   Settings,
   XCircle,
@@ -47,6 +46,7 @@ export default function ExamAdminClient({
   exam: legacyExam,
   submissions: legacySubmissions,
 }: ExamAdminClientProps) {
+  const router = useRouter();
   const exam = initialExam !== undefined ? initialExam : legacyExam;
   const submissions = initialSubmissions !== undefined ? initialSubmissions : (legacySubmissions || []);
 
@@ -150,7 +150,7 @@ export default function ExamAdminClient({
       if (!res.ok) throw new Error(data.error || "시험 개설 실패");
       alert(data.message || "새 시험 회차가 성공적으로 개설되었습니다!");
       setShowCreateModal(false);
-      window.location.href = `/exam/admin?examId=${data.examId}`;
+      router.push(`/exam/admin?examId=${data.examId}`);
     } catch (err: any) {
       alert(`오류: ${err.message}`);
     } finally {
@@ -448,7 +448,7 @@ export default function ExamAdminClient({
               <select
                 value={exam?.id || ""}
                 onChange={(e) => {
-                  window.location.href = `/exam/admin?examId=${e.target.value}`;
+                  router.push(`/exam/admin?examId=${e.target.value}`);
                 }}
                 className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-indigo-500"
               >

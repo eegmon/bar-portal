@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Scale, CheckCircle2, Clock, Calendar, Edit, Save,
-  Plus, Trash2, Lock, Award, ChevronDown, RefreshCw
+  Lock, Award, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 

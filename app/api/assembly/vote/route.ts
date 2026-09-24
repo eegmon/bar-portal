@@ -320,7 +320,17 @@ export async function POST(req: Request) {
         });
       }
     }
-    await db.batch(voteStatements, "write");
+    try {
+      await db.batch(voteStatements, "write");
+    } catch (error) {
+      if (String(error).toLowerCase().includes("unique")) {
+        return NextResponse.json(
+          { error: "이미 본 안건에 표결이 접수되었습니다." },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
 
     // 7. 디스코드 실시간 알림
     await sendDiscordWebhook("ASSEMBLY_VOTE", {
