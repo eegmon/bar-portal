@@ -4,6 +4,13 @@ import { isExamPhaseOpen } from "@/lib/exam-timing";
 
 export async function GET() {
   try {
+    // phase1_rules 컬럼 auto-migrate (없을 수 있으므로 조용히 처리)
+    try {
+      await db.execute("ALTER TABLE exams ADD COLUMN phase1_rules TEXT");
+    } catch {
+      // 이미 존재하면 무시
+    }
+
     const res = await db.execute({
       sql: "SELECT id, title, round_number, phase1_start, phase1_end, phase1_max_score, phase1_questions, errata_notices, status, phase1_operation_mode, phase1_pdf_url, phase1_rules FROM exams ORDER BY round_number DESC LIMIT 1",
     });

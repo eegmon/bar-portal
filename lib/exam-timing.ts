@@ -9,9 +9,12 @@ export function isExamPhaseOpen(
     phase === "PHASE1"
       ? exam.phase1_operation_mode || "MANUAL"
       : exam.phase2_operation_mode || "MANUAL",
-  );
+  ).trim().toUpperCase();
 
-  if (mode === "MANUAL") return exam.status === phase;
+  if (mode === "MANUAL") {
+    const status = String(exam.status || "").trim().toUpperCase();
+    return status === phase;
+  }
 
   const startAt = new Date(
     String(phase === "PHASE1" ? exam.phase1_start : exam.phase2_start),
