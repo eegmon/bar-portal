@@ -1763,8 +1763,7 @@ export default function ExamAdminClient({
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-[11px] text-slate-400 leading-relaxed">
                   <p>
                     <span className="text-blue-400 font-bold">1차 PDF:</span>{" "}
-                    저장만 되며 현재는 수험생에게 노출되지 않습니다. (향후
-                    배포용 예약)
+                    1차 CBT 입장 화면에서 수험생에게 문제지 다운로드 버튼으로 제공됩니다. Google Drive 등 공개 URL을 입력하세요.
                   </p>
                   <p>
                     <span className="text-purple-400 font-bold">2차 제1문 / 제2문 PDF:</span>{" "}
@@ -2050,7 +2049,7 @@ export default function ExamAdminClient({
                 </label>
                 <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-400 leading-relaxed space-y-1">
                   <p>
-                    <span className="text-blue-400 font-bold">1차:</span> 저장만 되며 현재 수험생에게 노출되지 않습니다.
+                    <span className="text-blue-400 font-bold">1차:</span> 1차 CBT 입장 화면에서 수험생 다운로드 버튼에 연결됩니다. Google Drive 등 공개 URL을 입력하세요.
                   </p>
                   <p>
                     <span className="text-purple-400 font-bold">2차 제1문 / 제2문:</span> 2차 서술형 제출실에서 수험생 다운로드 버튼에 직접 연결됩니다. Google Drive 등 공개 URL을 입력하세요.
