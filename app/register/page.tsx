@@ -11,7 +11,6 @@ import {
   Building,
   AlertCircle,
   CheckCircle2,
-  Phone,
   Award,
   ShieldCheck,
   Check,
@@ -30,7 +29,6 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState("");
   const [discordId, setDiscordId] = useState("");
-  const [phone, setPhone] = useState("");
   const [isLawyerApplicant, setIsLawyerApplicant] = useState(false);
   const [officeName, setOfficeName] = useState("");
   const [qualificationProof, setQualificationProof] = useState("");
@@ -142,7 +140,6 @@ export default function RegisterPage() {
           discordId: discordId.trim(),
           isLawyerApplicant,
           officeName: isLawyerApplicant ? officeName.trim() : "",
-          phone: phone.trim(),
           qualificationProof: isLawyerApplicant ? qualificationProof.trim() : "",
           selfIntroduction: isLawyerApplicant ? selfIntroduction.trim() : "",
         }),
@@ -354,39 +351,19 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* 성명 & 연락처 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1">
-              성명 (인게임 캐릭터명) <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="예: 홍길동"
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1">
-              연락처 / 전화번호 (선택)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                <Phone className="w-4 h-4" />
-              </div>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="예: 010-1234-5678"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-          </div>
+        {/* 성명 */}
+        <div>
+          <label className="block text-xs font-bold text-slate-300 mb-1">
+            성명 (인게임 캐릭터명) <span className="text-rose-400">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="예: 홍길동"
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
+          />
         </div>
 
         {/* 디스코드 ID */}
