@@ -516,8 +516,7 @@ export async function syncUserFromDiscord(userId: string, customDiscordId?: stri
             SET positions = ?, 
                 is_trainee = ?, 
                 role = ?,
-                discord_id = COALESCE(NULLIF(discord_id, ''), ?),
-                updated_at = CURRENT_TIMESTAMP
+                discord_id = COALESCE(NULLIF(discord_id, ''), ?)
             WHERE id = ?`,
       args: [
         JSON.stringify(newPositions),
