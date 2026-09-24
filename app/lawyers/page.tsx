@@ -40,9 +40,10 @@ export default async function LawyersSearchPage({
           <Scale className="w-4 h-4" />
           변호사법 제6조 · 도스변호사협회 공인 변호사 명부
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">공인 변호사·법무법인 검색</h1>
+        <h1 className="text-3xl font-extrabold text-white tracking-tight">공인 변호사 명부 검색</h1>
         <p className="text-slate-400 text-sm mt-1">
-          도스온라인에 정식 등록된 개업 변호사, 견습변호사 및 공증인가 법무법인의 정보를 투명하게 열람합니다.
+          도스온라인에 정식 등록된 개업 변호사 및 견습변호사의 정보를 열람합니다.
+          법무법인 검색은 <a href="/firms" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">법무법인 페이지</a>에서 확인하세요.
         </p>
       </div>
 
