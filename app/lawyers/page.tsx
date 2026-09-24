@@ -17,9 +17,9 @@ export default async function LawyersSearchPage({
       const res = await db.execute({
         sql: `SELECT * FROM users 
               WHERE role IN ('LAWYER', 'TRAINEE') 
-                AND (name LIKE ? OR office_name LIKE ? OR specialties LIKE ?)
+                AND (name LIKE ? OR office_name LIKE ? OR specialties LIKE ? OR contact LIKE ?)
               ORDER BY created_at DESC`,
-        args: [`%${query}%`, `%${query}%`, `%${query}%`],
+        args: [`%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`],
       });
       lawyers = res.rows;
     } else {
@@ -127,8 +127,17 @@ export default async function LawyersSearchPage({
                   <MapPin className="w-3.5 h-3.5 text-slate-500" />
                   {lawyer.office_address || "도스시"}
                 </span>
-                <span className="text-amber-400/80 font-medium">상담 의뢰 가능</span>
+                <span className={`font-semibold ${lawyer.is_available ? "text-emerald-400" : "text-slate-500"}`}>
+                  {lawyer.is_available ? "✅ 상담 의뢰 가능" : "🔒 상담 중단"}
+                </span>
               </div>
+
+              {lawyer.contact && (
+                <div className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-[11px] text-slate-300 flex items-center gap-1.5">
+                  <span className="text-slate-500">📞</span>
+                  <span className="font-mono">{lawyer.contact}</span>
+                </div>
+              )}
             </div>
           );
         })}

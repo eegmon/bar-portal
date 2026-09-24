@@ -22,6 +22,8 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
   const [bio, setBio] = useState(lawyerProfile?.bio || "");
   const [discordId, setDiscordId] = useState(lawyerProfile?.discord_id || "");
   const [phone, setPhone] = useState(lawyerProfile?.phone || "");
+  const [contact, setContact] = useState(lawyerProfile?.contact || "");
+  const [isAvailable, setIsAvailable] = useState(Boolean(lawyerProfile?.is_available));
   const [specialties, setSpecialties] = useState<string[]>(
     (() => { try { return JSON.parse(lawyerProfile?.specialties || "[]"); } catch { return []; } })()
   );
@@ -64,7 +66,7 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
       const res = await fetch("/api/portal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "UPDATE_PROFILE", officeName, officeAddress, bio, specialties, discordId, phone }),
+        body: JSON.stringify({ action: "UPDATE_PROFILE", officeName, officeAddress, bio, specialties, discordId, phone, contact, isAvailable }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -306,6 +308,42 @@ export default function PortalClient({ lawyerProfile }: PortalClientProps) {
                   placeholder="예: discord@username"
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
                 />
+              </div>
+            </div>
+
+            {/* 공개 연락처 + 상담 가능 여부 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-slate-400 mb-1 font-semibold text-xs">
+                  공개 연락처 <span className="text-slate-500 font-normal">(변호사 검색에 노출)</span>
+                </label>
+                <input
+                  type="text"
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                  placeholder="예: discord: username / 카카오: ID"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 mb-1 font-semibold text-xs">
+                  상담 의뢰 가능 여부 <span className="text-slate-500 font-normal">(변호사 검색에 노출)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsAvailable((v) => !v)}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border text-xs font-bold transition-all ${
+                    isAvailable
+                      ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-300"
+                      : "bg-slate-950 border-slate-700 text-slate-400"
+                  }`}
+                >
+                  <span>{isAvailable ? "✅ 상담 의뢰 수락 중" : "🔒 상담 의뢰 일시 중단"}</span>
+                  <span className={`w-8 h-4 rounded-full transition-colors relative ${isAvailable ? "bg-emerald-500" : "bg-slate-700"}`}>
+                    <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${isAvailable ? "left-4" : "left-0.5"}`} />
+                  </span>
+                </button>
               </div>
             </div>
 
