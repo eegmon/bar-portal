@@ -38,6 +38,7 @@ export default function CBT1Page() {
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [phase1PdfUrl, setPhase1PdfUrl] = useState("");
   const [phase1Rules, setPhase1Rules] = useState("");
+  const [questionsError, setQuestionsError] = useState("");
 
   // 최신 문항 및 정오표 비동기 조회
   useEffect(() => {
@@ -52,10 +53,13 @@ export default function CBT1Page() {
           if (data.errataNotices) setErrataNotices(data.errataNotices);
           if (data.phase1PdfUrl) setPhase1PdfUrl(data.phase1PdfUrl);
           if (data.phase1Rules) setPhase1Rules(data.phase1Rules);
+        } else {
+          setQuestionsError(data.error || "문항을 불러올 수 없습니다.");
         }
       })
       .catch((err) => {
         console.error("문항 로드 실패:", err);
+        setQuestionsError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
       })
       .finally(() => {
         setIsLoadingQuestions(false);
@@ -210,7 +214,7 @@ export default function CBT1Page() {
 
             <button
               type="button"
-              disabled={!securityCode.trim() || isLoadingQuestions}
+              disabled={!securityCode.trim() || isLoadingQuestions || !!questionsError}
               onClick={() => setIsCodeSet(true)}
               className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
             >
@@ -219,10 +223,23 @@ export default function CBT1Page() {
                   <Loader2 className="w-4 h-4 animate-spin" /> 시험 문항
                   로딩중...
                 </>
+              ) : questionsError ? (
+                "시험 문항 로드 실패 (입장 불가)"
               ) : (
                 "CBT 시험장 입장하기 (120분 시작)"
               )}
             </button>
+
+            {questionsError && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold">현재 1차 CBT 시험 문항을 불러올 수 없습니다.</p>
+                  <p className="text-amber-200/80">{questionsError}</p>
+                  <p className="text-amber-200/60">시험 진행 상태가 아니거나, 아직 시작 전일 수 있습니다. 시험 일정을 확인하거나 관리자에게 문의해 주세요.</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
