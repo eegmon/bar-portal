@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Vote, ArrowLeft, LogIn, AlertCircle } from "lucide-react";
 import db from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { getVoteAccessUser } from "@/lib/vote-access";
 import VoteClient from "./VoteClient";
 
 export const dynamic = "force-dynamic";
@@ -10,10 +11,19 @@ export const dynamic = "force-dynamic";
 export default async function AssemblyVoteServerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ agendaId?: string; assemblyId?: string }>;
+  searchParams: Promise<{
+    agendaId?: string;
+    assemblyId?: string;
+    accessToken?: string;
+  }>;
 }) {
-  const user = await getSessionUser();
-  const { agendaId, assemblyId } = await searchParams;
+  const sessionUser = await getSessionUser();
+  const { agendaId, assemblyId, accessToken } = await searchParams;
+  const linkUser = !sessionUser
+    ? await getVoteAccessUser(accessToken, { assemblyId, agendaId })
+    : null;
+  const user = sessionUser || linkUser;
+  const hasInvalidAccessToken = Boolean(accessToken) && !linkUser && !sessionUser;
 
   // 1. 비로그인 처리
   if (!user) {
@@ -24,14 +34,19 @@ export default async function AssemblyVoteServerPage({
             <Vote className="w-7 h-7" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-xl font-bold text-white">
-              총회 전자투표 로그인 필요
-            </h1>
+            <h1 className="text-xl font-bold text-white">총회 전자투표 접근 제한</h1>
             <p className="text-xs text-slate-400 leading-relaxed">
               총회 전자투표는 도스변호사협회에 등록된{" "}
               <strong>정회원 변호사 계정</strong>으로 로그인하신 후 의결권을
-              행사하실 수 있습니다.
+              행사하거나, 개인별로 발급된 전자투표 링크를 통해 참여할 수
+              있습니다.
             </p>
+            {hasInvalidAccessToken && (
+              <p className="text-[11px] text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-1.5">
+                유효하지 않거나 만료된 개인 투표 링크입니다. 새 링크를
+                발급받아 다시 접속해 주세요.
+              </p>
+            )}
           </div>
           <div className="pt-2">
             <Link
@@ -125,6 +140,9 @@ export default async function AssemblyVoteServerPage({
         method="get"
         className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-wrap items-center gap-3"
       >
+        {accessToken ? (
+          <input type="hidden" name="accessToken" value={accessToken} />
+        ) : null}
         <label htmlFor="assemblyId" className="text-xs font-bold text-white">
           투표할 총회 선택
         </label>
@@ -157,6 +175,7 @@ export default async function AssemblyVoteServerPage({
           agendas={agendas}
           userVotedAgendas={userVotedAgendas}
           initialAgendaId={agendaId || agendas[0]?.id}
+          accessToken={accessToken}
         />
       ) : (
         <div className="p-10 bg-slate-900 border border-slate-800 rounded-xl text-center text-sm text-slate-500">

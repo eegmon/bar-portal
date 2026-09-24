@@ -137,7 +137,7 @@ const DEFAULT_RULES: Record<string, string> = {
 export default async function RulesPage() {
   const user = await getSessionUser();
 
-  let rules: Record<string, string> = { ...DEFAULT_RULES };
+  const rules: Record<string, string> = { ...DEFAULT_RULES };
 
   try {
     const res = await db.execute(
