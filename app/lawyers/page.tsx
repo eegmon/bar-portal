@@ -105,7 +105,7 @@ export default async function LawyersSearchPage({
               </div>
 
               <p className="text-xs text-slate-300 leading-relaxed line-clamp-2">
-                {lawyer.bio || "의뢰인의 기본적 인권 옹호와 신뢰를 최우선으로 하는 변호사입니다."}
+                {lawyer.self_introduction || "의뢰인의 기본적 인권 옹호와 신뢰를 최우선으로 하는 변호사입니다."}
               </p>
 
               {/* 전문분야 태그 */}

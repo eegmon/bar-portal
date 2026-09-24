@@ -37,7 +37,7 @@ export default async function AdminDashboardPage() {
     const uRes = await db.execute(`
       SELECT 
         u.id, u.login_id, u.discord_id, u.name, u.role, u.status, u.is_trainee, 
-        u.phone, u.office_name, u.office_address, u.bio, u.specialties,
+        u.phone, u.office_name, u.office_address, u.bio, u.qualification_proof, u.self_introduction, u.specialties,
         u.positions, u.bar_exam_round, u.last_renewed_at, u.created_at
       FROM users u
       ORDER BY u.created_at DESC

@@ -1617,12 +1617,20 @@ export default function AdminClient({
                           <div className="text-[11px] text-slate-500">
                             {u.login_id}
                           </div>
-                          {u.bio && (
+                          {(u.qualification_proof || u.bio) && (
                             <div
                               className="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 mt-1 max-w-[220px] truncate"
-                              title={`자격 취득 근거/증빙: ${u.bio}`}
+                              title={`자격 취득 근거/증빙: ${u.qualification_proof || u.bio}`}
                             >
-                              📜 {u.bio}
+                              📜 {u.qualification_proof || u.bio}
+                            </div>
+                          )}
+                          {u.self_introduction && (
+                            <div
+                              className="text-[10px] text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 mt-1 max-w-[220px] truncate"
+                              title={`명부 공개 자기소개: ${u.self_introduction}`}
+                            >
+                              🗣️ {u.self_introduction}
                             </div>
                           )}
                         </td>

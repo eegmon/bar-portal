@@ -25,6 +25,8 @@ async function init() {
       office_name TEXT DEFAULT '',
       office_address TEXT DEFAULT '',
       bio TEXT DEFAULT '',
+      qualification_proof TEXT DEFAULT '', -- 변호사 자격 심사용 증빙자료
+      self_introduction TEXT DEFAULT '', -- 변호사 명부 공개 자기소개
       specialties TEXT DEFAULT '[]', -- 전문분야 JSON
       positions TEXT DEFAULT '[]', -- 직책 JSON (PRESIDENT, ASSEMBLY_SPEAKER 등)
       discord_synced_at TEXT, -- Discord 역할 동기화 시각

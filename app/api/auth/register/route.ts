@@ -16,6 +16,7 @@ export async function POST(req: Request) {
       officeName,
       phone,
       qualificationProof,
+      selfIntroduction,
       barExamRound,
     } = body;
 
@@ -81,9 +82,9 @@ export async function POST(req: Request) {
     await db.execute({
       sql: `INSERT INTO users (
               id, login_id, password, name, discord_id, role, status, 
-              office_name, positions, phone, bio, bar_exam_round, 
+              office_name, positions, phone, bio, qualification_proof, self_introduction, bar_exam_round,
               last_renewed_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, datetime('now'), datetime('now'))`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
       args: [
         userId,
         loginId,
@@ -95,6 +96,8 @@ export async function POST(req: Request) {
         officeName ? officeName.trim() : "",
         phone ? phone.trim() : "",
         proofText,
+        proofText,
+        (selfIntroduction || "").trim(),
         barExamRound ? Number(barExamRound) || null : null,
       ],
     });

@@ -34,6 +34,7 @@ export default function RegisterPage() {
   const [isLawyerApplicant, setIsLawyerApplicant] = useState(false);
   const [officeName, setOfficeName] = useState("");
   const [qualificationProof, setQualificationProof] = useState("");
+  const [selfIntroduction, setSelfIntroduction] = useState("");
   const [agreedTerms, setAgreedTerms] = useState(false);
 
   // 아이디 중복 확인 상태
@@ -143,6 +144,7 @@ export default function RegisterPage() {
           officeName: isLawyerApplicant ? officeName.trim() : "",
           phone: phone.trim(),
           qualificationProof: isLawyerApplicant ? qualificationProof.trim() : "",
+          selfIntroduction: isLawyerApplicant ? selfIntroduction.trim() : "",
         }),
       });
 
@@ -450,6 +452,22 @@ export default function RegisterPage() {
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
                   * 사무국 승인 심사 시 자격 검증 자료로 활용됩니다.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                  변호사 명부 공개 자기소개 (선택)
+                </label>
+                <textarea
+                  rows={3}
+                  value={selfIntroduction}
+                  onChange={(e) => setSelfIntroduction(e.target.value)}
+                  placeholder="명부에 공개할 경력, 업무 분야, 상담 철학 등을 소개해 주세요."
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 resize-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  이 내용은 승인된 후 변호사 명부에 공개됩니다. 증빙자료와 별도로 관리됩니다.
                 </p>
               </div>
             </div>
