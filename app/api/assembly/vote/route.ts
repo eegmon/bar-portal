@@ -188,6 +188,19 @@ export async function POST(req: Request) {
     }
 
     const agenda = agRes.rows[0];
+    const attendanceRes = await db.execute({
+      sql: `SELECT id FROM assembly_attendances
+            WHERE assembly_id = ? AND user_id = ? AND is_proxy = 0
+              AND approval_status = 'APPROVED' AND attended = 1
+            LIMIT 1`,
+      args: [agenda.assembly_id, user.id],
+    });
+    if (attendanceRes.rows.length === 0) {
+      return NextResponse.json(
+        { error: "해당 총회에서 출석 확인된 회원만 투표할 수 있습니다." },
+        { status: 403 },
+      );
+    }
     if (agenda.assembly_status !== "IN_SESSION" || agenda.status !== "VOTING") {
       return NextResponse.json(
         {
