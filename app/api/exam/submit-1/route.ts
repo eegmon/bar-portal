@@ -46,15 +46,26 @@ export async function POST(req: Request) {
     });
 
     const phase1MaxScore = Number(exam.phase1_max_score || 100);
-    const phase1PassScore = Math.ceil(phase1MaxScore * 0.6);
+    const defaultQuestionScore = Math.max(
+      1,
+      Math.round(phase1MaxScore / Math.max(questions.length, 1)),
+    );
+    const questionScores = questions.map((question: any) =>
+      Number(question.score || defaultQuestionScore),
+    );
+    const totalQuestionScore = questionScores.reduce(
+      (sum: number, questionScore: number) => sum + questionScore,
+      0,
+    );
+    const phase1PassScore = Math.ceil(totalQuestionScore * 0.6);
 
-    // 자동 채점: 정답률을 시험별 1차 만점에 비례해 환산
+    // 자동 채점: 정답 문항의 개별 배점 합산
     let score = 0;
     const gradingDetails = questions.map((q: any, idx: number) => {
       const userChoice = answers[idx + 1];
       const validAnswers = q.altAnswers || [q.answer];
       const isCorrect = validAnswers.includes(userChoice);
-      if (isCorrect) score += 1;
+      if (isCorrect) score += questionScores[idx] || defaultQuestionScore;
       return {
         num: q.num,
         userChoice,
@@ -63,9 +74,6 @@ export async function POST(req: Request) {
     });
 
     // 1차 합격 기준 (예: 60점 이상)
-    score = Math.round(
-      (score / Math.max(questions.length, 1)) * phase1MaxScore,
-    );
     const passed = score >= phase1PassScore ? 1 : 0;
 
     if (existingSub.rows.length === 0) {
@@ -95,7 +103,7 @@ export async function POST(req: Request) {
         embeds: [
           {
             title: `📝 제1차 변호사시험 답안 제출 (#${code})`,
-            description: `익명 수험번호 #${code} 답안이 접수되었습니다.\n• 득점: **${score}점 / ${phase1MaxScore}점**\n• 1차 통과 여부: **${passed ? "🟢 통과 (합격)" : "🔴 과락 (불합격)"}**`,
+            description: `익명 수험번호 #${code} 답안이 접수되었습니다.\n• 득점: **${score}점 / ${totalQuestionScore}점**\n• 1차 통과 여부: **${passed ? "🟢 통과 (합격)" : "🔴 과락 (불합격)"}**`,
             color: passed ? 0x10b981 : 0xef4444,
             timestamp: new Date().toISOString(),
           },

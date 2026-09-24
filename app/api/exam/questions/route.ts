@@ -24,6 +24,15 @@ export async function GET() {
     }
     const rawQuestions = JSON.parse((exam.phase1_questions as string) || "[]");
     const errataNotices = JSON.parse((exam.errata_notices as string) || "[]");
+    const defaultQuestionScore = Math.max(
+      1,
+      Math.round(Number(exam.phase1_max_score || 100) / Math.max(rawQuestions.length, 1)),
+    );
+    const phase1MaxScore = rawQuestions.reduce(
+      (sum: number, question: any) =>
+        sum + Number(question.score || defaultQuestionScore),
+      0,
+    );
 
     // 수험생용 문항 목록 (정답 정보 answer, altAnswers는 클라이언트에 노출하지 않고 전달)
     const questions = rawQuestions.map((q: any) => ({
@@ -38,7 +47,7 @@ export async function GET() {
       examId: exam.id,
       title: exam.title,
       roundNumber: exam.round_number,
-      phase1MaxScore: Number(exam.phase1_max_score || 100),
+      phase1MaxScore,
       questions,
       errataNotices,
     });

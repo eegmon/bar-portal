@@ -27,6 +27,7 @@ interface QuestionData {
   title: string;
   choices: string[];
   answer: number;
+  score: number;
   altAnswers?: number[];
   explanation?: string;
 }
@@ -155,8 +156,15 @@ export default function ExamAdminClient({
   const [isIssuingCodes, setIsIssuingCodes] = useState(false);
 
   // 2. 1차 CBT 문항 편집기 상태
+  const defaultQuestionScore = Math.max(
+    1,
+    Math.round(Number(exam?.phase1_max_score || 100) / 10),
+  );
   const initialQuestions: QuestionData[] = exam
-    ? JSON.parse(exam.phase1_questions || "[]")
+    ? JSON.parse(exam.phase1_questions || "[]").map((question: QuestionData) => ({
+        ...question,
+        score: Number(question.score || defaultQuestionScore),
+      }))
     : [];
   const [questions, setQuestions] = useState<QuestionData[]>(
     initialQuestions.length > 0
@@ -167,6 +175,7 @@ export default function ExamAdminClient({
           title: "",
           choices: ["", "", "", "", ""],
           answer: 1,
+          score: defaultQuestionScore,
           altAnswers: [],
           explanation: "",
         })),
@@ -420,6 +429,8 @@ export default function ExamAdminClient({
         question.choices.some((choice) => !choice.trim()) ||
         question.answer < 1 ||
         question.answer > question.choices.length ||
+        !Number.isInteger(question.score) ||
+        question.score <= 0 ||
         (question.altAnswers || []).some(
           (answer) => answer < 1 || answer > question.choices.length,
         ),
@@ -911,6 +922,19 @@ export default function ExamAdminClient({
                         <span className="text-[11px] text-slate-500">
                           (선지 {q.choices.length}개)
                         </span>
+                        <label className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold">
+                          배점
+                          <input
+                            type="number"
+                            min={1}
+                            value={q.score}
+                            onChange={(e) =>
+                              handleQuestionChange(qIdx, "score", Number(e.target.value))
+                            }
+                            className="w-16 bg-slate-900 border border-emerald-500/40 rounded px-2 py-1 text-xs text-white font-mono"
+                          />
+                          점
+                        </label>
                       </div>
 
                       <div className="flex items-center gap-4 text-xs">

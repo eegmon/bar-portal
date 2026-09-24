@@ -317,9 +317,24 @@ export async function POST(req: Request) {
         );
       }
 
+      const normalizedQuestions = questions.map((question) => ({
+        ...question,
+        score: Number(question.score),
+      }));
+      if (
+        normalizedQuestions.some(
+          (question) => !Number.isInteger(question.score) || question.score <= 0,
+        )
+      ) {
+        return NextResponse.json(
+          { error: "각 CBT 문항의 배점은 1점 이상의 정수여야 합니다." },
+          { status: 400 },
+        );
+      }
+
       await db.execute({
         sql: "UPDATE exams SET phase1_questions = ? WHERE id = ?",
-        args: [JSON.stringify(questions), examId],
+        args: [JSON.stringify(normalizedQuestions), examId],
       });
 
       // 디스코드 시험 관리자 채널 알림
@@ -327,7 +342,7 @@ export async function POST(req: Request) {
         embeds: [
           {
             title: "📝 [변호사시험] 제1차 CBT 문항 및 정답표 갱신",
-            description: `변호사시험관리위원회(**${user.name}** 위원)에서 제1차 필기 문항(총 ${questions.length}문)의 내용 및 정답표를 수정 등록하였습니다.`,
+            description: `변호사시험관리위원회(**${user.name}** 위원)에서 제1차 필기 문항(총 ${normalizedQuestions.length}문)의 내용, 배점 및 정답표를 수정 등록하였습니다.`,
             color: 0x3b82f6,
             timestamp: new Date().toISOString(),
           },
