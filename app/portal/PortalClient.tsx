@@ -13,6 +13,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
+import LawyerAvatar from "@/app/lawyers/LawyerAvatar";
 
 interface PortalClientProps {
   lawyerProfile: any;
@@ -275,8 +276,8 @@ export default function PortalClient({
       {/* 상단 프로필 카드 */}
       <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl flex items-center justify-center text-slate-950 font-bold text-2xl shadow-md">
-            {lawyerProfile?.name?.[0] || "변"}
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-md shrink-0">
+            <LawyerAvatar name={lawyerProfile?.name || "변"} isActive={lawyerProfile?.status === "ACTIVE"} size={64} />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2 flex-wrap">
