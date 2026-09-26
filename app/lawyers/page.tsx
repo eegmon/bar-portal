@@ -46,6 +46,7 @@ export default async function LawyersSearchPage({
                 AND (name LIKE ? OR office_name LIKE ? OR specialties LIKE ? OR contact LIKE ?)
               ORDER BY
                 CASE status WHEN 'ACTIVE' THEN 0 WHEN 'SUSPENDED' THEN 1 ELSE 2 END,
+                CASE WHEN status = 'ACTIVE' AND is_available = 1 THEN 0 ELSE 1 END,
                 created_at DESC`,
         args: [`%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`],
       });
@@ -57,6 +58,7 @@ export default async function LawyersSearchPage({
                 ${statusCondition}
               ORDER BY
                 CASE status WHEN 'ACTIVE' THEN 0 WHEN 'SUSPENDED' THEN 1 ELSE 2 END,
+                CASE WHEN status = 'ACTIVE' AND is_available = 1 THEN 0 ELSE 1 END,
                 created_at DESC`,
         args: [],
       });
