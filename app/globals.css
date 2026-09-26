@@ -32,8 +32,15 @@ html.light body {
   color: #0f172a !important;
 }
 
-/* 기본 레이아웃 배경 */
+/* ── 배경색 ──────────────────────────────────────────────────────────────── */
+
+/* 최하위 레이아웃 배경 (slate-950 계열 전체) */
 html.light .bg-slate-950,
+html.light .bg-slate-950\/5,
+html.light .bg-slate-950\/10,
+html.light .bg-slate-950\/15,
+html.light .bg-slate-950\/20,
+html.light .bg-slate-950\/30,
 html.light .bg-slate-950\/40,
 html.light .bg-slate-950\/50,
 html.light .bg-slate-950\/60,
@@ -42,10 +49,10 @@ html.light .bg-slate-950\/80,
 html.light .bg-slate-950\/90,
 html.light .bg-slate-950\/95,
 html.light .bg-slate-950\/98 {
-  background-color: #f8fafc !important;
+  background-color: #f1f5f9 !important;
 }
 
-/* 카드 및 섹션 배경 */
+/* 카드 및 섹션 배경 (slate-900 계열 전체) */
 html.light .bg-slate-900,
 html.light .bg-slate-900\/30,
 html.light .bg-slate-900\/40,
@@ -60,7 +67,7 @@ html.light .bg-slate-900\/98 {
   box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
 }
 
-/* 보조 블록 / 버튼 / 배지 배경 */
+/* 보조 블록 / 버튼 / 배지 배경 (slate-800 계열) */
 html.light .bg-slate-800,
 html.light .bg-slate-800\/30,
 html.light .bg-slate-800\/40,
@@ -72,11 +79,30 @@ html.light .bg-slate-800\/90 {
   background-color: #f1f5f9 !important;
 }
 
-/* 테두리 및 구분선 */
+/* 선택 불가·비활성 요소 (slate-700 계열) */
+html.light .bg-slate-700,
+html.light .bg-slate-700\/40,
+html.light .bg-slate-700\/60,
+html.light .bg-slate-700\/80 {
+  background-color: #e2e8f0 !important;
+}
+
+/* 깊은 비활성 요소 (slate-600 계열) */
+html.light .bg-slate-600,
+html.light .bg-slate-600\/40,
+html.light .bg-slate-600\/60 {
+  background-color: #cbd5e1 !important;
+}
+
+/* ── 테두리 & 구분선 ─────────────────────────────────────────────────────── */
+
 html.light .border-slate-800,
 html.light .border-slate-800\/40,
 html.light .border-slate-800\/60,
-html.light .border-slate-800\/80,
+html.light .border-slate-800\/80 {
+  border-color: #e2e8f0 !important;
+}
+
 html.light .border-slate-700,
 html.light .border-slate-700\/40,
 html.light .border-slate-700\/50,
@@ -84,13 +110,21 @@ html.light .border-slate-700\/80 {
   border-color: #e2e8f0 !important;
 }
 
+html.light .border-slate-600,
+html.light .border-slate-600\/40,
+html.light .border-slate-600\/60 {
+  border-color: #cbd5e1 !important;
+}
+
 html.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
 html.light .divide-slate-800\/60 > :not([hidden]) ~ :not([hidden]),
-html.light .divide-slate-800\/80 > :not([hidden]) ~ :not([hidden]) {
+html.light .divide-slate-800\/80 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
   border-color: #e2e8f0 !important;
 }
 
-/* 텍스트 색상 및 대비 */
+/* ── 텍스트 색상 ─────────────────────────────────────────────────────────── */
+
 html.light .text-white,
 html.light .text-slate-100 {
   color: #0f172a !important;
@@ -112,7 +146,62 @@ html.light .text-slate-500 {
   color: #64748b !important;
 }
 
-/* 헤더 & 푸터 */
+/* slate-600/700은 라이트모드에서 그대로 읽히므로 약간만 조정 */
+html.light .text-slate-600 {
+  color: #64748b !important;
+}
+
+html.light .text-slate-700 {
+  color: #475569 !important;
+}
+
+/* ── 그라디언트 ──────────────────────────────────────────────────────────── */
+/*
+ * Tailwind의 from-*/via-*/to-* 는 --tw-gradient-from/stops 변수를 통해 동작.
+ * slate 기반 그라디언트만 선택적으로 무력화하고, amber/emerald 등은 유지합니다.
+ *
+ * 접근: from-slate-900, from-slate-950 을 오버라이드해서
+ * --tw-gradient-from 변수를 밝은 색으로 교체합니다.
+ */
+
+/* slate 그라디언트 from/via/to 변수 오버라이드 */
+html.light .from-slate-950 {
+  --tw-gradient-from: #f1f5f9 !important;
+  --tw-gradient-to: rgb(241 245 249 / 0) !important;
+}
+html.light .from-slate-900 {
+  --tw-gradient-from: #ffffff !important;
+  --tw-gradient-to: rgb(255 255 255 / 0) !important;
+}
+html.light .from-slate-800 {
+  --tw-gradient-from: #f1f5f9 !important;
+  --tw-gradient-to: rgb(241 245 249 / 0) !important;
+}
+html.light .via-slate-950,
+html.light .via-slate-950\/90 {
+  --tw-gradient-via: #f1f5f9 !important;
+}
+html.light .via-slate-900,
+html.light .via-slate-900\/90 {
+  --tw-gradient-via: #ffffff !important;
+}
+html.light .to-slate-950 {
+  --tw-gradient-to: #f1f5f9 !important;
+}
+html.light .to-slate-900 {
+  --tw-gradient-to: #ffffff !important;
+}
+
+/* bg-clip-text 그라디언트 텍스트 (히어로 타이틀) — 라이트모드에서도 유지 */
+html.light .bg-clip-text.text-transparent {
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  /* from-amber-200 via-amber-400 to-amber-600 유지 */
+}
+
+/* ── 헤더 & 푸터 ─────────────────────────────────────────────────────────── */
+
 html.light header {
   background-color: #ffffff !important;
   border-bottom-color: #e2e8f0 !important;
@@ -124,7 +213,15 @@ html.light footer {
   border-top-color: #e2e8f0 !important;
 }
 
-/* 테이블 스타일 */
+/* Navbar 모바일 드롭다운 메뉴 */
+html.light header > div + div,
+html.light .lg\:hidden.border-t {
+  background-color: #ffffff !important;
+  border-top-color: #e2e8f0 !important;
+}
+
+/* ── 테이블 ──────────────────────────────────────────────────────────────── */
+
 html.light table thead tr {
   background-color: #f1f5f9 !important;
 }
@@ -138,7 +235,8 @@ html.light table tbody tr:hover {
   background-color: #f8fafc !important;
 }
 
-/* 폼 입력 요소 */
+/* ── 폼 입력 요소 ────────────────────────────────────────────────────────── */
+
 html.light input:not([type="checkbox"]):not([type="radio"]),
 html.light textarea,
 html.light select {
@@ -160,24 +258,69 @@ html.light textarea::placeholder {
   color: #94a3b8 !important;
 }
 
-/* 호버 효과 */
-html.light .hover\:bg-slate-800:hover,
-html.light .hover\:bg-slate-700:hover {
-  background-color: #e2e8f0 !important;
+/* disabled 입력 요소 */
+html.light input:disabled,
+html.light textarea:disabled {
+  background-color: #f1f5f9 !important;
+  color: #94a3b8 !important;
+}
+
+/* ── focus ring-offset ───────────────────────────────────────────────────── */
+/*
+ * focus:ring-offset-slate-900/950 가 라이트모드에서 어두운 offset 색상으로 남는 문제 해결
+ * --tw-ring-offset-color 변수를 직접 오버라이드합니다.
+ */
+html.light .ring-offset-slate-900,
+html.light .focus\:ring-offset-slate-900:focus {
+  --tw-ring-offset-color: #ffffff !important;
+}
+
+html.light .ring-offset-slate-950,
+html.light .focus\:ring-offset-slate-950:focus {
+  --tw-ring-offset-color: #f1f5f9 !important;
+}
+
+/* ── 호버 효과 ───────────────────────────────────────────────────────────── */
+
+html.light .hover\:bg-slate-950:hover {
+  background-color: #f1f5f9 !important;
 }
 
 html.light .hover\:bg-slate-900:hover {
   background-color: #f8fafc !important;
 }
 
-/* 모달 백드롭 오버레이 (바깥 배경은 자연스러운 어두운 반투명 유지) */
+html.light .hover\:bg-slate-800:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .hover\:bg-slate-700:hover {
+  background-color: #cbd5e1 !important;
+}
+
+html.light .hover\:bg-slate-600:hover {
+  background-color: #94a3b8 !important;
+}
+
+html.light .hover\:border-slate-600:hover,
+html.light .hover\:border-slate-700:hover {
+  border-color: #cbd5e1 !important;
+}
+
+html.light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+/* ── 모달 백드롭 오버레이 ────────────────────────────────────────────────── */
+
 html.light .bg-black\/70,
 html.light .bg-black\/75,
 html.light .bg-black\/80 {
   background-color: rgba(15, 23, 42, 0.65) !important;
 }
 
-/* 스크롤바 커스텀 */
+/* ── 스크롤바 ────────────────────────────────────────────────────────────── */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -191,4 +334,17 @@ html.light .bg-black\/80 {
 }
 html.light ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
+}
+
+/* ── 기타 유틸리티 ───────────────────────────────────────────────────────── */
+
+/* backdrop-blur 요소가 배경을 흐리게 할 때 색조가 어둡지 않도록 */
+html.light .backdrop-blur-md,
+html.light .backdrop-blur-sm {
+  --tw-backdrop-brightness: brightness(1.05);
+}
+
+/* 밝은 테두리 아웃라인 */
+html.light .outline-slate-800 {
+  outline-color: #e2e8f0 !important;
 }
