@@ -40,7 +40,9 @@ interface FirmOption {
 }
 
 export default function ProxyPage() {
-  const [activeTab, setActiveTab] = useState<"reregister" | "proxy">("reregister");
+  const [activeTab, setActiveTab] = useState<"reregister" | "proxy">(
+    "reregister",
+  );
 
   // 총회 및 로그인 정보 상태
   const [assemblies, setAssemblies] = useState<AssemblyOption[]>([]);
@@ -55,7 +57,9 @@ export default function ProxyPage() {
   const [reSignature, setReSignature] = useState("");
 
   // 의결권 위임장 폼 상태
-  const [delegationTarget, setDelegationTarget] = useState<"PERSONAL" | "FIRM">("PERSONAL");
+  const [delegationTarget, setDelegationTarget] = useState<"PERSONAL" | "FIRM">(
+    "PERSONAL",
+  );
   const [selectedFirmId, setSelectedFirmId] = useState("");
   const [proxyLawyerName, setProxyLawyerName] = useState("");
   const [proxyLawyerId, setProxyLawyerId] = useState("");
@@ -165,11 +169,15 @@ export default function ProxyPage() {
         return;
       }
       if ((currentFirm.voting_power || 0) < 1) {
-        alert(`해당 법인의 등록 구성원 변호사는 ${currentFirm.partner_count || 0}명으로, 의결권이 0표이므로 위임 신고서를 제출할 수 없습니다. (2인당 1표 필요)`);
+        alert(
+          `해당 법인의 등록 구성원 변호사는 ${currentFirm.partner_count || 0}명으로, 의결권이 0표이므로 위임 신고서를 제출할 수 없습니다. (2인당 1표 필요)`,
+        );
         return;
       }
       if (!proxyEvidenceUrl.trim()) {
-        alert("회칙 제3항 및 제5항에 따라 구성원 회의(만장일치 결의) 서면 증빙 URL을 필수로 입력해 주세요.");
+        alert(
+          "회칙 제3항 및 제5항에 따라 구성원 회의(만장일치 결의) 서면 증빙 URL을 필수로 입력해 주세요.",
+        );
         return;
       }
     }
@@ -258,23 +266,52 @@ export default function ProxyPage() {
           <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-2 text-left">
             {isFirmProxy ? (
               <>
-                <p>• <strong>위임 법인:</strong> {submittedData.firmName}</p>
-                <p>• <strong>신청인(대표/파트너):</strong> {submittedData.name} 변호사</p>
-                <p>• <strong>수임 대리인:</strong> {submittedData.proxyName}</p>
-                <p>• <strong>위임 의결권 수:</strong> <strong className="text-amber-400">{submittedData.votingPower}표</strong> (구성원 2인당 1표)</p>
-                <p>• <strong>처리 상태:</strong> ⏳ 관리자 승인 대기 (회칙 제14조제3항~제5항)</p>
+                <p>
+                  • <strong>위임 법인:</strong> {submittedData.firmName}
+                </p>
+                <p>
+                  • <strong>신청인(대표/파트너):</strong> {submittedData.name}{" "}
+                  변호사
+                </p>
+                <p>
+                  • <strong>수임 대리인:</strong> {submittedData.proxyName}
+                </p>
+                <p>
+                  • <strong>위임 의결권 수:</strong>{" "}
+                  <strong className="text-amber-400">
+                    {submittedData.votingPower}표
+                  </strong>{" "}
+                  (구성원 2인당 1표)
+                </p>
+                <p>
+                  • <strong>처리 상태:</strong> ⏳ 관리자 승인 대기 (회칙
+                  제14조제3항~제5항)
+                </p>
               </>
             ) : (
               <>
-                <p>• <strong>{isRereg ? "신청인" : "위임인"}:</strong> {submittedData.name} 변호사</p>
+                <p>
+                  • <strong>{isRereg ? "신청인" : "위임인"}:</strong>{" "}
+                  {submittedData.name} 변호사
+                </p>
                 {!isRereg && (
                   <>
-                    <p>• <strong>수임 대리인:</strong> {submittedData.proxyName}</p>
-                    <p>• <strong>위임 의결권:</strong> 1표 (개인 의결권)</p>
+                    <p>
+                      • <strong>수임 대리인:</strong> {submittedData.proxyName}
+                    </p>
+                    <p>
+                      • <strong>위임 의결권:</strong> 1표 (개인 의결권)
+                    </p>
                   </>
                 )}
-                <p>• <strong>자격 상태:</strong> ✅ 정상 유지 (ACTIVE · 1개월 갱신)</p>
-                <p>• <strong>처리 근거:</strong> 변호사법 제6조제4항 및 회칙 제14조</p>
+                <p>
+                  • <strong>자격 상태:</strong> ✅ 정상 유지 (ACTIVE · 1개월
+                  갱신)
+                </p>
+                <p>
+                  • <strong>처리 근거:</strong> 변호사법 제6조제4항 및 회칙
+                  제14조
+                </p>
               </>
             )}
           </div>
@@ -391,7 +428,7 @@ export default function ProxyPage() {
                 required
                 value={reLawyerName}
                 onChange={(e) => setReLawyerName(e.target.value)}
-                placeholder="예: 홍길동"
+                placeholder="예: eegmon"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -512,7 +549,8 @@ export default function ProxyPage() {
                     법인회원 의결권 위임
                   </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    구성원 회의 만장일치 결의에 따른 법인 의결권 위임 (2인당 1표)
+                    구성원 회의 만장일치 결의에 따른 법인 의결권 위임 (2인당
+                    1표)
                   </div>
                 </div>
               </label>
@@ -527,19 +565,25 @@ export default function ProxyPage() {
                   📜 <strong>회칙 제14조제3항~제5항:</strong>
                 </p>
                 <p>
-                  • 법인회원의 의결권은 <strong>구성원 회의(만장일치 결의)</strong>를 거쳐 의장에게 서면으로 통지하여야 하며, 개인회원에게 위임할 수 있습니다.
+                  • 법인회원의 의결권은{" "}
+                  <strong>구성원 회의(만장일치 결의)</strong>를 거쳐 의장에게
+                  서면으로 통지하여야 하며, 개인회원에게 위임할 수 있습니다.
                 </p>
                 <p>
-                  • 위임 시에는 <strong>위임을 증명할 서면(구성원 회의록 등)</strong>이 포함되어 있어야 합니다.
+                  • 위임 시에는{" "}
+                  <strong>위임을 증명할 서면(구성원 회의록 등)</strong>이
+                  포함되어 있어야 합니다.
                 </p>
                 <p>
-                  • 의결권 산정: 등록된 <strong>구성원 변호사(파트너) 2명당 1표</strong> (1명 0표).
+                  • 의결권 산정: 등록된{" "}
+                  <strong>구성원 변호사(파트너) 2명당 1표</strong> (1명 0표).
                 </p>
               </div>
 
               {myFirms.length === 0 ? (
                 <div className="p-3 bg-slate-950 rounded-lg border border-red-500/30 text-rose-300 text-xs">
-                  ⚠️ 로그인하신 계정에 등록된 승인 법무법인이 없거나 대표/구성원 권한이 없습니다. 법인 등록을 먼저 진행해 주세요.
+                  ⚠️ 로그인하신 계정에 등록된 승인 법무법인이 없거나 대표/구성원
+                  권한이 없습니다. 법인 등록을 먼저 진행해 주세요.
                 </div>
               ) : (
                 <div className="space-y-2 pt-1 border-t border-amber-500/20">
@@ -553,7 +597,8 @@ export default function ProxyPage() {
                   >
                     {myFirms.map((f) => (
                       <option key={f.id} value={f.id}>
-                        {f.name} ({f.type}) · 구성원 {f.partner_count}명 → {f.voting_power}표
+                        {f.name} ({f.type}) · 구성원 {f.partner_count}명 →{" "}
+                        {f.voting_power}표
                       </option>
                     ))}
                   </select>
@@ -561,7 +606,8 @@ export default function ProxyPage() {
                   {currentFirm && (
                     <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
                       <span className="text-slate-400">
-                        소속 {currentFirm.member_count}명 · 파트너 {currentFirm.partner_count}명
+                        소속 {currentFirm.member_count}명 · 파트너{" "}
+                        {currentFirm.partner_count}명
                       </span>
                       <span className="font-bold text-amber-400">
                         행사 가능 의결권: {currentFirm.voting_power}표
@@ -572,7 +618,8 @@ export default function ProxyPage() {
                   {currentFirm && (currentFirm.voting_power || 0) <= 0 && (
                     <div className="p-2.5 bg-red-950/40 border border-red-800/40 rounded-lg text-rose-300 text-xs flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 shrink-0" />
-                      구성원 변호사가 2인 미만이므로 현재 법인 의결권이 0표입니다. 구성원을 추가 등록해 주세요.
+                      구성원 변호사가 2인 미만이므로 현재 법인 의결권이
+                      0표입니다. 구성원을 추가 등록해 주세요.
                     </div>
                   )}
                 </div>
@@ -584,8 +631,9 @@ export default function ProxyPage() {
           {delegationTarget === "PERSONAL" && (
             <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-200 leading-relaxed">
               💡 <strong>회칙 제14조제4항:</strong> 총회에 출석할 수 없는 회원은
-              특정 회원 변호사에게 본인 의결권(1표)을 위임할 수 있습니다. 위임 시 수임
-              변호사는 전자투표 시 본인의 표와 위임받은 표를 합산하여 행사합니다.
+              특정 회원 변호사에게 본인 의결권(1표)을 위임할 수 있습니다. 위임
+              시 수임 변호사는 전자투표 시 본인의 표와 위임받은 표를 합산하여
+              행사합니다.
             </div>
           )}
 
@@ -611,14 +659,16 @@ export default function ProxyPage() {
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                {delegationTarget === "FIRM" ? "위임 신청인 (대표/구성원 변호사 성명) *" : "위임인 (본인 성명) *"}
+                {delegationTarget === "FIRM"
+                  ? "위임 신청인 (대표/구성원 변호사 성명) *"
+                  : "위임인 (본인 성명) *"}
               </label>
               <input
                 type="text"
                 required
                 value={proxyLawyerName}
                 onChange={(e) => setProxyLawyerName(e.target.value)}
-                placeholder="예: 홍길동"
+                placeholder="예: eegmon"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -640,7 +690,8 @@ export default function ProxyPage() {
               </select>
               {delegationTarget === "FIRM" && (
                 <p className="text-[11px] text-slate-500 mt-1">
-                  * 법인회원의 경우 대표변호사 본인이 수임하거나 소속/동료 변호사를 지정할 수 있습니다.
+                  * 법인회원의 경우 대표변호사 본인이 수임하거나 소속/동료
+                  변호사를 지정할 수 있습니다.
                 </p>
               )}
             </div>
@@ -654,7 +705,9 @@ export default function ProxyPage() {
                     : "증빙 문서 URL (선택)"}
                 </span>
                 {delegationTarget === "FIRM" && (
-                  <span className="text-[10px] text-amber-400 font-bold">회칙 제5항 필수</span>
+                  <span className="text-[10px] text-amber-400 font-bold">
+                    회칙 제5항 필수
+                  </span>
                 )}
               </label>
               <input
@@ -671,7 +724,9 @@ export default function ProxyPage() {
               />
               {delegationTarget === "FIRM" && (
                 <p className="text-[11px] text-slate-400 mt-1">
-                  회칙 제5항: 서면에는 위임을 증명할 자료(구성원 회의 결의서 등)가 포함되어 있어야 하며, 관리자(의장)가 승인한 후 의결권이 부여됩니다.
+                  회칙 제5항: 서면에는 위임을 증명할 자료(구성원 회의 결의서
+                  등)가 포함되어 있어야 하며, 관리자(의장)가 승인한 후 의결권이
+                  부여됩니다.
                 </p>
               )}
             </div>
@@ -707,7 +762,11 @@ export default function ProxyPage() {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSubmitting || (delegationTarget === "FIRM" && (currentFirm?.voting_power || 0) <= 0)}
+              disabled={
+                isSubmitting ||
+                (delegationTarget === "FIRM" &&
+                  (currentFirm?.voting_power || 0) <= 0)
+              }
               className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-xs rounded-xl shadow-lg transition-colors flex items-center justify-center gap-1.5"
             >
               <Send className="w-3.5 h-3.5" />

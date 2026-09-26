@@ -103,7 +103,9 @@ export default function AdminClient({
       const tabParam = new URLSearchParams(window.location.search).get("tab");
       if (
         tabParam &&
-        ["users", "firms", "assembly", "settings", "overview"].includes(tabParam)
+        ["users", "firms", "assembly", "settings", "overview"].includes(
+          tabParam,
+        )
       ) {
         return tabParam;
       }
@@ -217,12 +219,21 @@ export default function AdminClient({
 
   // 투표 링크 발급
   const [linkTargetUserId, setLinkTargetUserId] = useState("");
-  const [linkAssemblyId, setLinkAssemblyId] = useState(initialAssemblies[0]?.id || "");
+  const [linkAssemblyId, setLinkAssemblyId] = useState(
+    initialAssemblies[0]?.id || "",
+  );
   const [linkAgendaId, setLinkAgendaId] = useState("");
   const [linkExpiryDays, setLinkExpiryDays] = useState(30);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [generatedLinks, setGeneratedLinks] = useState<
-    { userId: string; userName: string; link: string; agendaId?: string; expiresInDays: number; createdAt: string }[]
+    {
+      userId: string;
+      userName: string;
+      link: string;
+      agendaId?: string;
+      expiresInDays: number;
+      createdAt: string;
+    }[]
   >([]);
   const [copiedLinkIdx, setCopiedLinkIdx] = useState<number | null>(null);
 
@@ -406,7 +417,8 @@ export default function AdminClient({
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     setCreateForm((prev) => ({
       ...prev,
-      loginId: prev.role === "LAWYER" ? `lawyer_${randomNum}` : `user_${randomNum}`,
+      loginId:
+        prev.role === "LAWYER" ? `lawyer_${randomNum}` : `user_${randomNum}`,
     }));
   };
 
@@ -423,7 +435,11 @@ export default function AdminClient({
   // 회원 직권 생성 처리
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.name.trim() || !createForm.loginId.trim() || !createForm.password.trim()) {
+    if (
+      !createForm.name.trim() ||
+      !createForm.loginId.trim() ||
+      !createForm.password.trim()
+    ) {
       alert("성명, 로그인 아이디, 초기 비밀번호는 필수 입력 항목입니다.");
       return;
     }
@@ -445,13 +461,17 @@ export default function AdminClient({
           positions: createForm.positions,
           phone: createForm.phone.trim(),
           bio: createForm.bio.trim(),
-          barExamRound: createForm.barExamRound ? Number(createForm.barExamRound) : null,
+          barExamRound: createForm.barExamRound
+            ? Number(createForm.barExamRound)
+            : null,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "회원 생성 실패");
 
-      alert(`✅ [회원 직권 생성 완료]\n\n성명: ${createForm.name}\n아이디: ${createForm.loginId}\n초기 비밀번호: ${createForm.password}\n역할: ${createForm.role}\n상태: ${createForm.status}\n\n신규 회원에게 해당 접속 정보를 안내해 주세요.`);
+      alert(
+        `✅ [회원 직권 생성 완료]\n\n성명: ${createForm.name}\n아이디: ${createForm.loginId}\n초기 비밀번호: ${createForm.password}\n역할: ${createForm.role}\n상태: ${createForm.status}\n\n신규 회원에게 해당 접속 정보를 안내해 주세요.`,
+      );
       if (data.user) {
         setUsers((prev) => [data.user, ...prev]);
       }
@@ -1122,7 +1142,9 @@ export default function AdminClient({
     setEditAgIsSecret(Boolean(ag.is_secret));
     try {
       const parsed = JSON.parse(ag.choice_config || "[]");
-      setEditAgChoices(Array.isArray(parsed) ? parsed.join(", ") : "찬성, 반대, 기권");
+      setEditAgChoices(
+        Array.isArray(parsed) ? parsed.join(", ") : "찬성, 반대, 기권",
+      );
     } catch {
       setEditAgChoices("찬성, 반대, 기권");
     }
@@ -1147,7 +1169,10 @@ export default function AdminClient({
           title: editAgTitle.trim(),
           description: editAgDesc,
           isSecret: editAgIsSecret,
-          choices: editAgChoices.split(",").map((c) => c.trim()).filter(Boolean),
+          choices: editAgChoices
+            .split(",")
+            .map((c) => c.trim())
+            .filter(Boolean),
           quorumNeeded: editAgQuorum,
           votingDeadline: editAgDeadline || null,
           votingMethod: editAgMethod,
@@ -1159,7 +1184,9 @@ export default function AdminClient({
       alert("✅ 안건이 성공적으로 수정되었습니다.");
       if (data.agenda) {
         setAgendas((prev) =>
-          prev.map((ag) => (ag.id === editingAgenda.id ? { ...ag, ...data.agenda } : ag)),
+          prev.map((ag) =>
+            ag.id === editingAgenda.id ? { ...ag, ...data.agenda } : ag,
+          ),
         );
       }
       setEditingAgenda(null);
@@ -1171,59 +1198,64 @@ export default function AdminClient({
   };
 
   // ── 출석 현황 통계 로드 ──────────────────────────────────────────────────────
-  const loadAttendanceStats = useCallback(async (assemblyId: string) => {
-    if (!assemblyId) return;
-    setIsLoadingStats(true);
-    try {
-      // 출석 현황 (해당 총회)
-      const attRows = attendances.filter((a) => a.assembly_id === assemblyId);
-      const attended = attRows.filter(
-        (a) => a.attended === 1 && a.approval_status === "APPROVED",
-      ).length;
-      const proxy = attRows.filter(
-        (a) => a.is_proxy === 1 && a.approval_status === "APPROVED",
-      ).length;
-      const pending = attRows.filter((a) => a.approval_status === "PENDING").length;
-      const activeLawyers = users.filter(
-        (u) => u.role === "LAWYER" && u.status === "ACTIVE",
-      ).length;
+  const loadAttendanceStats = useCallback(
+    async (assemblyId: string) => {
+      if (!assemblyId) return;
+      setIsLoadingStats(true);
+      try {
+        // 출석 현황 (해당 총회)
+        const attRows = attendances.filter((a) => a.assembly_id === assemblyId);
+        const attended = attRows.filter(
+          (a) => a.attended === 1 && a.approval_status === "APPROVED",
+        ).length;
+        const proxy = attRows.filter(
+          (a) => a.is_proxy === 1 && a.approval_status === "APPROVED",
+        ).length;
+        const pending = attRows.filter(
+          (a) => a.approval_status === "PENDING",
+        ).length;
+        const activeLawyers = users.filter(
+          (u) => u.role === "LAWYER" && u.status === "ACTIVE",
+        ).length;
 
-      // 의결권 통계는 vote API에서 첫 안건 agendaId로 조회
-      const firstAgenda = agendas.find((ag) => ag.assembly_id === assemblyId);
-      let totalRights = activeLawyers;
-      let presentRights = attended + proxy;
-      let quorumNeeded = Math.ceil(totalRights / 3);
-      if (firstAgenda) {
-        try {
-          const res = await fetch(
-            `/api/assembly/vote?agendaId=${encodeURIComponent(firstAgenda.id)}`,
-          );
-          const data = await res.json();
-          if (res.ok && data.stats) {
-            totalRights = data.stats.totalRights;
-            presentRights = data.stats.presentRights;
-            quorumNeeded = data.stats.quorumNeeded;
+        // 의결권 통계는 vote API에서 첫 안건 agendaId로 조회
+        const firstAgenda = agendas.find((ag) => ag.assembly_id === assemblyId);
+        let totalRights = activeLawyers;
+        let presentRights = attended + proxy;
+        let quorumNeeded = Math.ceil(totalRights / 3);
+        if (firstAgenda) {
+          try {
+            const res = await fetch(
+              `/api/assembly/vote?agendaId=${encodeURIComponent(firstAgenda.id)}`,
+            );
+            const data = await res.json();
+            if (res.ok && data.stats) {
+              totalRights = data.stats.totalRights;
+              presentRights = data.stats.presentRights;
+              quorumNeeded = data.stats.quorumNeeded;
+            }
+          } catch {
+            // 통계 API 실패 시 로컬 계산값 사용
           }
-        } catch {
-          // 통계 API 실패 시 로컬 계산값 사용
         }
-      }
 
-      setAttendanceStats({
-        total: activeLawyers,
-        attended,
-        proxy,
-        pending,
-        absent: activeLawyers - attended - proxy - pending,
-        totalRights,
-        presentRights,
-        quorumNeeded,
-        quorumMet: presentRights >= quorumNeeded,
-      });
-    } finally {
-      setIsLoadingStats(false);
-    }
-  }, [attendances, agendas, users]);
+        setAttendanceStats({
+          total: activeLawyers,
+          attended,
+          proxy,
+          pending,
+          absent: activeLawyers - attended - proxy - pending,
+          totalRights,
+          presentRights,
+          quorumNeeded,
+          quorumMet: presentRights >= quorumNeeded,
+        });
+      } finally {
+        setIsLoadingStats(false);
+      }
+    },
+    [attendances, agendas, users],
+  );
 
   // ── 감사 로그 필터 로드 ───────────────────────────────────────────────────────
   const loadAuditLogs = useCallback(async () => {
@@ -1949,8 +1981,10 @@ export default function AdminClient({
 
             <form onSubmit={handleCreateUser} className="space-y-4 text-xs">
               <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200/90 text-[11px] leading-relaxed">
-                💡 사이트에 아직 가입하지 않은 회원의 계정을 직권으로 생성합니다.
-                생성 후 부여된 아이디와 비밀번호로 회원이 직접 로그인할 수 있으며, 총회 출석 및 위임장 수여 대상자로 지정 가능합니다.
+                💡 사이트에 아직 가입하지 않은 회원의 계정을 직권으로
+                생성합니다. 생성 후 부여된 아이디와 비밀번호로 회원이 직접
+                로그인할 수 있으며, 총회 출석 및 위임장 수여 대상자로 지정
+                가능합니다.
               </div>
 
               {/* 기본 인적사항 */}
@@ -1962,7 +1996,7 @@ export default function AdminClient({
                   <input
                     type="text"
                     required
-                    placeholder="예: 홍길동"
+                    placeholder="예: eegmon"
                     value={createForm.name}
                     onChange={(e) =>
                       setCreateForm({ ...createForm, name: e.target.value })
@@ -2033,7 +2067,10 @@ export default function AdminClient({
                     placeholder="예: 123456789012345678"
                     value={createForm.discordId}
                     onChange={(e) =>
-                      setCreateForm({ ...createForm, discordId: e.target.value })
+                      setCreateForm({
+                        ...createForm,
+                        discordId: e.target.value,
+                      })
                     }
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
                   />
@@ -2055,7 +2092,9 @@ export default function AdminClient({
                   >
                     <option value="LAWYER">정회원 변호사 (LAWYER)</option>
                     <option value="TRAINEE">견습변호사 (TRAINEE)</option>
-                    <option value="CITIZEN">일반 시민 / 수험생 (CITIZEN)</option>
+                    <option value="CITIZEN">
+                      일반 시민 / 수험생 (CITIZEN)
+                    </option>
                     <option value="PROSECUTOR">검찰총장 (PROSECUTOR)</option>
                     {isSuperAdmin && (
                       <option value="ADMIN">시스템 총괄 관리자 (ADMIN)</option>
@@ -2076,7 +2115,9 @@ export default function AdminClient({
                   >
                     <option value="ACTIVE">정상 활성 (ACTIVE)</option>
                     <option value="PENDING">승인 대기 (PENDING)</option>
-                    <option value="SUSPENDED">정직 / 업무정지 (SUSPENDED)</option>
+                    <option value="SUSPENDED">
+                      정직 / 업무정지 (SUSPENDED)
+                    </option>
                     <option value="EXPIRED">자격 상실 (EXPIRED)</option>
                   </select>
                 </div>
@@ -2107,7 +2148,10 @@ export default function AdminClient({
                     placeholder="예: 법무법인 도스"
                     value={createForm.officeName}
                     onChange={(e) =>
-                      setCreateForm({ ...createForm, officeName: e.target.value })
+                      setCreateForm({
+                        ...createForm,
+                        officeName: e.target.value,
+                      })
                     }
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
                   />
@@ -2214,1043 +2258,1645 @@ export default function AdminClient({
       {/* ========================================================================= */}
       {/* 탭 1.5: 법무법인 현황 및 의결권 관리 */}
       {/* ========================================================================= */}
-      {activeTab === "firms" && (permissions.canFirms || permissions.canUsers) && (
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Building className="w-5 h-5 text-amber-400" />
-                법무법인 및 합동법률사무소 관리 (총회 의결권)
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                등록 신청된 법무법인을 심사·승인하고, 회칙에 의거한 <strong>구성원 변호사 2명당 1표(1명 0표)</strong> 의결권 산정 현황을 총괄 관리합니다.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Link
-                href="/firms"
-                target="_blank"
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                법인 포털 페이지 바로가기
-              </Link>
-            </div>
-          </div>
-
-          {/* 법인 의결권 통계 요약 카드 3종 */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
-              <div className="text-xs font-semibold text-slate-400">정상 등록 법인</div>
-              <div className="text-2xl font-extrabold text-white mt-1">
-                {firms.length}개소
+      {activeTab === "firms" &&
+        (permissions.canFirms || permissions.canUsers) && (
+          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Building className="w-5 h-5 text-amber-400" />
+                  법무법인 및 합동법률사무소 관리 (총회 의결권)
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  등록 신청된 법무법인을 심사·승인하고, 회칙에 의거한{" "}
+                  <strong>구성원 변호사 2명당 1표(1명 0표)</strong> 의결권 산정
+                  현황을 총괄 관리합니다.
+                </p>
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">관리자 정식 승인 완료</div>
-            </div>
 
-            <div className="p-4 bg-slate-950 border border-amber-500/20 rounded-xl">
-              <div className="text-xs font-semibold text-amber-400">법인회원 총 의결권 산출 합계</div>
-              <div className="text-2xl font-extrabold text-amber-300 mt-1">
-                {firms.reduce((acc, f) => acc + (f.voting_power || 0), 0)}표
-              </div>
-              <div className="text-[11px] text-amber-400/70 mt-0.5">
-                구성원 변호사 2인당 1표 기준 (1인 0표)
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/firms"
+                  target="_blank"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  법인 포털 페이지 바로가기
+                </Link>
               </div>
             </div>
 
-            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
-              <div className="text-xs font-semibold text-slate-400">승인 심사 대기</div>
-              <div className="text-2xl font-extrabold text-rose-400 mt-1">
-                {pendingFirms.length}건
+            {/* 법인 의결권 통계 요약 카드 3종 */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
+                <div className="text-xs font-semibold text-slate-400">
+                  정상 등록 법인
+                </div>
+                <div className="text-2xl font-extrabold text-white mt-1">
+                  {firms.length}개소
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  관리자 정식 승인 완료
+                </div>
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">신규 등록 신청 접수분</div>
-            </div>
-          </div>
 
-          {/* 승인 심사 대기 법인 섹션 */}
-          {pendingFirms.length > 0 && (
-            <div className="p-5 bg-amber-500/5 border border-amber-500/30 rounded-2xl space-y-3">
-              <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                신규 법무법인 등록 승인 대기 목록 ({pendingFirms.length}건)
-              </h3>
-              <div className="space-y-3">
-                {pendingFirms.map((pf) => (
-                  <div
-                    key={pf.id}
-                    className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-4"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-bold">
-                          {pf.type}
-                        </span>
-                        {pf.is_notary ? (
-                          <span className="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded font-bold">
-                            공증인가
+              <div className="p-4 bg-slate-950 border border-amber-500/20 rounded-xl">
+                <div className="text-xs font-semibold text-amber-400">
+                  법인회원 총 의결권 산출 합계
+                </div>
+                <div className="text-2xl font-extrabold text-amber-300 mt-1">
+                  {firms.reduce((acc, f) => acc + (f.voting_power || 0), 0)}표
+                </div>
+                <div className="text-[11px] text-amber-400/70 mt-0.5">
+                  구성원 변호사 2인당 1표 기준 (1인 0표)
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
+                <div className="text-xs font-semibold text-slate-400">
+                  승인 심사 대기
+                </div>
+                <div className="text-2xl font-extrabold text-rose-400 mt-1">
+                  {pendingFirms.length}건
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  신규 등록 신청 접수분
+                </div>
+              </div>
+            </div>
+
+            {/* 승인 심사 대기 법인 섹션 */}
+            {pendingFirms.length > 0 && (
+              <div className="p-5 bg-amber-500/5 border border-amber-500/30 rounded-2xl space-y-3">
+                <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  신규 법무법인 등록 승인 대기 목록 ({pendingFirms.length}건)
+                </h3>
+                <div className="space-y-3">
+                  {pendingFirms.map((pf) => (
+                    <div
+                      key={pf.id}
+                      className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-4"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-bold">
+                            {pf.type}
                           </span>
-                        ) : null}
-                        <span className="text-[10px] text-slate-500">
-                          신청일: {pf.created_at ? new Date(pf.created_at).toLocaleDateString() : "-"}
-                        </span>
+                          {pf.is_notary ? (
+                            <span className="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded font-bold">
+                              공증인가
+                            </span>
+                          ) : null}
+                          <span className="text-[10px] text-slate-500">
+                            신청일:{" "}
+                            {pf.created_at
+                              ? new Date(pf.created_at).toLocaleDateString()
+                              : "-"}
+                          </span>
+                        </div>
+                        <h4 className="text-base font-bold text-white">
+                          {pf.name}
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          대표:{" "}
+                          <strong className="text-slate-200">
+                            {pf.rep_name || "미지정"}
+                          </strong>{" "}
+                          ({pf.rep_login_id || ""}) · 주소:{" "}
+                          {pf.address || "미기재"} · 연락처:{" "}
+                          {pf.contact || "미기재"}
+                        </p>
                       </div>
-                      <h4 className="text-base font-bold text-white">{pf.name}</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        대표: <strong className="text-slate-200">{pf.rep_name || "미지정"}</strong> ({pf.rep_login_id || ""}) · 주소: {pf.address || "미기재"} · 연락처: {pf.contact || "미기재"}
-                      </p>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isProcessingFirm}
+                          onClick={() => handleApproveFirm(pf.id)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          승인
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isProcessingFirm}
+                          onClick={() => handleRejectFirm(pf.id)}
+                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          반려
+                        </button>
+                      </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={isProcessingFirm}
-                        onClick={() => handleApproveFirm(pf.id)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        승인
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isProcessingFirm}
-                        onClick={() => handleRejectFirm(pf.id)}
-                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        반려
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 등록된 법무법인 검색 & 목록 */}
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Building className="w-4 h-4 text-amber-400" />
-                등록 법무법인 명부 및 의결권 현황
-              </h3>
-
-              <div className="flex items-center gap-2 w-full sm:w-64 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
-                <Search className="w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="법인명 또는 주소 검색..."
-                  value={firmSearchQuery}
-                  onChange={(e) => setFirmSearchQuery(e.target.value)}
-                  className="bg-transparent border-none outline-none w-full text-xs placeholder-slate-500"
-                />
-              </div>
-            </div>
-
-            {firms.filter((f) =>
-              f.name.toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
-              (f.address || "").toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
-              (f.rep_name || "").toLowerCase().includes(firmSearchQuery.toLowerCase())
-            ).length === 0 ? (
-              <div className="p-8 bg-slate-950 border border-slate-800 rounded-xl text-center text-slate-400 text-xs">
-                등록된 법무법인이 없습니다.
-              </div>
-            ) : (
-              <div className="overflow-x-auto border border-slate-800 rounded-xl">
-                <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold">
-                    <tr>
-                      <th className="p-3">법인명 / 구분</th>
-                      <th className="p-3">대표변호사</th>
-                      <th className="p-3">소재지 / 연락처</th>
-                      <th className="p-3 text-center">총 소속인원</th>
-                      <th className="p-3 text-center">구성원(파트너) 수</th>
-                      <th className="p-3 text-center">총회 의결권</th>
-                      <th className="p-3 text-right">상태</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800 bg-slate-900/50">
-                    {firms
-                      .filter((f) =>
-                        f.name.toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
-                        (f.address || "").toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
-                        (f.rep_name || "").toLowerCase().includes(firmSearchQuery.toLowerCase())
-                      )
-                      .map((firm) => (
-                        <tr key={firm.id} className="hover:bg-slate-800/40 transition-colors">
-                          <td className="p-3">
-                            <div className="font-bold text-white flex items-center gap-1.5">
-                              {firm.name}
-                              {firm.is_notary ? (
-                                <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px]">
-                                  공증
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="text-[11px] text-slate-500">{firm.type}</div>
-                          </td>
-                          <td className="p-3">
-                            <span className="font-semibold text-slate-200">{firm.rep_name || "미지정"}</span>
-                            {firm.rep_login_id && (
-                              <span className="text-[10px] text-slate-500 block">({firm.rep_login_id})</span>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <div className="text-slate-300 truncate max-w-xs">{firm.address || "미기재"}</div>
-                            <div className="text-[10px] text-slate-500">{firm.contact || "-"}</div>
-                          </td>
-                          <td className="p-3 text-center font-medium">
-                            {firm.member_count || 0}명
-                          </td>
-                          <td className="p-3 text-center font-bold text-amber-300">
-                            {firm.partner_count || 0}명
-                          </td>
-                          <td className="p-3 text-center">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${
-                                (firm.voting_power || 0) > 0
-                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                  : "bg-slate-800 text-slate-500 border-slate-700"
-                              }`}
-                            >
-                              {firm.voting_power || 0}표
-                            </span>
-                            {(firm.partner_count || 0) === 1 && (
-                              <span className="block text-[10px] text-slate-500 mt-0.5">
-                                (1인: 0표)
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3 text-right">
-                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">
-                              정상 등록
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
 
-          {/* 안내 규정 */}
-          <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-400">
-            <h4 className="font-bold text-amber-400 flex items-center gap-1.5">
-              <Scale className="w-4 h-4" />
-              회칙 제14조 법인회원 의결권 규정 안내
-            </h4>
-            <p>• <strong>의결권 산정:</strong> 등록된 <strong>구성원 변호사(파트너) 2명당 1표</strong>가 부여됩니다. 구성원 변호사가 1명인 법인은 의결권이 0표입니다.</p>
-            <p>• <strong>소속 변호사(Associate):</strong> 고용된 소속 변호사는 법인 의결권 모수에 포함되지 않으며, 변호사 개인회원으로서의 1표를 별도로 행사합니다.</p>
-            <p>• <strong>의결권 행사:</strong> 법인회원의 의결권은 <strong>구성원 회의(만장일치 결의)</strong>를 거쳐 의장에게 서면 통지하거나, 개인회원(대표변호사 본인 또는 수임 변호사)에게 위임하여 행사합니다.</p>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 탭 2: 정기/임시 총회 일정 & 안건 관리 */}
-      {/* ========================================================================= */}
-      {activeTab === "assembly" && permissions.canAssembly && (() => {
-        // 현재 선택 총회
-        const selectedAssembly = assemblies.find((a) => a.id === selectedAssemblyId);
-        const assAgendas = agendas
-          .filter((ag) => ag.assembly_id === selectedAssemblyId)
-          .sort((a, b) =>
-            Number(a.agenda_order ?? 0) - Number(b.agenda_order ?? 0) ||
-            String(a.created_at).localeCompare(String(b.created_at)),
-          );
-        const assAttendances = attendances.filter(
-          (a) => a.assembly_id === selectedAssemblyId,
-        );
-        const pendingAttendances = assAttendances.filter(
-          (a) => a.approval_status === "PENDING",
-        );
-
-        // 감사 로그 액션 종류 (필터용)
-        const uniqueActions = [...new Set(auditLogs2.map((l) => String(l.action)))].sort();
-        const filteredAuditLogs = auditLogs2.filter((l) => {
-          const matchAction = !auditFilterAction || l.action === auditFilterAction;
-          return matchAction;
-        });
-
-        return (
-          <div className="space-y-5">
-            {/* ── 헤더 + 총회 선택 ────────────────────────────────────────────── */}
-            <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+            {/* 등록된 법무법인 검색 & 목록 */}
+            <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Vote className="w-5 h-5 text-emerald-400" />
-                    총회 의사진행 통합 관리
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    총회 개설·개회·폐회, 안건 표결, 출석 현황, 감사 로그, 투표 링크를 통합 관리합니다.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowAssemblyModal(true)}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> 신규 총회 개설
-                  </button>
-                  <button
-                    onClick={() => { setTargetAssemblyId(selectedAssemblyId); setShowAgendaModal(true); }}
-                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> 안건 상정
-                  </button>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Building className="w-4 h-4 text-amber-400" />
+                  등록 법무법인 명부 및 의결권 현황
+                </h3>
+
+                <div className="flex items-center gap-2 w-full sm:w-64 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
+                  <Search className="w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="법인명 또는 주소 검색..."
+                    value={firmSearchQuery}
+                    onChange={(e) => setFirmSearchQuery(e.target.value)}
+                    className="bg-transparent border-none outline-none w-full text-xs placeholder-slate-500"
+                  />
                 </div>
               </div>
 
-              {/* 총회 선택 + 상태 */}
-              <div className="flex flex-wrap items-center gap-3">
-                <select
-                  value={selectedAssemblyId}
-                  onChange={(e) => {
-                    setSelectedAssemblyId(e.target.value);
-                    setTargetAssemblyId(e.target.value);
-                    setAttendanceStats(null);
-                  }}
-                  className="flex-1 min-w-60 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="">총회를 선택하세요</option>
-                  {assemblies.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.status === "IN_SESSION" ? "🟢 " : a.status === "CLOSED" ? "⬛ " : "🕐 "}
-                      {a.title} · {a.held_at}
-                    </option>
-                  ))}
-                </select>
-                {selectedAssembly && (
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                      selectedAssembly.status === "IN_SESSION"
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                        : selectedAssembly.status === "CLOSED"
-                          ? "bg-slate-700/60 text-slate-400 border-slate-600/40"
-                          : "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                    }`}>
-                      {selectedAssembly.status === "IN_SESSION" ? "🟢 개회중"
-                        : selectedAssembly.status === "CLOSED" ? "⬛ 폐회"
-                        : "🕐 개최 예정"}
-                    </span>
-                    {selectedAssembly.status === "SCHEDULED" && (
-                      <button onClick={() => handleAssemblyStatus(selectedAssembly.id, "IN_SESSION")}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg">
-                        총회 개회
-                      </button>
-                    )}
-                    {selectedAssembly.status === "IN_SESSION" && (
-                      <button onClick={() => handleAssemblyStatus(selectedAssembly.id, "CLOSED")}
-                        className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg">
-                        총회 폐회
-                      </button>
-                    )}
-                    <button onClick={() => openMinutesModal(selectedAssembly)}
-                      className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-lg flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5" />
-                      {selectedAssembly.minutes_text ? "의사록 수정" : "의사록 작성"}
-                    </button>
-                    <button onClick={() => handleDeleteAssembly(selectedAssembly)}
-                      className="px-3 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 text-xs font-bold rounded-lg flex items-center gap-1">
-                      <Trash2 className="w-3.5 h-3.5" /> 삭제
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* 승인 대기 뱃지 */}
-              {pendingAttendances.length > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>
-                    <strong>{pendingAttendances.length}명</strong>의 출석 확인이 의장 승인을 기다리고 있습니다.
-                  </span>
-                  <button
-                    onClick={() => setAssemblySubTab("attendance")}
-                    className="ml-auto px-2.5 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 rounded font-bold transition-colors"
-                  >
-                    바로 처리
-                  </button>
+              {firms.filter(
+                (f) =>
+                  f.name
+                    .toLowerCase()
+                    .includes(firmSearchQuery.toLowerCase()) ||
+                  (f.address || "")
+                    .toLowerCase()
+                    .includes(firmSearchQuery.toLowerCase()) ||
+                  (f.rep_name || "")
+                    .toLowerCase()
+                    .includes(firmSearchQuery.toLowerCase()),
+              ).length === 0 ? (
+                <div className="p-8 bg-slate-950 border border-slate-800 rounded-xl text-center text-slate-400 text-xs">
+                  등록된 법무법인이 없습니다.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold">
+                      <tr>
+                        <th className="p-3">법인명 / 구분</th>
+                        <th className="p-3">대표변호사</th>
+                        <th className="p-3">소재지 / 연락처</th>
+                        <th className="p-3 text-center">총 소속인원</th>
+                        <th className="p-3 text-center">구성원(파트너) 수</th>
+                        <th className="p-3 text-center">총회 의결권</th>
+                        <th className="p-3 text-right">상태</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800 bg-slate-900/50">
+                      {firms
+                        .filter(
+                          (f) =>
+                            f.name
+                              .toLowerCase()
+                              .includes(firmSearchQuery.toLowerCase()) ||
+                            (f.address || "")
+                              .toLowerCase()
+                              .includes(firmSearchQuery.toLowerCase()) ||
+                            (f.rep_name || "")
+                              .toLowerCase()
+                              .includes(firmSearchQuery.toLowerCase()),
+                        )
+                        .map((firm) => (
+                          <tr
+                            key={firm.id}
+                            className="hover:bg-slate-800/40 transition-colors"
+                          >
+                            <td className="p-3">
+                              <div className="font-bold text-white flex items-center gap-1.5">
+                                {firm.name}
+                                {firm.is_notary ? (
+                                  <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px]">
+                                    공증
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {firm.type}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-semibold text-slate-200">
+                                {firm.rep_name || "미지정"}
+                              </span>
+                              {firm.rep_login_id && (
+                                <span className="text-[10px] text-slate-500 block">
+                                  ({firm.rep_login_id})
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <div className="text-slate-300 truncate max-w-xs">
+                                {firm.address || "미기재"}
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                {firm.contact || "-"}
+                              </div>
+                            </td>
+                            <td className="p-3 text-center font-medium">
+                              {firm.member_count || 0}명
+                            </td>
+                            <td className="p-3 text-center font-bold text-amber-300">
+                              {firm.partner_count || 0}명
+                            </td>
+                            <td className="p-3 text-center">
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${
+                                  (firm.voting_power || 0) > 0
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                    : "bg-slate-800 text-slate-500 border-slate-700"
+                                }`}
+                              >
+                                {firm.voting_power || 0}표
+                              </span>
+                              {(firm.partner_count || 0) === 1 && (
+                                <span className="block text-[10px] text-slate-500 mt-0.5">
+                                  (1인: 0표)
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-right">
+                              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                                정상 등록
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
 
-            {/* ── 서브탭 네비 ────────────────────────────────────────────────────── */}
-            <div className="flex gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto">
-              {([
-                { key: "overview",    icon: BarChart3,     label: "현황 대시보드",   badge: undefined },
-                { key: "agendas",     icon: FileText,      label: "안건 관리",        badge: assAgendas.filter((a: any) => a.status === "VOTING").length },
-                { key: "attendance",  icon: UserCheck,     label: "출석 관리",        badge: pendingAttendances.length },
-                { key: "audit",       icon: ClipboardList, label: "감사 로그",        badge: undefined },
-                { key: "votelink",    icon: Link2,         label: "투표 링크 발급",   badge: undefined },
-              ] as { key: "overview"|"agendas"|"attendance"|"audit"|"votelink"; icon: any; label: string; badge: number|undefined }[]).map(({ key, icon: Icon, label, badge }) => (
-                <button
-                  key={key}
-                  onClick={() => {
-                    setAssemblySubTab(key);
-                    if (key === "overview" && selectedAssemblyId) loadAttendanceStats(selectedAssemblyId);
-                    if (key === "audit") loadAuditLogs();
-                  }}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${
-                    assemblySubTab === key
-                      ? "bg-emerald-600 text-white shadow"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                  {badge != null && badge > 0 && (
-                    <span className="px-1.5 py-0.5 bg-red-500 text-white rounded-full text-[10px] font-extrabold animate-pulse">
-                      {badge}
-                    </span>
-                  )}
-                </button>
-              ))}
+            {/* 안내 규정 */}
+            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-400">
+              <h4 className="font-bold text-amber-400 flex items-center gap-1.5">
+                <Scale className="w-4 h-4" />
+                회칙 제14조 법인회원 의결권 규정 안내
+              </h4>
+              <p>
+                • <strong>의결권 산정:</strong> 등록된{" "}
+                <strong>구성원 변호사(파트너) 2명당 1표</strong>가 부여됩니다.
+                구성원 변호사가 1명인 법인은 의결권이 0표입니다.
+              </p>
+              <p>
+                • <strong>소속 변호사(Associate):</strong> 고용된 소속 변호사는
+                법인 의결권 모수에 포함되지 않으며, 변호사 개인회원으로서의
+                1표를 별도로 행사합니다.
+              </p>
+              <p>
+                • <strong>의결권 행사:</strong> 법인회원의 의결권은{" "}
+                <strong>구성원 회의(만장일치 결의)</strong>를 거쳐 의장에게 서면
+                통지하거나, 개인회원(대표변호사 본인 또는 수임 변호사)에게
+                위임하여 행사합니다.
+              </p>
             </div>
+          </div>
+        )}
 
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* 서브탭: 현황 대시보드                                              */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {assemblySubTab === "overview" && (
-              <div className="space-y-5">
-                {!selectedAssemblyId ? (
-                  <div className="p-12 bg-slate-950 border border-slate-800 rounded-2xl text-center text-slate-500 text-sm">
-                    위에서 총회를 선택하면 현황이 표시됩니다.
+      {/* ========================================================================= */}
+      {/* 탭 2: 정기/임시 총회 일정 & 안건 관리 */}
+      {/* ========================================================================= */}
+      {activeTab === "assembly" &&
+        permissions.canAssembly &&
+        (() => {
+          // 현재 선택 총회
+          const selectedAssembly = assemblies.find(
+            (a) => a.id === selectedAssemblyId,
+          );
+          const assAgendas = agendas
+            .filter((ag) => ag.assembly_id === selectedAssemblyId)
+            .sort(
+              (a, b) =>
+                Number(a.agenda_order ?? 0) - Number(b.agenda_order ?? 0) ||
+                String(a.created_at).localeCompare(String(b.created_at)),
+            );
+          const assAttendances = attendances.filter(
+            (a) => a.assembly_id === selectedAssemblyId,
+          );
+          const pendingAttendances = assAttendances.filter(
+            (a) => a.approval_status === "PENDING",
+          );
+
+          // 감사 로그 액션 종류 (필터용)
+          const uniqueActions = [
+            ...new Set(auditLogs2.map((l) => String(l.action))),
+          ].sort();
+          const filteredAuditLogs = auditLogs2.filter((l) => {
+            const matchAction =
+              !auditFilterAction || l.action === auditFilterAction;
+            return matchAction;
+          });
+
+          return (
+            <div className="space-y-5">
+              {/* ── 헤더 + 총회 선택 ────────────────────────────────────────────── */}
+              <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Vote className="w-5 h-5 text-emerald-400" />
+                      총회 의사진행 통합 관리
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      총회 개설·개회·폐회, 안건 표결, 출석 현황, 감사 로그, 투표
+                      링크를 통합 관리합니다.
+                    </p>
                   </div>
-                ) : (
-                  <>
-                    {/* 출석 현황 카드 */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {isLoadingStats ? (
-                        <div className="col-span-4 py-8 text-center text-slate-500 text-xs flex items-center justify-center gap-2">
-                          <RefreshCw className="w-4 h-4 animate-spin" /> 출석 현황 로딩 중...
-                        </div>
-                      ) : attendanceStats ? (
-                        <>
-                          {[
-                            { label: "총 정회원", value: `${attendanceStats.total}명`, cls: "text-white", sub: "LAWYER·ACTIVE" },
-                            { label: "직접 출석", value: `${attendanceStats.attended}명`, cls: "text-emerald-400", sub: "본인 확인 완료" },
-                            { label: "위임 출석", value: `${attendanceStats.proxy}명`, cls: "text-blue-400", sub: "위임 승인" },
-                            { label: "승인 대기", value: `${attendanceStats.pending}명`, cls: "text-amber-400", sub: "지각 출석 등" },
-                          ].map((s) => (
-                            <div key={s.label} className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
-                              <div className="text-[11px] text-slate-500 mb-0.5">{s.label}</div>
-                              <div className={`text-2xl font-extrabold font-mono ${s.cls}`}>{s.value}</div>
-                              <div className="text-[10px] text-slate-600 mt-0.5">{s.sub}</div>
-                            </div>
-                          ))}
-                        </>
-                      ) : (
-                        <div className="col-span-4 text-center">
-                          <button
-                            onClick={() => loadAttendanceStats(selectedAssemblyId)}
-                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl font-bold flex items-center gap-2 mx-auto"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" /> 출석 현황 불러오기
-                          </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowAssemblyModal(true)}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> 신규 총회 개설
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTargetAssemblyId(selectedAssemblyId);
+                        setShowAgendaModal(true);
+                      }}
+                      className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> 안건 상정
+                    </button>
+                  </div>
+                </div>
+
+                {/* 총회 선택 + 상태 */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <select
+                    value={selectedAssemblyId}
+                    onChange={(e) => {
+                      setSelectedAssemblyId(e.target.value);
+                      setTargetAssemblyId(e.target.value);
+                      setAttendanceStats(null);
+                    }}
+                    className="flex-1 min-w-60 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">총회를 선택하세요</option>
+                    {assemblies.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.status === "IN_SESSION"
+                          ? "🟢 "
+                          : a.status === "CLOSED"
+                            ? "⬛ "
+                            : "🕐 "}
+                        {a.title} · {a.held_at}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedAssembly && (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                          selectedAssembly.status === "IN_SESSION"
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                            : selectedAssembly.status === "CLOSED"
+                              ? "bg-slate-700/60 text-slate-400 border-slate-600/40"
+                              : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                        }`}
+                      >
+                        {selectedAssembly.status === "IN_SESSION"
+                          ? "🟢 개회중"
+                          : selectedAssembly.status === "CLOSED"
+                            ? "⬛ 폐회"
+                            : "🕐 개최 예정"}
+                      </span>
+                      {selectedAssembly.status === "SCHEDULED" && (
+                        <button
+                          onClick={() =>
+                            handleAssemblyStatus(
+                              selectedAssembly.id,
+                              "IN_SESSION",
+                            )
+                          }
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg"
+                        >
+                          총회 개회
+                        </button>
+                      )}
+                      {selectedAssembly.status === "IN_SESSION" && (
+                        <button
+                          onClick={() =>
+                            handleAssemblyStatus(selectedAssembly.id, "CLOSED")
+                          }
+                          className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg"
+                        >
+                          총회 폐회
+                        </button>
+                      )}
+                      <button
+                        onClick={() => openMinutesModal(selectedAssembly)}
+                        className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-bold rounded-lg flex items-center gap-1"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        {selectedAssembly.minutes_text
+                          ? "의사록 수정"
+                          : "의사록 작성"}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAssembly(selectedAssembly)}
+                        className="px-3 py-1 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 text-xs font-bold rounded-lg flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> 삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 승인 대기 뱃지 */}
+                {pendingAttendances.length > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>
+                      <strong>{pendingAttendances.length}명</strong>의 출석
+                      확인이 의장 승인을 기다리고 있습니다.
+                    </span>
+                    <button
+                      onClick={() => setAssemblySubTab("attendance")}
+                      className="ml-auto px-2.5 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 rounded font-bold transition-colors"
+                    >
+                      바로 처리
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── 서브탭 네비 ────────────────────────────────────────────────────── */}
+              <div className="flex gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto">
+                {(
+                  [
+                    {
+                      key: "overview",
+                      icon: BarChart3,
+                      label: "현황 대시보드",
+                      badge: undefined,
+                    },
+                    {
+                      key: "agendas",
+                      icon: FileText,
+                      label: "안건 관리",
+                      badge: assAgendas.filter(
+                        (a: any) => a.status === "VOTING",
+                      ).length,
+                    },
+                    {
+                      key: "attendance",
+                      icon: UserCheck,
+                      label: "출석 관리",
+                      badge: pendingAttendances.length,
+                    },
+                    {
+                      key: "audit",
+                      icon: ClipboardList,
+                      label: "감사 로그",
+                      badge: undefined,
+                    },
+                    {
+                      key: "votelink",
+                      icon: Link2,
+                      label: "투표 링크 발급",
+                      badge: undefined,
+                    },
+                  ] as {
+                    key:
+                      | "overview"
+                      | "agendas"
+                      | "attendance"
+                      | "audit"
+                      | "votelink";
+                    icon: any;
+                    label: string;
+                    badge: number | undefined;
+                  }[]
+                ).map(({ key, icon: Icon, label, badge }) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setAssemblySubTab(key);
+                      if (key === "overview" && selectedAssemblyId)
+                        loadAttendanceStats(selectedAssemblyId);
+                      if (key === "audit") loadAuditLogs();
+                    }}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex-shrink-0 ${
+                      assemblySubTab === key
+                        ? "bg-emerald-600 text-white shadow"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                    {badge != null && badge > 0 && (
+                      <span className="px-1.5 py-0.5 bg-red-500 text-white rounded-full text-[10px] font-extrabold animate-pulse">
+                        {badge}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {/* 서브탭: 현황 대시보드                                              */}
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {assemblySubTab === "overview" && (
+                <div className="space-y-5">
+                  {!selectedAssemblyId ? (
+                    <div className="p-12 bg-slate-950 border border-slate-800 rounded-2xl text-center text-slate-500 text-sm">
+                      위에서 총회를 선택하면 현황이 표시됩니다.
+                    </div>
+                  ) : (
+                    <>
+                      {/* 출석 현황 카드 */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {isLoadingStats ? (
+                          <div className="col-span-4 py-8 text-center text-slate-500 text-xs flex items-center justify-center gap-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" /> 출석
+                            현황 로딩 중...
+                          </div>
+                        ) : attendanceStats ? (
+                          <>
+                            {[
+                              {
+                                label: "총 정회원",
+                                value: `${attendanceStats.total}명`,
+                                cls: "text-white",
+                                sub: "LAWYER·ACTIVE",
+                              },
+                              {
+                                label: "직접 출석",
+                                value: `${attendanceStats.attended}명`,
+                                cls: "text-emerald-400",
+                                sub: "본인 확인 완료",
+                              },
+                              {
+                                label: "위임 출석",
+                                value: `${attendanceStats.proxy}명`,
+                                cls: "text-blue-400",
+                                sub: "위임 승인",
+                              },
+                              {
+                                label: "승인 대기",
+                                value: `${attendanceStats.pending}명`,
+                                cls: "text-amber-400",
+                                sub: "지각 출석 등",
+                              },
+                            ].map((s) => (
+                              <div
+                                key={s.label}
+                                className="p-4 bg-slate-950 border border-slate-800 rounded-xl"
+                              >
+                                <div className="text-[11px] text-slate-500 mb-0.5">
+                                  {s.label}
+                                </div>
+                                <div
+                                  className={`text-2xl font-extrabold font-mono ${s.cls}`}
+                                >
+                                  {s.value}
+                                </div>
+                                <div className="text-[10px] text-slate-600 mt-0.5">
+                                  {s.sub}
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <div className="col-span-4 text-center">
+                            <button
+                              onClick={() =>
+                                loadAttendanceStats(selectedAssemblyId)
+                              }
+                              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl font-bold flex items-center gap-2 mx-auto"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" /> 출석 현황
+                              불러오기
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 정족수 게이지 */}
+                      {attendanceStats && (
+                        <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-300">
+                              의사정족수 달성률
+                              <span className="ml-2 text-slate-500 font-normal">
+                                ({attendanceStats.presentRights} /{" "}
+                                {attendanceStats.quorumNeeded}표 이상 필요)
+                              </span>
+                            </span>
+                            <span
+                              className={`font-extrabold text-sm ${attendanceStats.quorumMet ? "text-emerald-400" : "text-amber-400"}`}
+                            >
+                              {attendanceStats.quorumMet
+                                ? "✅ 정족수 충족"
+                                : "⚠️ 정족수 미충족"}
+                            </span>
+                          </div>
+                          <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-700 ${attendanceStats.quorumMet ? "bg-emerald-500" : "bg-amber-500"}`}
+                              style={{
+                                width: `${Math.min(100, Math.round((attendanceStats.presentRights / (attendanceStats.quorumNeeded || 1)) * 100))}%`,
+                              }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[11px] text-slate-500">
+                            <span>0</span>
+                            <span>
+                              정족수 기준: {attendanceStats.quorumNeeded}표
+                            </span>
+                            <span>
+                              전체 의결권: {attendanceStats.totalRights}표
+                            </span>
+                          </div>
                         </div>
                       )}
-                    </div>
 
-                    {/* 정족수 게이지 */}
-                    {attendanceStats && (
-                      <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-slate-300">
-                            의사정족수 달성률
-                            <span className="ml-2 text-slate-500 font-normal">
-                              ({attendanceStats.presentRights} / {attendanceStats.quorumNeeded}표 이상 필요)
-                            </span>
+                      {/* 진행 중 안건 */}
+                      <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                          <span className="flex items-center gap-1.5">
+                            <Vote className="w-4 h-4 text-emerald-400" /> 상정
+                            안건 현황
                           </span>
-                          <span className={`font-extrabold text-sm ${attendanceStats.quorumMet ? "text-emerald-400" : "text-amber-400"}`}>
-                            {attendanceStats.quorumMet ? "✅ 정족수 충족" : "⚠️ 정족수 미충족"}
+                          <span className="text-slate-500">
+                            {assAgendas.length}건
                           </span>
                         </div>
-                        <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
+                        {assAgendas.length === 0 ? (
+                          <p className="text-xs text-slate-600 text-center py-4">
+                            상정된 안건이 없습니다.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {assAgendas.map((ag) => (
+                              <div
+                                key={ag.id}
+                                className="flex items-center justify-between gap-3 p-3 bg-slate-900 rounded-xl text-xs"
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-bold text-white truncate">
+                                    {ag.title}
+                                  </div>
+                                  {ag.description && (
+                                    <div className="text-slate-500 truncate mt-0.5">
+                                      {ag.description}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span
+                                    className={`px-2 py-0.5 rounded font-bold text-[10px] border ${
+                                      ag.status === "VOTING"
+                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                        : ag.status === "CLOSED" ||
+                                            ag.status === "RESULT_CONFIRMED"
+                                          ? "bg-slate-700 text-slate-400 border-slate-600"
+                                          : ag.status === "ON_HOLD"
+                                            ? "bg-slate-700 text-slate-500 border-slate-600"
+                                            : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                    }`}
+                                  >
+                                    {ag.status === "VOTING"
+                                      ? "🟢 표결중"
+                                      : ag.status === "CLOSED"
+                                        ? "⬛ 종료"
+                                        : ag.status === "RESULT_CONFIRMED"
+                                          ? "✅ 확정"
+                                          : ag.status === "ON_HOLD"
+                                            ? "⏸ 보류"
+                                            : "🕐 대기"}
+                                  </span>
+                                  {ag.status === "READY" &&
+                                    selectedAssembly?.status ===
+                                      "IN_SESSION" && (
+                                      <button
+                                        onClick={() => handleStartVoting(ag.id)}
+                                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg"
+                                      >
+                                        표결 개시
+                                      </button>
+                                    )}
+                                  {ag.status === "VOTING" && (
+                                    <button
+                                      onClick={() => handleCloseVoting(ag.id)}
+                                      className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold rounded-lg"
+                                    >
+                                      표결 종료
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => loadAttendanceStats(selectedAssemblyId)}
+                        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${isLoadingStats ? "animate-spin" : ""}`}
+                        />
+                        새로고침
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {/* 서브탭: 안건 관리                                                  */}
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {assemblySubTab === "agendas" && (
+                <div className="space-y-4">
+                  {!selectedAssemblyId ? (
+                    <div className="p-10 bg-slate-950 border border-slate-800 rounded-2xl text-center text-slate-500 text-sm">
+                      위에서 총회를 선택하세요.
+                    </div>
+                  ) : assAgendas.length === 0 ? (
+                    <div className="p-10 bg-slate-950 border border-slate-800 rounded-2xl text-center space-y-3">
+                      <p className="text-slate-500 text-sm">
+                        상정된 안건이 없습니다.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setTargetAssemblyId(selectedAssemblyId);
+                          setShowAgendaModal(true);
+                        }}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> 첫 안건 상정하기
+                      </button>
+                    </div>
+                  ) : (
+                    assAgendas.map((ag, agIdx) => (
+                      <div
+                        key={ag.id}
+                        className="p-5 bg-slate-950 border border-slate-800 rounded-2xl space-y-3"
+                      >
+                        {/* 안건 헤더 */}
+                        <div className="flex flex-wrap items-start gap-3">
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                  ag.is_secret
+                                    ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                                    : "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                }`}
+                              >
+                                {ag.is_secret ? "🔒 무기명" : "기명투표"}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                  ag.voting_method === "TWO_THIRDS"
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                    : ag.voting_method === "PLURALITY"
+                                      ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                                      : ag.voting_method === "RANKED"
+                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                        : "bg-slate-800 text-slate-300 border-slate-700"
+                                }`}
+                              >
+                                {ag.voting_method === "TWO_THIRDS"
+                                  ? "특별의결(2/3)"
+                                  : ag.voting_method === "PLURALITY"
+                                    ? "최다득표"
+                                    : ag.voting_method === "RANKED"
+                                      ? "순위투표"
+                                      : "일반의결(과반)"}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                  ag.status === "VOTING"
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                    : ag.status === "CLOSED"
+                                      ? "bg-slate-800 text-slate-500 border-slate-700"
+                                      : ag.status === "RESULT_CONFIRMED"
+                                        ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                        : ag.status === "ON_HOLD"
+                                          ? "bg-slate-800 text-slate-400 border-slate-700"
+                                          : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                }`}
+                              >
+                                {ag.status === "VOTING"
+                                  ? "🟢 표결 진행중"
+                                  : ag.status === "CLOSED"
+                                    ? "⬛ 표결 종료"
+                                    : ag.status === "RESULT_CONFIRMED"
+                                      ? "✅ 결과 확정"
+                                      : ag.status === "ON_HOLD"
+                                        ? "⏸ 보류"
+                                        : "🕐 표결 대기"}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-bold text-white">
+                              {ag.title}
+                            </h4>
+                            {ag.description && (
+                              <p className="text-xs text-slate-400">
+                                {ag.description}
+                              </p>
+                            )}
+                            {ag.voting_deadline && ag.status === "VOTING" && (
+                              <div className="text-[11px] text-amber-400 flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> 마감:{" "}
+                                {ag.voting_deadline}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 액션 버튼 그룹 */}
+                          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                            {selectedAssembly?.status === "IN_SESSION" &&
+                              ![
+                                "VOTING",
+                                "CLOSED",
+                                "RESULT_CONFIRMED",
+                              ].includes(ag.status) && (
+                                <div className="flex gap-1">
+                                  <button
+                                    disabled={agIdx === 0}
+                                    onClick={() => {
+                                      const n = [...assAgendas];
+                                      [n[agIdx - 1], n[agIdx]] = [
+                                        n[agIdx],
+                                        n[agIdx - 1],
+                                      ];
+                                      handleReorderAgendas(
+                                        selectedAssemblyId,
+                                        n.map((i) => i.id),
+                                      );
+                                    }}
+                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    disabled={agIdx === assAgendas.length - 1}
+                                    onClick={() => {
+                                      const n = [...assAgendas];
+                                      [n[agIdx], n[agIdx + 1]] = [
+                                        n[agIdx + 1],
+                                        n[agIdx],
+                                      ];
+                                      handleReorderAgendas(
+                                        selectedAssemblyId,
+                                        n.map((i) => i.id),
+                                      );
+                                    }}
+                                    className="p-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            {["READY", "ON_HOLD"].includes(ag.status) && (
+                              <button
+                                onClick={() => openEditAgendaModal(ag)}
+                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-lg flex items-center gap-1"
+                              >
+                                <Edit className="w-3.5 h-3.5" /> 수정
+                              </button>
+                            )}
+                            {selectedAssembly?.status === "IN_SESSION" &&
+                              ag.status === "READY" && (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      handleAgendaStatus(ag.id, "ON_HOLD")
+                                    }
+                                    className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg"
+                                  >
+                                    보류
+                                  </button>
+                                  <button
+                                    onClick={() => handleStartVoting(ag.id)}
+                                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow"
+                                  >
+                                    표결 개시 선언
+                                  </button>
+                                </>
+                              )}
+                            {ag.status === "ON_HOLD" && (
+                              <button
+                                onClick={() =>
+                                  handleAgendaStatus(ag.id, "READY")
+                                }
+                                className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg"
+                              >
+                                재상정
+                              </button>
+                            )}
+                            {ag.status === "VOTING" && (
+                              <>
+                                <button
+                                  onClick={() => handleExtendDeadline(ag.id)}
+                                  className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg"
+                                >
+                                  마감 연장
+                                </button>
+                                <button
+                                  onClick={() => handleCloseVoting(ag.id)}
+                                  className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg shadow"
+                                >
+                                  표결 종료 및 결과 선포
+                                </button>
+                              </>
+                            )}
+                            {ag.status === "CLOSED" && (
+                              <button
+                                onClick={() =>
+                                  handleConfirmResult(ag.id, "CONFIRM_RESULT")
+                                }
+                                className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow"
+                              >
+                                결과 확정
+                              </button>
+                            )}
+                            {ag.status === "RESULT_CONFIRMED" && (
+                              <button
+                                onClick={() =>
+                                  handleConfirmResult(ag.id, "REOPEN_RESULT")
+                                }
+                                className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg"
+                              >
+                                결과 재개
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {/* 서브탭: 출석 관리                                                  */}
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {assemblySubTab === "attendance" && (
+                <div className="space-y-4">
+                  {/* 현장 출석 수동 등록 */}
+                  {selectedAssemblyId && (
+                    <div className="p-4 bg-slate-950 border border-emerald-800/40 rounded-xl space-y-2">
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <UserCheck className="w-4 h-4 text-emerald-400" />
+                        현장(오프라인) 참석자 수동 출석 등록
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        온라인 신청을 하지 않았지만 현장에 나온 회원을 의장이
+                        직접 출석 처리합니다.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={offlineAttendeeId}
+                          onChange={(e) => setOfflineAttendeeId(e.target.value)}
+                          className="flex-1 min-w-[200px] px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                        >
+                          <option value="">회원 선택...</option>
+                          {users
+                            .filter(
+                              (u) =>
+                                u.role === "LAWYER" && u.status === "ACTIVE",
+                            )
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name} ({u.office_name || "개인/미기재"})
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          onClick={handleAddOfflineAttendance}
+                          disabled={!offlineAttendeeId || isAddingAttendance}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          {isAddingAttendance ? "등록 중..." : "현장 출석 등록"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 출석 목록 */}
+                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                      <span>
+                        출석·위임 신청 현황 ({assAttendances.length}건)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold">
+                          대기 {pendingAttendances.length}건
+                        </span>
+                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-[10px] font-bold">
+                          승인{" "}
+                          {
+                            assAttendances.filter(
+                              (a) => a.approval_status === "APPROVED",
+                            ).length
+                          }
+                          건
+                        </span>
+                      </div>
+                    </div>
+                    {assAttendances.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-6">
+                        접수된 출석 또는 위임 신청이 없습니다.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {assAttendances.map((item) => (
                           <div
-                            className={`h-full rounded-full transition-all duration-700 ${attendanceStats.quorumMet ? "bg-emerald-500" : "bg-amber-500"}`}
-                            style={{ width: `${Math.min(100, Math.round((attendanceStats.presentRights / (attendanceStats.quorumNeeded || 1)) * 100))}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-[11px] text-slate-500">
-                          <span>0</span>
-                          <span>정족수 기준: {attendanceStats.quorumNeeded}표</span>
-                          <span>전체 의결권: {attendanceStats.totalRights}표</span>
-                        </div>
+                            key={item.id}
+                            className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs transition-colors ${
+                              item.approval_status === "PENDING"
+                                ? "bg-amber-500/5 border-amber-500/20"
+                                : item.approval_status === "REJECTED"
+                                  ? "bg-red-950/20 border-red-800/30 opacity-60"
+                                  : "bg-slate-900 border-slate-800"
+                            }`}
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <strong className="text-white">
+                                  {item.grantor_name || "회원"}
+                                </strong>
+                                {item.is_proxy ? (
+                                  <>
+                                    <span className="text-slate-400">
+                                      → {item.proxy_name || "수임인"}
+                                    </span>
+                                    {item.firm_id ? (
+                                      <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold">
+                                        🏢 법인 ({item.voting_power || 1}표)
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded text-[10px]">
+                                        개인위임
+                                      </span>
+                                    )}
+                                    {item.evidence_url && (
+                                      <a
+                                        href={item.evidence_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-indigo-400 hover:text-indigo-300 underline text-[11px] flex items-center gap-0.5"
+                                      >
+                                        <ExternalLink className="w-3 h-3" />{" "}
+                                        증빙
+                                      </a>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-slate-400">
+                                    직접 출석
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                className={`text-[10px] font-bold ${
+                                  item.approval_status === "PENDING"
+                                    ? "text-amber-400"
+                                    : item.approval_status === "APPROVED"
+                                      ? "text-emerald-400"
+                                      : "text-red-400"
+                                }`}
+                              >
+                                {item.approval_status === "PENDING"
+                                  ? "⏳ 승인 대기"
+                                  : item.approval_status === "APPROVED"
+                                    ? item.attended
+                                      ? "✅ 출석 확인됨"
+                                      : "✅ 위임 승인됨"
+                                    : "❌ 반려됨"}
+                              </div>
+                            </div>
+                            <div className="flex gap-1.5">
+                              {item.approval_status !== "APPROVED" && (
+                                <button
+                                  onClick={() =>
+                                    handleAttendance(item.id, "APPROVED", true)
+                                  }
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
+                                >
+                                  승인·출석
+                                </button>
+                              )}
+                              {item.approval_status !== "REJECTED" && (
+                                <button
+                                  onClick={() =>
+                                    handleAttendance(item.id, "REJECTED", false)
+                                  }
+                                  className="px-3 py-1.5 bg-red-900/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-bold"
+                                >
+                                  반려
+                                </button>
+                              )}
+                              {item.approval_status === "APPROVED" &&
+                                !item.attended && (
+                                  <button
+                                    onClick={() =>
+                                      handleAttendance(
+                                        item.id,
+                                        "APPROVED",
+                                        true,
+                                      )
+                                    }
+                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold"
+                                  >
+                                    출석 체크
+                                  </button>
+                                )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
+                  </div>
 
-                    {/* 진행 중 안건 */}
-                    <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                        <span className="flex items-center gap-1.5"><Vote className="w-4 h-4 text-emerald-400" /> 상정 안건 현황</span>
-                        <span className="text-slate-500">{assAgendas.length}건</span>
-                      </div>
-                      {assAgendas.length === 0 ? (
-                        <p className="text-xs text-slate-600 text-center py-4">상정된 안건이 없습니다.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {assAgendas.map((ag) => (
-                            <div key={ag.id} className="flex items-center justify-between gap-3 p-3 bg-slate-900 rounded-xl text-xs">
-                              <div className="min-w-0">
-                                <div className="font-bold text-white truncate">{ag.title}</div>
-                                {ag.description && <div className="text-slate-500 truncate mt-0.5">{ag.description}</div>}
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className={`px-2 py-0.5 rounded font-bold text-[10px] border ${
-                                  ag.status === "VOTING" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                                  : ag.status === "CLOSED" || ag.status === "RESULT_CONFIRMED" ? "bg-slate-700 text-slate-400 border-slate-600"
-                                  : ag.status === "ON_HOLD" ? "bg-slate-700 text-slate-500 border-slate-600"
-                                  : "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                                }`}>
-                                  {ag.status === "VOTING" ? "🟢 표결중"
-                                    : ag.status === "CLOSED" ? "⬛ 종료"
-                                    : ag.status === "RESULT_CONFIRMED" ? "✅ 확정"
-                                    : ag.status === "ON_HOLD" ? "⏸ 보류"
-                                    : "🕐 대기"}
+                  {/* 의결권 수동 설정 */}
+                  <div className="p-4 bg-slate-950 border border-amber-500/20 rounded-xl space-y-3">
+                    <div className="text-xs font-bold text-white">
+                      총회별 수동 의결권 설정
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      설정하지 않은 회원은 기본 1표입니다. 승인된 위임표는
+                      별도로 추가됩니다.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      <select
+                        value={rightAssemblyId}
+                        onChange={(e) => setRightAssemblyId(e.target.value)}
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
+                      >
+                        <option value="">총회 선택</option>
+                        {assemblies.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.title}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={rightUserId}
+                        onChange={(e) => setRightUserId(e.target.value)}
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
+                      >
+                        <option value="">회원 선택</option>
+                        {users
+                          .filter(
+                            (u) => u.role === "LAWYER" && u.status === "ACTIVE",
+                          )
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.login_id})
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        type="number"
+                        min={0}
+                        value={rightPower}
+                        onChange={(e) => setRightPower(Number(e.target.value))}
+                        placeholder="의결권 수"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
+                      />
+                      <input
+                        type="text"
+                        value={rightReason}
+                        onChange={(e) => setRightReason(e.target.value)}
+                        placeholder="설정 사유"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSetVotingRight}
+                      className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold"
+                    >
+                      의결권 저장
+                    </button>
+                    {votingRights.filter(
+                      (r) =>
+                        !rightAssemblyId || r.assembly_id === rightAssemblyId,
+                    ).length > 0 && (
+                      <div className="space-y-1 border-t border-slate-800 pt-2">
+                        {votingRights
+                          .filter(
+                            (r) =>
+                              !rightAssemblyId ||
+                              r.assembly_id === rightAssemblyId,
+                          )
+                          .map((right) => (
+                            <div
+                              key={`${right.assembly_id}-${right.user_id}`}
+                              className="flex justify-between items-center text-xs text-slate-300 p-2 bg-slate-900 rounded-lg"
+                            >
+                              <span>
+                                <span className="text-slate-500 text-[10px] mr-1">
+                                  {assemblies.find(
+                                    (a) => a.id === right.assembly_id,
+                                  )?.title || right.assembly_id}
                                 </span>
-                                {ag.status === "READY" && selectedAssembly?.status === "IN_SESSION" && (
-                                  <button onClick={() => handleStartVoting(ag.id)}
-                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded-lg">
-                                    표결 개시
-                                  </button>
-                                )}
-                                {ag.status === "VOTING" && (
-                                  <button onClick={() => handleCloseVoting(ag.id)}
-                                    className="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold rounded-lg">
-                                    표결 종료
-                                  </button>
-                                )}
-                              </div>
+                                {right.user_name || right.user_id}
+                              </span>
+                              <span className="flex items-center gap-2">
+                                <strong className="text-amber-400 font-mono">
+                                  {right.voting_power}표
+                                </strong>
+                                <span className="text-slate-500 text-[10px]">
+                                  {right.reason}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    handleRemoveVotingRight(
+                                      right.assembly_id,
+                                      right.user_id,
+                                    )
+                                  }
+                                  className="text-red-400 hover:text-red-300 text-[10px]"
+                                >
+                                  삭제
+                                </button>
+                              </span>
                             </div>
                           ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {/* 서브탭: 감사 로그 대시보드                                          */}
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {assemblySubTab === "audit" && (
+                <div className="space-y-4">
+                  {/* 필터 바 */}
+                  <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                    <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <select
+                      value={auditFilterAssembly}
+                      onChange={(e) => setAuditFilterAssembly(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white min-w-[160px]"
+                    >
+                      <option value="">전체 총회</option>
+                      {assemblies.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.title}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={auditFilterAction}
+                      onChange={(e) => setAuditFilterAction(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white min-w-[140px]"
+                    >
+                      <option value="">전체 액션</option>
+                      {uniqueActions.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={loadAuditLogs}
+                      disabled={isLoadingAudit}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg font-bold disabled:opacity-50"
+                    >
+                      <RefreshCw
+                        className={`w-3.5 h-3.5 ${isLoadingAudit ? "animate-spin" : ""}`}
+                      />
+                      {isLoadingAudit ? "로딩 중..." : "새로고침"}
+                    </button>
+                    <a
+                      href={`/api/assembly/audit?format=csv${auditFilterAssembly ? `&assemblyId=${auditFilterAssembly}` : ""}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg font-bold ml-auto"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> CSV
+                    </a>
+                  </div>
+
+                  {/* 로그 통계 */}
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      {
+                        label: "전체 로그",
+                        value: filteredAuditLogs.length,
+                        cls: "text-white",
+                      },
+                      {
+                        label: "이번 총회",
+                        value: filteredAuditLogs.filter(
+                          (l) => l.assembly_id === selectedAssemblyId,
+                        ).length,
+                        cls: "text-emerald-400",
+                      },
+                      {
+                        label: "오늘",
+                        value: filteredAuditLogs.filter((l) =>
+                          String(l.created_at).startsWith(
+                            new Date().toISOString().slice(0, 10),
+                          ),
+                        ).length,
+                        cls: "text-blue-400",
+                      },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center"
+                      >
+                        <div className="text-[11px] text-slate-500 mb-0.5">
+                          {s.label}
                         </div>
+                        <div
+                          className={`text-xl font-extrabold font-mono ${s.cls}`}
+                        >
+                          {s.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 로그 목록 */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] text-[10px] font-bold text-slate-400 bg-slate-900 px-4 py-2 border-b border-slate-800">
+                      <span className="w-20">시각</span>
+                      <span>총회</span>
+                      <span>안건</span>
+                      <span>액션</span>
+                      <span className="w-24 text-right">처리자</span>
+                    </div>
+                    <div className="divide-y divide-slate-800/50 max-h-[480px] overflow-y-auto">
+                      {filteredAuditLogs.length === 0 ? (
+                        <div className="py-8 text-center text-slate-500 text-xs">
+                          조건에 맞는 로그가 없습니다.
+                        </div>
+                      ) : (
+                        filteredAuditLogs.map((log) => (
+                          <div key={log.id}>
+                            <button
+                              onClick={() =>
+                                setExpandedAuditId(
+                                  expandedAuditId === log.id ? null : log.id,
+                                )
+                              }
+                              className="w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-4 py-2.5 text-xs hover:bg-slate-900/60 transition-colors text-left"
+                            >
+                              <span className="w-20 text-slate-500 font-mono text-[10px] truncate">
+                                {String(log.created_at || "")
+                                  .replace("T", " ")
+                                  .slice(0, 16)}
+                              </span>
+                              <span className="text-slate-400 truncate">
+                                {String(
+                                  log.assembly_title || log.assembly_id || "-",
+                                )}
+                              </span>
+                              <span className="text-slate-400 truncate">
+                                {String(log.agenda_title || "-")}
+                              </span>
+                              <span
+                                className={`font-bold truncate ${
+                                  String(log.action).includes("START") ||
+                                  String(log.action).includes("OPEN")
+                                    ? "text-emerald-400"
+                                    : String(log.action).includes("CLOSE") ||
+                                        String(log.action).includes("DELETE")
+                                      ? "text-red-400"
+                                      : String(log.action).includes("CONFIRM")
+                                        ? "text-blue-400"
+                                        : "text-amber-300"
+                                }`}
+                              >
+                                {String(log.action)}
+                              </span>
+                              <span className="w-24 text-right text-slate-500 text-[10px] truncate">
+                                {String(log.actor_id || "-")}
+                              </span>
+                            </button>
+                            {expandedAuditId === log.id && log.details && (
+                              <div className="px-4 pb-3 bg-slate-900/40">
+                                <pre className="text-[11px] text-slate-300 font-mono bg-slate-950 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
+                                  {(() => {
+                                    try {
+                                      return JSON.stringify(
+                                        JSON.parse(String(log.details)),
+                                        null,
+                                        2,
+                                      );
+                                    } catch {
+                                      return String(log.details);
+                                    }
+                                  })()}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        ))
                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {/* 서브탭: 투표 링크 발급                                              */}
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {assemblySubTab === "votelink" && (
+                <div className="space-y-4">
+                  {/* 발급 폼 */}
+                  <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Link2 className="w-4 h-4 text-blue-400" />
+                        개인 투표 링크 발급
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        로그인 없이도 개인 JWT 링크로 투표할 수 있습니다. 발급
+                        링크는 회원에게 전달해 주세요.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <label className="block text-slate-400 font-bold mb-1">
+                          대상 회원 <span className="text-rose-400">*</span>
+                        </label>
+                        <select
+                          value={linkTargetUserId}
+                          onChange={(e) => setLinkTargetUserId(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="">회원을 선택하세요</option>
+                          {users
+                            .filter(
+                              (u) =>
+                                u.role === "LAWYER" && u.status === "ACTIVE",
+                            )
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name} ({u.login_id})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 font-bold mb-1">
+                          대상 총회 <span className="text-rose-400">*</span>
+                        </label>
+                        <select
+                          value={linkAssemblyId}
+                          onChange={(e) => {
+                            setLinkAssemblyId(e.target.value);
+                            setLinkAgendaId("");
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="">총회 선택</option>
+                          {assemblies.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 font-bold mb-1">
+                          특정 안건 한정 (선택)
+                        </label>
+                        <select
+                          value={linkAgendaId}
+                          onChange={(e) => setLinkAgendaId(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                        >
+                          <option value="">전체 안건 (제한 없음)</option>
+                          {agendas
+                            .filter((ag) => ag.assembly_id === linkAssemblyId)
+                            .map((ag) => (
+                              <option key={ag.id} value={ag.id}>
+                                {ag.title}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-slate-400 font-bold mb-1">
+                          링크 유효 기간
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={linkExpiryDays}
+                            onChange={(e) =>
+                              setLinkExpiryDays(Number(e.target.value))
+                            }
+                            className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                          />
+                          <span className="text-slate-400">일</span>
+                          <div className="flex gap-1 ml-2">
+                            {[7, 14, 30].map((d) => (
+                              <button
+                                key={d}
+                                onClick={() => setLinkExpiryDays(d)}
+                                className={`px-2 py-1 text-[10px] rounded font-bold transition-colors ${linkExpiryDays === d ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white"}`}
+                              >
+                                {d}일
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-200 space-y-0.5">
+                      <p>
+                        • 발급된 링크로 접근하면 로그인 없이 해당 회원 권한으로
+                        투표 참여 가능합니다.
+                      </p>
+                      <p>• 링크 유저는 출석 검증이 면제됩니다 (EXEMPT 처리).</p>
+                      <p>
+                        • 링크 분실 또는 유출 시 만료 전에도 새 링크를 발급하면
+                        이전 링크는 무효화됩니다.
+                      </p>
                     </div>
 
                     <button
-                      onClick={() => loadAttendanceStats(selectedAssemblyId)}
-                      className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                      onClick={handleGenerateVoteLink}
+                      disabled={
+                        isGeneratingLink || !linkTargetUserId || !linkAssemblyId
+                      }
+                      className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow transition-colors"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingStats ? "animate-spin" : ""}`} />
-                      새로고침
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* 서브탭: 안건 관리                                                  */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {assemblySubTab === "agendas" && (
-              <div className="space-y-4">
-                {!selectedAssemblyId ? (
-                  <div className="p-10 bg-slate-950 border border-slate-800 rounded-2xl text-center text-slate-500 text-sm">
-                    위에서 총회를 선택하세요.
-                  </div>
-                ) : assAgendas.length === 0 ? (
-                  <div className="p-10 bg-slate-950 border border-slate-800 rounded-2xl text-center space-y-3">
-                    <p className="text-slate-500 text-sm">상정된 안건이 없습니다.</p>
-                    <button onClick={() => { setTargetAssemblyId(selectedAssemblyId); setShowAgendaModal(true); }}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl inline-flex items-center gap-1.5">
-                      <Plus className="w-3.5 h-3.5" /> 첫 안건 상정하기
+                      <Link2 className="w-4 h-4" />
+                      {isGeneratingLink ? "발급 중..." : "개인 투표 링크 발급"}
                     </button>
                   </div>
-                ) : (
-                  assAgendas.map((ag, agIdx) => (
-                    <div key={ag.id} className="p-5 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
-                      {/* 안건 헤더 */}
-                      <div className="flex flex-wrap items-start gap-3">
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                              ag.is_secret ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                            }`}>
-                              {ag.is_secret ? "🔒 무기명" : "기명투표"}
-                            </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                              ag.voting_method === "TWO_THIRDS" ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                              : ag.voting_method === "PLURALITY" ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
-                              : ag.voting_method === "RANKED" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                              : "bg-slate-800 text-slate-300 border-slate-700"
-                            }`}>
-                              {ag.voting_method === "TWO_THIRDS" ? "특별의결(2/3)"
-                                : ag.voting_method === "PLURALITY" ? "최다득표"
-                                : ag.voting_method === "RANKED" ? "순위투표"
-                                : "일반의결(과반)"}
-                            </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                              ag.status === "VOTING" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                              : ag.status === "CLOSED" ? "bg-slate-800 text-slate-500 border-slate-700"
-                              : ag.status === "RESULT_CONFIRMED" ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                              : ag.status === "ON_HOLD" ? "bg-slate-800 text-slate-400 border-slate-700"
-                              : "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                            }`}>
-                              {ag.status === "VOTING" ? "🟢 표결 진행중"
-                                : ag.status === "CLOSED" ? "⬛ 표결 종료"
-                                : ag.status === "RESULT_CONFIRMED" ? "✅ 결과 확정"
-                                : ag.status === "ON_HOLD" ? "⏸ 보류"
-                                : "🕐 표결 대기"}
-                            </span>
-                          </div>
-                          <h4 className="text-sm font-bold text-white">{ag.title}</h4>
-                          {ag.description && <p className="text-xs text-slate-400">{ag.description}</p>}
-                          {ag.voting_deadline && ag.status === "VOTING" && (
-                            <div className="text-[11px] text-amber-400 flex items-center gap-1">
-                              <Clock className="w-3 h-3" /> 마감: {ag.voting_deadline}
-                            </div>
-                          )}
-                        </div>
 
-                        {/* 액션 버튼 그룹 */}
-                        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                          {selectedAssembly?.status === "IN_SESSION" && !["VOTING", "CLOSED", "RESULT_CONFIRMED"].includes(ag.status) && (
-                            <div className="flex gap-1">
-                              <button disabled={agIdx === 0}
-                                onClick={() => { const n=[...assAgendas]; [n[agIdx-1],n[agIdx]]=[n[agIdx],n[agIdx-1]]; handleReorderAgendas(selectedAssemblyId, n.map(i=>i.id)); }}
-                                className="p-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg">
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button disabled={agIdx === assAgendas.length - 1}
-                                onClick={() => { const n=[...assAgendas]; [n[agIdx],n[agIdx+1]]=[n[agIdx+1],n[agIdx]]; handleReorderAgendas(selectedAssemblyId, n.map(i=>i.id)); }}
-                                className="p-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-300 rounded-lg">
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-                          {["READY", "ON_HOLD"].includes(ag.status) && (
-                            <button onClick={() => openEditAgendaModal(ag)}
-                              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-lg flex items-center gap-1">
-                              <Edit className="w-3.5 h-3.5" /> 수정
-                            </button>
-                          )}
-                          {selectedAssembly?.status === "IN_SESSION" && ag.status === "READY" && (
-                            <>
-                              <button onClick={() => handleAgendaStatus(ag.id, "ON_HOLD")}
-                                className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg">보류</button>
-                              <button onClick={() => handleStartVoting(ag.id)}
-                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow">표결 개시 선언</button>
-                            </>
-                          )}
-                          {ag.status === "ON_HOLD" && (
-                            <button onClick={() => handleAgendaStatus(ag.id, "READY")}
-                              className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg">재상정</button>
-                          )}
-                          {ag.status === "VOTING" && (
-                            <>
-                              <button onClick={() => handleExtendDeadline(ag.id)}
-                                className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg">마감 연장</button>
-                              <button onClick={() => handleCloseVoting(ag.id)}
-                                className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg shadow">표결 종료 및 결과 선포</button>
-                            </>
-                          )}
-                          {ag.status === "CLOSED" && (
-                            <button onClick={() => handleConfirmResult(ag.id, "CONFIRM_RESULT")}
-                              className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow">결과 확정</button>
-                          )}
-                          {ag.status === "RESULT_CONFIRMED" && (
-                            <button onClick={() => handleConfirmResult(ag.id, "REOPEN_RESULT")}
-                              className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg">결과 재개</button>
-                          )}
-                        </div>
+                  {/* 발급 이력 */}
+                  {generatedLinks.length > 0 && (
+                    <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+                      <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        이번 세션 발급 이력 ({generatedLinks.length}건)
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* 서브탭: 출석 관리                                                  */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {assemblySubTab === "attendance" && (
-              <div className="space-y-4">
-                {/* 현장 출석 수동 등록 */}
-                {selectedAssemblyId && (
-                  <div className="p-4 bg-slate-950 border border-emerald-800/40 rounded-xl space-y-2">
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                      <UserCheck className="w-4 h-4 text-emerald-400" />
-                      현장(오프라인) 참석자 수동 출석 등록
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      온라인 신청을 하지 않았지만 현장에 나온 회원을 의장이 직접 출석 처리합니다.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <select value={offlineAttendeeId} onChange={(e) => setOfflineAttendeeId(e.target.value)}
-                        className="flex-1 min-w-[200px] px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white">
-                        <option value="">회원 선택...</option>
-                        {users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE").map((u) => (
-                          <option key={u.id} value={u.id}>{u.name} ({u.office_name || "개인/미기재"})</option>
-                        ))}
-                      </select>
-                      <button onClick={handleAddOfflineAttendance} disabled={!offlineAttendeeId || isAddingAttendance}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5">
-                        <Plus className="w-3.5 h-3.5" />
-                        {isAddingAttendance ? "등록 중..." : "현장 출석 등록"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* 출석 목록 */}
-                <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-                    <span>출석·위임 신청 현황 ({assAttendances.length}건)</span>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold">
-                        대기 {pendingAttendances.length}건
-                      </span>
-                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-[10px] font-bold">
-                        승인 {assAttendances.filter(a => a.approval_status === "APPROVED").length}건
-                      </span>
-                    </div>
-                  </div>
-                  {assAttendances.length === 0 ? (
-                    <p className="text-xs text-slate-500 text-center py-6">접수된 출석 또는 위임 신청이 없습니다.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {assAttendances.map((item) => (
-                        <div key={item.id}
-                          className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs transition-colors ${
-                            item.approval_status === "PENDING"
-                              ? "bg-amber-500/5 border-amber-500/20"
-                              : item.approval_status === "REJECTED"
-                                ? "bg-red-950/20 border-red-800/30 opacity-60"
-                                : "bg-slate-900 border-slate-800"
-                          }`}>
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <strong className="text-white">{item.grantor_name || "회원"}</strong>
-                              {item.is_proxy ? (
-                                <>
-                                  <span className="text-slate-400">→ {item.proxy_name || "수임인"}</span>
-                                  {item.firm_id ? (
-                                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold">
-                                      🏢 법인 ({item.voting_power || 1}표)
-                                    </span>
-                                  ) : (
-                                    <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded text-[10px]">
-                                      개인위임
-                                    </span>
-                                  )}
-                                  {item.evidence_url && (
-                                    <a href={item.evidence_url} target="_blank" rel="noopener noreferrer"
-                                      className="text-indigo-400 hover:text-indigo-300 underline text-[11px] flex items-center gap-0.5">
-                                      <ExternalLink className="w-3 h-3" /> 증빙
-                                    </a>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-slate-400">직접 출석</span>
-                              )}
-                            </div>
-                            <div className={`text-[10px] font-bold ${
-                              item.approval_status === "PENDING" ? "text-amber-400"
-                              : item.approval_status === "APPROVED" ? "text-emerald-400"
-                              : "text-red-400"
-                            }`}>
-                              {item.approval_status === "PENDING" ? "⏳ 승인 대기"
-                                : item.approval_status === "APPROVED"
-                                  ? item.attended ? "✅ 출석 확인됨" : "✅ 위임 승인됨"
-                                : "❌ 반려됨"}
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5">
-                            {item.approval_status !== "APPROVED" && (
-                              <button onClick={() => handleAttendance(item.id, "APPROVED", true)}
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold">
-                                승인·출석
-                              </button>
-                            )}
-                            {item.approval_status !== "REJECTED" && (
-                              <button onClick={() => handleAttendance(item.id, "REJECTED", false)}
-                                className="px-3 py-1.5 bg-red-900/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-bold">
-                                반려
-                              </button>
-                            )}
-                            {item.approval_status === "APPROVED" && !item.attended && (
-                              <button onClick={() => handleAttendance(item.id, "APPROVED", true)}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold">
-                                출석 체크
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 의결권 수동 설정 */}
-                <div className="p-4 bg-slate-950 border border-amber-500/20 rounded-xl space-y-3">
-                  <div className="text-xs font-bold text-white">총회별 수동 의결권 설정</div>
-                  <p className="text-[11px] text-slate-500">설정하지 않은 회원은 기본 1표입니다. 승인된 위임표는 별도로 추가됩니다.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    <select value={rightAssemblyId} onChange={(e) => setRightAssemblyId(e.target.value)}
-                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white">
-                      <option value="">총회 선택</option>
-                      {assemblies.map((a) => <option key={a.id} value={a.id}>{a.title}</option>)}
-                    </select>
-                    <select value={rightUserId} onChange={(e) => setRightUserId(e.target.value)}
-                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white">
-                      <option value="">회원 선택</option>
-                      {users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE").map((u) => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.login_id})</option>
-                      ))}
-                    </select>
-                    <input type="number" min={0} value={rightPower} onChange={(e) => setRightPower(Number(e.target.value))}
-                      placeholder="의결권 수" className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white" />
-                    <input type="text" value={rightReason} onChange={(e) => setRightReason(e.target.value)}
-                      placeholder="설정 사유" className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white" />
-                  </div>
-                  <button onClick={handleSetVotingRight}
-                    className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold">
-                    의결권 저장
-                  </button>
-                  {votingRights.filter(r => !rightAssemblyId || r.assembly_id === rightAssemblyId).length > 0 && (
-                    <div className="space-y-1 border-t border-slate-800 pt-2">
-                      {votingRights.filter(r => !rightAssemblyId || r.assembly_id === rightAssemblyId).map((right) => (
-                        <div key={`${right.assembly_id}-${right.user_id}`}
-                          className="flex justify-between items-center text-xs text-slate-300 p-2 bg-slate-900 rounded-lg">
-                          <span>
-                            <span className="text-slate-500 text-[10px] mr-1">
-                              {assemblies.find(a => a.id === right.assembly_id)?.title || right.assembly_id}
-                            </span>
-                            {right.user_name || right.user_id}
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <strong className="text-amber-400 font-mono">{right.voting_power}표</strong>
-                            <span className="text-slate-500 text-[10px]">{right.reason}</span>
-                            <button onClick={() => handleRemoveVotingRight(right.assembly_id, right.user_id)}
-                              className="text-red-400 hover:text-red-300 text-[10px]">삭제</button>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* 서브탭: 감사 로그 대시보드                                          */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {assemblySubTab === "audit" && (
-              <div className="space-y-4">
-                {/* 필터 바 */}
-                <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                  <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <select value={auditFilterAssembly} onChange={(e) => setAuditFilterAssembly(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white min-w-[160px]">
-                    <option value="">전체 총회</option>
-                    {assemblies.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
-                  </select>
-                  <select value={auditFilterAction} onChange={(e) => setAuditFilterAction(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white min-w-[140px]">
-                    <option value="">전체 액션</option>
-                    {uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                  <button onClick={loadAuditLogs} disabled={isLoadingAudit}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg font-bold disabled:opacity-50">
-                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAudit ? "animate-spin" : ""}`} />
-                    {isLoadingAudit ? "로딩 중..." : "새로고침"}
-                  </button>
-                  <a href={`/api/assembly/audit?format=csv${auditFilterAssembly ? `&assemblyId=${auditFilterAssembly}` : ""}`}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg font-bold ml-auto">
-                    <FileText className="w-3.5 h-3.5" /> CSV
-                  </a>
-                </div>
-
-                {/* 로그 통계 */}
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: "전체 로그", value: filteredAuditLogs.length, cls: "text-white" },
-                    { label: "이번 총회", value: filteredAuditLogs.filter(l => l.assembly_id === selectedAssemblyId).length, cls: "text-emerald-400" },
-                    { label: "오늘", value: filteredAuditLogs.filter(l => String(l.created_at).startsWith(new Date().toISOString().slice(0, 10))).length, cls: "text-blue-400" },
-                  ].map(s => (
-                    <div key={s.label} className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
-                      <div className="text-[11px] text-slate-500 mb-0.5">{s.label}</div>
-                      <div className={`text-xl font-extrabold font-mono ${s.cls}`}>{s.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 로그 목록 */}
-                <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                  <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] text-[10px] font-bold text-slate-400 bg-slate-900 px-4 py-2 border-b border-slate-800">
-                    <span className="w-20">시각</span>
-                    <span>총회</span>
-                    <span>안건</span>
-                    <span>액션</span>
-                    <span className="w-24 text-right">처리자</span>
-                  </div>
-                  <div className="divide-y divide-slate-800/50 max-h-[480px] overflow-y-auto">
-                    {filteredAuditLogs.length === 0 ? (
-                      <div className="py-8 text-center text-slate-500 text-xs">조건에 맞는 로그가 없습니다.</div>
-                    ) : (
-                      filteredAuditLogs.map((log) => (
-                        <div key={log.id}>
-                          <button
-                            onClick={() => setExpandedAuditId(expandedAuditId === log.id ? null : log.id)}
-                            className="w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-4 py-2.5 text-xs hover:bg-slate-900/60 transition-colors text-left"
+                      <div className="space-y-2">
+                        {generatedLinks.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2"
                           >
-                            <span className="w-20 text-slate-500 font-mono text-[10px] truncate">
-                              {String(log.created_at || "").replace("T", " ").slice(0, 16)}
-                            </span>
-                            <span className="text-slate-400 truncate">{String(log.assembly_title || log.assembly_id || "-")}</span>
-                            <span className="text-slate-400 truncate">{String(log.agenda_title || "-")}</span>
-                            <span className={`font-bold truncate ${
-                              String(log.action).includes("START") || String(log.action).includes("OPEN") ? "text-emerald-400"
-                              : String(log.action).includes("CLOSE") || String(log.action).includes("DELETE") ? "text-red-400"
-                              : String(log.action).includes("CONFIRM") ? "text-blue-400"
-                              : "text-amber-300"
-                            }`}>{String(log.action)}</span>
-                            <span className="w-24 text-right text-slate-500 text-[10px] truncate">{String(log.actor_id || "-")}</span>
-                          </button>
-                          {expandedAuditId === log.id && log.details && (
-                            <div className="px-4 pb-3 bg-slate-900/40">
-                              <pre className="text-[11px] text-slate-300 font-mono bg-slate-950 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-                                {(() => { try { return JSON.stringify(JSON.parse(String(log.details)), null, 2); } catch { return String(log.details); } })()}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* 서브탭: 투표 링크 발급                                              */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {assemblySubTab === "votelink" && (
-              <div className="space-y-4">
-                {/* 발급 폼 */}
-                <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl space-y-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Link2 className="w-4 h-4 text-blue-400" />
-                      개인 투표 링크 발급
-                    </h3>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      로그인 없이도 개인 JWT 링크로 투표할 수 있습니다. 발급 링크는 회원에게 전달해 주세요.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block text-slate-400 font-bold mb-1">대상 회원 <span className="text-rose-400">*</span></label>
-                      <select value={linkTargetUserId} onChange={(e) => setLinkTargetUserId(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
-                        <option value="">회원을 선택하세요</option>
-                        {users.filter(u => u.role === "LAWYER" && u.status === "ACTIVE").map(u => (
-                          <option key={u.id} value={u.id}>{u.name} ({u.login_id})</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-slate-400 font-bold mb-1">대상 총회 <span className="text-rose-400">*</span></label>
-                      <select value={linkAssemblyId} onChange={(e) => { setLinkAssemblyId(e.target.value); setLinkAgendaId(""); }}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
-                        <option value="">총회 선택</option>
-                        {assemblies.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-slate-400 font-bold mb-1">특정 안건 한정 (선택)</label>
-                      <select value={linkAgendaId} onChange={(e) => setLinkAgendaId(e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
-                        <option value="">전체 안건 (제한 없음)</option>
-                        {agendas.filter(ag => ag.assembly_id === linkAssemblyId).map(ag => (
-                          <option key={ag.id} value={ag.id}>{ag.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-slate-400 font-bold mb-1">링크 유효 기간</label>
-                      <div className="flex items-center gap-2">
-                        <input type="number" min={1} max={365} value={linkExpiryDays}
-                          onChange={(e) => setLinkExpiryDays(Number(e.target.value))}
-                          className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500" />
-                        <span className="text-slate-400">일</span>
-                        <div className="flex gap-1 ml-2">
-                          {[7, 14, 30].map(d => (
-                            <button key={d} onClick={() => setLinkExpiryDays(d)}
-                              className={`px-2 py-1 text-[10px] rounded font-bold transition-colors ${linkExpiryDays === d ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 hover:text-white"}`}>
-                              {d}일
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-200 space-y-0.5">
-                    <p>• 발급된 링크로 접근하면 로그인 없이 해당 회원 권한으로 투표 참여 가능합니다.</p>
-                    <p>• 링크 유저는 출석 검증이 면제됩니다 (EXEMPT 처리).</p>
-                    <p>• 링크 분실 또는 유출 시 만료 전에도 새 링크를 발급하면 이전 링크는 무효화됩니다.</p>
-                  </div>
-
-                  <button onClick={handleGenerateVoteLink} disabled={isGeneratingLink || !linkTargetUserId || !linkAssemblyId}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow transition-colors">
-                    <Link2 className="w-4 h-4" />
-                    {isGeneratingLink ? "발급 중..." : "개인 투표 링크 발급"}
-                  </button>
-                </div>
-
-                {/* 발급 이력 */}
-                {generatedLinks.length > 0 && (
-                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
-                    <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      이번 세션 발급 이력 ({generatedLinks.length}건)
-                    </div>
-                    <div className="space-y-2">
-                      {generatedLinks.map((item, idx) => (
-                        <div key={idx} className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <div className="text-xs">
-                              <span className="font-bold text-white">{item.userName}</span>
-                              <span className="text-slate-400 ml-2">
-                                {assemblies.find(a => a.id === linkAssemblyId)?.title || ""}
-                              </span>
-                              {item.agendaId && (
-                                <span className="ml-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded text-[10px]">
-                                  특정 안건 한정
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="text-xs">
+                                <span className="font-bold text-white">
+                                  {item.userName}
                                 </span>
-                              )}
+                                <span className="text-slate-400 ml-2">
+                                  {assemblies.find(
+                                    (a) => a.id === linkAssemblyId,
+                                  )?.title || ""}
+                                </span>
+                                {item.agendaId && (
+                                  <span className="ml-1.5 px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded text-[10px]">
+                                    특정 안건 한정
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                <Clock className="w-3 h-3" />
+                                {item.expiresInDays}일 유효 · {item.createdAt}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                              <Clock className="w-3 h-3" />
-                              {item.expiresInDays}일 유효 · {item.createdAt}
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-1.5 rounded-lg truncate border border-slate-800">
+                                {item.link}
+                              </code>
+                              <button
+                                onClick={() => copyVoteLink(item.link, idx)}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg shrink-0 transition-colors"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                                {copiedLinkIdx === idx ? "복사됨 ✓" : "복사"}
+                              </button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <code className="flex-1 text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-1.5 rounded-lg truncate border border-slate-800">
-                              {item.link}
-                            </code>
-                            <button onClick={() => copyVoteLink(item.link, idx)}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg shrink-0 transition-colors">
-                              <Copy className="w-3.5 h-3.5" />
-                              {copiedLinkIdx === idx ? "복사됨 ✓" : "복사"}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-600">
+                        * 이력은 현재 세션에서만 유지됩니다. 페이지 새로고침 시
+                        초기화됩니다.
+                      </p>
                     </div>
-                    <p className="text-[10px] text-slate-600">* 이력은 현재 세션에서만 유지됩니다. 페이지 새로고침 시 초기화됩니다.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       {/* 신규 총회 일정 개설 모달 */}
       {showAssemblyModal && (
@@ -3618,12 +4264,15 @@ export default function AdminClient({
             </div>
 
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-[11px] leading-relaxed">
-              ⚠️ 표결이 시작되지 않은 안건(대기/보류)만 수정할 수 있습니다. 수정 후 즉시 반영됩니다.
+              ⚠️ 표결이 시작되지 않은 안건(대기/보류)만 수정할 수 있습니다. 수정
+              후 즉시 반영됩니다.
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-300 font-bold mb-1">안건명 <span className="text-rose-400">*</span></label>
+                <label className="block text-slate-300 font-bold mb-1">
+                  안건명 <span className="text-rose-400">*</span>
+                </label>
                 <input
                   type="text"
                   required
@@ -3635,7 +4284,9 @@ export default function AdminClient({
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">제안 이유 및 설명</label>
+                <label className="block text-slate-300 font-bold mb-1">
+                  제안 이유 및 설명
+                </label>
                 <textarea
                   rows={3}
                   value={editAgDesc}
@@ -3646,7 +4297,9 @@ export default function AdminClient({
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">투표 선택지 (쉼표 구분)</label>
+                <label className="block text-slate-300 font-bold mb-1">
+                  투표 선택지 (쉼표 구분)
+                </label>
                 <input
                   type="text"
                   value={editAgChoices}
@@ -3657,7 +4310,9 @@ export default function AdminClient({
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">투표 의결 방식</label>
+                <label className="block text-slate-300 font-bold mb-1">
+                  투표 의결 방식
+                </label>
                 <select
                   value={editAgMethod}
                   onChange={(e) => setEditAgMethod(e.target.value)}
@@ -3672,7 +4327,9 @@ export default function AdminClient({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">정족수 (0=전체 1/3)</label>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    정족수 (0=전체 1/3)
+                  </label>
                   <input
                     type="number"
                     min={0}
@@ -3682,7 +4339,9 @@ export default function AdminClient({
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">투표 마감 시각 (선택)</label>
+                  <label className="block text-slate-300 font-bold mb-1">
+                    투표 마감 시각 (선택)
+                  </label>
                   <input
                     type="datetime-local"
                     value={editAgDeadline}
@@ -3699,7 +4358,9 @@ export default function AdminClient({
                   onChange={(e) => setEditAgIsSecret(e.target.checked)}
                   className="rounded text-purple-600 focus:ring-purple-500"
                 />
-                <span className="text-slate-300 font-semibold">무기명 비밀투표로 진행</span>
+                <span className="text-slate-300 font-semibold">
+                  무기명 비밀투표로 진행
+                </span>
               </label>
             </div>
 

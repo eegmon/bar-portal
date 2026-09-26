@@ -76,11 +76,18 @@ export default function RegisterPage() {
 
     setIdChecking(true);
     try {
-      const res = await fetch(`/api/auth/check-id?loginId=${encodeURIComponent(trimmed)}`);
+      const res = await fetch(
+        `/api/auth/check-id?loginId=${encodeURIComponent(trimmed)}`,
+      );
       const data = await res.json();
       setIdChecked(true);
       setIsIdAvailable(data.available);
-      setIdMessage(data.message || (data.available ? "사용 가능한 아이디입니다." : "이미 사용 중인 아이디입니다."));
+      setIdMessage(
+        data.message ||
+          (data.available
+            ? "사용 가능한 아이디입니다."
+            : "이미 사용 중인 아이디입니다."),
+      );
     } catch {
       setIdChecked(true);
       setIsIdAvailable(false);
@@ -90,7 +97,8 @@ export default function RegisterPage() {
     }
   };
 
-  const isPasswordMatch = password && passwordConfirm && password === passwordConfirm;
+  const isPasswordMatch =
+    password && passwordConfirm && password === passwordConfirm;
   const isPasswordMismatch = passwordConfirm && password !== passwordConfirm;
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -115,10 +123,15 @@ export default function RegisterPage() {
     if (!idChecked || !isIdAvailable) {
       // 아이디 중복확인을 안 눌렀으면 자동 1회 체크 시도
       try {
-        const res = await fetch(`/api/auth/check-id?loginId=${encodeURIComponent(loginId.trim())}`);
+        const res = await fetch(
+          `/api/auth/check-id?loginId=${encodeURIComponent(loginId.trim())}`,
+        );
         const data = await res.json();
         if (!data.available) {
-          setError(data.message || "이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요.");
+          setError(
+            data.message ||
+              "이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요.",
+          );
           return;
         }
       } catch {
@@ -140,7 +153,9 @@ export default function RegisterPage() {
           discordId: discordId.trim(),
           isLawyerApplicant,
           officeName: isLawyerApplicant ? officeName.trim() : "",
-          qualificationProof: isLawyerApplicant ? qualificationProof.trim() : "",
+          qualificationProof: isLawyerApplicant
+            ? qualificationProof.trim()
+            : "",
           selfIntroduction: isLawyerApplicant ? selfIntroduction.trim() : "",
         }),
       });
@@ -150,7 +165,7 @@ export default function RegisterPage() {
 
       if (data.isPending) {
         alert(
-          "🎉 회원가입 및 변호사 자격 등록 신청이 완료되었습니다!\n\n협회 사무국의 승인 심사 후 정회원 변호사로 등록되며, 승인 전까지는 일반회원 권한으로 포털을 이용하실 수 있습니다."
+          "🎉 회원가입 및 변호사 자격 등록 신청이 완료되었습니다!\n\n협회 사무국의 승인 심사 후 정회원 변호사로 등록되며, 승인 전까지는 일반회원 권한으로 포털을 이용하실 수 있습니다.",
         );
       } else {
         alert("🎉 도스변호사협회 회원가입이 완료되었습니다!\n환영합니다.");
@@ -176,7 +191,8 @@ export default function RegisterPage() {
           도스변호사협회 회원가입
         </h1>
         <p className="text-xs sm:text-sm text-slate-400">
-          변호사시험 응시, 총회 전자투표 및 변호사 행정 포털 이용을 위한 통합 계정을 생성합니다.
+          변호사시험 응시, 총회 전자투표 및 변호사 행정 포털 이용을 위한 통합
+          계정을 생성합니다.
         </p>
       </div>
 
@@ -211,7 +227,9 @@ export default function RegisterPage() {
                   <User className="w-3.5 h-3.5 text-blue-400" />
                   일반회원 / 수험생
                 </div>
-                {!isLawyerApplicant && <Check className="w-4 h-4 text-amber-400" />}
+                {!isLawyerApplicant && (
+                  <Check className="w-4 h-4 text-amber-400" />
+                )}
               </div>
               <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                 변호사시험 응시생, 시험 준비생, 일반 시민 (즉시 활성)
@@ -231,7 +249,9 @@ export default function RegisterPage() {
                   <Award className="w-3.5 h-3.5 text-amber-400" />
                   변호사 자격등록 신청
                 </div>
-                {isLawyerApplicant && <Check className="w-4 h-4 text-amber-400" />}
+                {isLawyerApplicant && (
+                  <Check className="w-4 h-4 text-amber-400" />
+                )}
               </div>
               <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
                 기존 변호사 또는 합격자의 정식 변호사 등록 (사무국 승인제)
@@ -296,7 +316,11 @@ export default function RegisterPage() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
               >
-                {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                {showPassword ? (
+                  <EyeOff className="w-3 h-3" />
+                ) : (
+                  <Eye className="w-3 h-3" />
+                )}
                 {showPassword ? "숨기기" : "보기"}
               </button>
             </div>
@@ -335,13 +359,15 @@ export default function RegisterPage() {
                   isPasswordMatch
                     ? "border-emerald-500 focus:border-emerald-500"
                     : isPasswordMismatch
-                    ? "border-rose-500 focus:border-rose-500"
-                    : "border-slate-700 focus:border-amber-500"
+                      ? "border-rose-500 focus:border-rose-500"
+                      : "border-slate-700 focus:border-amber-500"
                 }`}
               />
             </div>
             {isPasswordMismatch && (
-              <p className="text-[11px] text-rose-400 mt-1">비밀번호가 일치하지 않습니다.</p>
+              <p className="text-[11px] text-rose-400 mt-1">
+                비밀번호가 일치하지 않습니다.
+              </p>
             )}
             {isPasswordMatch && (
               <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
@@ -361,7 +387,7 @@ export default function RegisterPage() {
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="예: 홍길동"
+            placeholder="예: eegmon"
             className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
           />
         </div>
@@ -384,7 +410,8 @@ export default function RegisterPage() {
             />
           </div>
           <p className="text-[10px] text-slate-500 mt-1">
-            💡 디스코드 계정을 입력하시면 공식 디스코드 서버 내 변호사/수험생 역할이 자동으로 동기화됩니다.
+            💡 디스코드 계정을 입력하시면 공식 디스코드 서버 내 변호사/수험생
+            역할이 자동으로 동기화됩니다.
           </p>
         </div>
 
@@ -417,7 +444,8 @@ export default function RegisterPage() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  자격 취득 근거 또는 증빙사항 <span className="text-amber-400">*</span>
+                  자격 취득 근거 또는 증빙사항{" "}
+                  <span className="text-amber-400">*</span>
                 </label>
                 <textarea
                   rows={2}
@@ -444,12 +472,14 @@ export default function RegisterPage() {
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-500 resize-none"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  이 내용은 승인된 후 변호사 명부에 공개됩니다. 증빙자료와 별도로 관리됩니다.
+                  이 내용은 승인된 후 변호사 명부에 공개됩니다. 증빙자료와
+                  별도로 관리됩니다.
                 </p>
               </div>
             </div>
             <p className="text-[11px] text-amber-300/80">
-              * 변호사 등록 신청은 가입 후 협회 사무국의 자격 확인 절차(승인)를 거쳐 정회원으로 전환됩니다.
+              * 변호사 등록 신청은 가입 후 협회 사무국의 자격 확인 절차(승인)를
+              거쳐 정회원으로 전환됩니다.
             </p>
           </div>
         )}
@@ -465,9 +495,10 @@ export default function RegisterPage() {
               className="w-4 h-4 mt-0.5 rounded border-slate-700 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-900"
             />
             <span className="text-xs text-slate-300">
-              도스변호사협회 <strong className="text-amber-400">포털 이용약관</strong> 및{" "}
-              <strong className="text-amber-400">개인정보 처리방침</strong>에 동의합니다.{" "}
-              <span className="text-rose-400">(필수)</span>
+              도스변호사협회{" "}
+              <strong className="text-amber-400">포털 이용약관</strong> 및{" "}
+              <strong className="text-amber-400">개인정보 처리방침</strong>에
+              동의합니다. <span className="text-rose-400">(필수)</span>
             </span>
           </label>
         </div>
@@ -488,7 +519,10 @@ export default function RegisterPage() {
             href="/login"
             className="text-xs text-slate-400 hover:text-amber-400 transition-colors"
           >
-            이미 계정이 있으신가요? <span className="text-amber-400 font-bold underline ml-1">로그인하기</span>
+            이미 계정이 있으신가요?{" "}
+            <span className="text-amber-400 font-bold underline ml-1">
+              로그인하기
+            </span>
           </Link>
         </div>
       </form>
