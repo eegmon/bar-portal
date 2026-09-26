@@ -186,13 +186,24 @@ export async function POST(req: Request) {
 
       const disc = discRes.rows[0];
 
+      // 제명/영구제명은 집행완료 처리 불가 (복권은 REVOKED로만)
+      if (status === "COMPLETED" && ["EXPULSION", "PERMANENT_EXPULSION"].includes(disc.type as string)) {
+        return NextResponse.json(
+          { error: "제명 및 영구제명 처분은 집행완료 처리할 수 없습니다. 복권이 필요한 경우 '처분 철회'를 사용하세요." },
+          { status: 400 },
+        );
+      }
+
       await db.execute({
         sql: "UPDATE disciplines SET status = ? WHERE id = ?",
         args: [status, disciplineId],
       });
 
-      // 처분 철회/복권 시 변호사 자격 복구
-      if (status === "REVOKED" || status === "COMPLETED") {
+      // 처분 철회/복권 시 자격 복구
+      // REVOKED: 모든 종류 철회 → ACTIVE 복구
+      // COMPLETED: 정직(SUSPENSION) 기간 만료만 → ACTIVE 복구
+      //            제명/영구제명은 집행완료 개념 없음 (API 레벨에서도 차단)
+      if (status === "REVOKED" || (status === "COMPLETED" && disc.type === "SUSPENSION")) {
         await db.execute({
           sql: "UPDATE users SET status = 'ACTIVE' WHERE id = ?",
           args: [disc.lawyer_id],

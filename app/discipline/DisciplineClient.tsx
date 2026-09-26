@@ -347,7 +347,7 @@ export default function DisciplineClient({
                           <RotateCcw className="w-3.5 h-3.5" /> 처분 철회 및 복권
                         </button>
                       )}
-                      {!isCompleted && !isRevoked && (
+                      {!isCompleted && !isRevoked && d.type === "SUSPENSION" && (
                         <button
                           onClick={() => handleUpdateStatus(d.id, "COMPLETED")}
                           className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold shadow flex items-center gap-1"

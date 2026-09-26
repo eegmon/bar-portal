@@ -33,8 +33,12 @@ export default async function LawyersSearchPage({
     // status 필터 조건 (기본: 전체 표시, 단 PENDING 제외)
     const validStatuses = ["ACTIVE", "SUSPENDED", "EXPIRED", "EXPELLED"];
     const filterStatus = validStatuses.includes(statusFilter || "") ? statusFilter! : null;
+    // "inactive" → SUSPENDED/EXPIRED/EXPELLED 전체
+    const isInactiveFilter = statusFilter === "inactive";
 
-    const statusCondition = filterStatus
+    const statusCondition = isInactiveFilter
+      ? `AND status IN ('SUSPENDED', 'EXPIRED', 'EXPELLED')`
+      : filterStatus
       ? `AND status = '${filterStatus}'`
       : `AND status IN ('ACTIVE', 'SUSPENDED', 'EXPIRED', 'EXPELLED')`;
 
@@ -127,13 +131,13 @@ export default async function LawyersSearchPage({
             value === ""
               ? !statusFilter
               : value === "inactive"
-              ? ["SUSPENDED", "EXPIRED", "EXPELLED"].includes(statusFilter || "")
+              ? statusFilter === "inactive" || ["SUSPENDED", "EXPIRED", "EXPELLED"].includes(statusFilter || "")
               : statusFilter === value;
           const href =
             value === ""
               ? `/lawyers${query ? `?q=${encodeURIComponent(query)}` : ""}`
               : value === "inactive"
-              ? `/lawyers?status=SUSPENDED${query ? `&q=${encodeURIComponent(query)}` : ""}`
+              ? `/lawyers?status=inactive${query ? `&q=${encodeURIComponent(query)}` : ""}`
               : `/lawyers?status=${value}${query ? `&q=${encodeURIComponent(query)}` : ""}`;
           return (
             <a
@@ -204,12 +208,12 @@ export default async function LawyersSearchPage({
                       {lawyer.name}
                       <span
                         className={`text-[10px] font-normal px-2 py-0.5 rounded border ${
-                          lawyer.is_trainee
+                          lawyer.role === "TRAINEE"
                             ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
                             : "bg-amber-500/10 text-amber-300 border-amber-500/30"
                         }`}
                       >
-                        {lawyer.is_trainee ? "견습변호사" : "정회원 변호사"}
+                      {lawyer.role === "TRAINEE" ? "견습변호사" : "정회원 변호사"}
                       </span>
                     </h3>
                     <p className="text-xs text-slate-400">{lawyer.office_name || "개인 법률사무소"}</p>
