@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { isExamPhaseOpen } from "@/lib/exam-timing";
+import { isPhase1EntryOpen, isPhase1SubmitOpen } from "@/lib/exam-timing";
 import { ensureDraftColumns, sanitizeAnswers } from "@/lib/exam-draft";
 
 // 1차 CBT 진행 중 답안 서버 임시저장
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     if (examRes.rows.length === 0) {
       return NextResponse.json({ error: "유효하지 않은 시험입니다." }, { status: 404 });
     }
-    if (!isExamPhaseOpen(examRes.rows[0], "PHASE1")) {
+    if (!(action === "start" ? isPhase1EntryOpen : isPhase1SubmitOpen)(examRes.rows[0])) {
       return NextResponse.json(
         { error: "현재 제1차 시험 응시 시간이 아닙니다." },
         { status: 403 },

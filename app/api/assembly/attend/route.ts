@@ -1,3 +1,4 @@
+import { formatKstNow } from "@/lib/kst";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
           embeds: [
             {
               title: "⏳ 총회 지각 출석 확인 — 의장 승인 필요",
-              description: `**${user.name}** 변호사님께서 표결 진행 중에 출석을 확인하셨습니다.\n\n• 총회: ${assembly.title}\n• 시각: ${new Date().toLocaleString("ko-KR")}\n\n⚠️ 정족수 반영을 위해 **의장의 승인**이 필요합니다.\n관리자 패널 → 총회 탭 → 출석·위임장 승인 목록에서 처리해 주세요.`,
+              description: `**${user.name}** 변호사님께서 표결 진행 중에 출석을 확인하셨습니다.\n\n• 총회: ${assembly.title}\n• 시각: ${formatKstNow()}\n\n⚠️ 정족수 반영을 위해 **의장의 승인**이 필요합니다.\n관리자 패널 → 총회 탭 → 출석·위임장 승인 목록에서 처리해 주세요.`,
               color: 0xf59e0b,
             },
           ],
@@ -140,7 +141,7 @@ export async function POST(req: Request) {
           embeds: [
             {
               title: "✅ 총회 출석 확인",
-              description: `**${user.name}** 변호사님께서 총회 출석을 확인하셨습니다.\n• 총회: ${assembly.title}\n• 시각: ${new Date().toLocaleString("ko-KR")}`,
+              description: `**${user.name}** 변호사님께서 총회 출석을 확인하셨습니다.\n• 총회: ${assembly.title}\n• 시각: ${formatKstNow()}`,
               color: 0x10b981,
             },
           ],

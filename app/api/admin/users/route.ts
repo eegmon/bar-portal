@@ -15,7 +15,7 @@ export async function GET() {
       SELECT 
         u.id, u.login_id, u.discord_id, u.name, u.role, u.status, u.is_trainee, 
         u.phone, u.office_name, u.office_address, u.bio, u.qualification_proof, u.self_introduction, u.specialties,
-        u.positions, u.bar_exam_round, u.last_renewed_at, u.created_at
+        u.positions, u.bar_exam_round, u.last_renewed_at, u.created_at, u.bonus_eligible
       FROM users u
       ORDER BY u.created_at DESC
     `);
@@ -201,6 +201,51 @@ export async function POST(req: Request) {
     }
 
     // 1. 변호사 승인 액션 (PENDING -> ACTIVE / LAWYER)
+    // 법학과정 가산점 신청 심사: APPROVE(승인=1) / REJECT(반려=0) / REVOKE(승인 취소=0)
+    if (action === "REVIEW_BONUS") {
+      const { userId, decision } = body;
+      if (!userId || !["APPROVE", "REJECT", "REVOKE"].includes(decision)) {
+        return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
+      }
+      const uRes = await db.execute({
+        sql: "SELECT name, bonus_eligible FROM users WHERE id = ?",
+        args: [userId],
+      });
+      if (uRes.rows.length === 0) {
+        return NextResponse.json({ error: "회원을 찾을 수 없습니다." }, { status: 404 });
+      }
+      const current = Number(uRes.rows[0].bonus_eligible);
+      const name = String(uRes.rows[0].name);
+
+      if (decision !== "REVOKE" && current !== 2) {
+        return NextResponse.json({ error: "심사 대기 상태의 신청이 아닙니다." }, { status: 409 });
+      }
+      if (decision === "REVOKE" && current !== 1) {
+        return NextResponse.json({ error: "승인된 상태가 아닙니다." }, { status: 409 });
+      }
+
+      const next = decision === "APPROVE" ? 1 : 0;
+      await db.execute({
+        sql: "UPDATE users SET bonus_eligible = ? WHERE id = ?",
+        args: [next, userId],
+      });
+      // 자격이 사라지면 이미 승인된 수험번호별 가산점 승인도 함께 해제
+      if (next === 0) {
+        try {
+          await db.execute({
+            sql: "UPDATE exam_submissions SET bonus_approved = 0 WHERE claimed_user_id = ?",
+            args: [userId],
+          });
+        } catch {}
+      }
+      const msg = {
+        APPROVE: `${name} 님의 가산점 신청을 승인했습니다.`,
+        REJECT: `${name} 님의 가산점 신청을 반려했습니다.`,
+        REVOKE: `${name} 님의 가산점 승인을 취소했습니다.`,
+      }[decision as "APPROVE" | "REJECT" | "REVOKE"];
+      return NextResponse.json({ success: true, bonusEligible: next, message: msg });
+    }
+
     if (action === "APPROVE_LAWYER") {
       await db.execute({
         sql: `UPDATE users 

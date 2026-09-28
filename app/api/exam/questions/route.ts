@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { isExamPhaseOpen } from "@/lib/exam-timing";
+import { getPhase1Window, isPhase1EntryOpen } from "@/lib/exam-timing";
+import { ensurePublishColumns } from "@/lib/exam-publish";
 
 export async function GET() {
   try {
@@ -11,8 +12,9 @@ export async function GET() {
       // 이미 존재하면 무시
     }
 
+    await ensurePublishColumns();
     const res = await db.execute({
-      sql: "SELECT id, title, round_number, phase1_start, phase1_end, phase1_max_score, phase1_questions, errata_notices, status, phase1_operation_mode, phase1_pdf_url, phase1_rules FROM exams ORDER BY round_number DESC LIMIT 1",
+      sql: "SELECT phase1_started_at, id, title, round_number, phase1_start, phase1_end, phase1_max_score, phase1_questions, errata_notices, status, phase1_operation_mode, phase1_pdf_url, phase1_rules FROM exams ORDER BY round_number DESC LIMIT 1",
     });
 
     if (res.rows.length === 0) {
@@ -23,9 +25,16 @@ export async function GET() {
     }
 
     const exam = res.rows[0];
-    if (!isExamPhaseOpen(exam, "PHASE1")) {
+    const win = getPhase1Window(exam);
+    const schedule = {
+      mode: win.mode,
+      startAt: win.startAt,
+      deadlineAt: win.deadlineAt,
+      serverNow: Date.now(),
+    };
+    if (!isPhase1EntryOpen(exam)) {
       return NextResponse.json(
-        { error: "현재 공개할 수 있는 시험 문항이 없습니다." },
+        { error: "현재 공개할 수 있는 시험 문항이 없습니다.", schedule },
         { status: 403 },
       );
     }
@@ -59,6 +68,7 @@ export async function GET() {
       phase1Rules: (exam.phase1_rules as string) || "",
       questions,
       errataNotices,
+      schedule,
     });
   } catch (err: any) {
     console.error("Questions GET Error:", err);

@@ -1,4 +1,5 @@
 "use client";
+import { formatKst } from "@/lib/kst";
 
 import { useState } from "react";
 import {
@@ -343,7 +344,7 @@ export default function Session2Page() {
             <Lock className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
               2차 답안이{" "}
-              {publishedAt ? new Date(publishedAt).toLocaleString("ko-KR") : ""}{" "}
+              {publishedAt ? formatKst(new Date(publishedAt)) : ""}{" "}
               최종 게시되어 수정할 수 없습니다.
             </span>
           </div>

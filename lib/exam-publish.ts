@@ -29,6 +29,16 @@ export function ensurePublishColumns(): Promise<void> {
           throw e;
         }
       }
+      try {
+        await db.execute(
+          "ALTER TABLE exams ADD COLUMN phase1_started_at TEXT DEFAULT ''",
+        );
+      } catch (e: any) {
+        if (!/duplicate column/i.test(String(e?.message || e))) {
+          ensured = null;
+          throw e;
+        }
+      }
       // 컬럼을 처음 만든 순간, 이미 1차가 끝난 기존 회차는 발표된 것으로 간주(기존 동작 유지)
       if (added) {
         await db.execute(

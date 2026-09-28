@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDbUtcAsKst } from "@/lib/kst";
 import { useState, useEffect, useCallback } from "react";
 import {
   ShieldCheck,
@@ -597,6 +598,39 @@ export default function AdminClient({
   };
 
   // 전체 회원 디스코드 역할 일괄 동기화
+  // 법학과정 가산점 신청 심사 (승인 / 반려 / 승인 취소)
+  const handleReviewBonus = async (
+    userId: string,
+    decision: "APPROVE" | "REJECT" | "REVOKE",
+  ) => {
+    const label = { APPROVE: "승인", REJECT: "반려", REVOKE: "승인 취소" }[decision];
+    if (!confirm(`이 신청을 ${label}하시겠습니까?`)) return;
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REVIEW_BONUS", userId, decision }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "처리 실패");
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, bonus_eligible: data.bonusEligible } : u,
+        ),
+      );
+      alert(data.message);
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    }
+  };
+
+  // bio 에 누적된 마지막 "[가산점신청] ..." 내용 추출
+  const bonusApplicationText = (bio: unknown) => {
+    const t = String(bio || "");
+    const i = t.lastIndexOf("[가산점신청]");
+    return i >= 0 ? t.slice(i + "[가산점신청]".length).trim() : "(신청 내용 없음)";
+  };
+
   const handleBatchSync = async () => {
     if (
       !confirm(
@@ -1529,6 +1563,83 @@ export default function AdminClient({
       {/* ========================================================================= */}
       {activeTab === "users" && permissions.canUsers && (
         <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6">
+          {/* 법학과정 가산점(법학과·로스쿨 이수) 신청 심사 */}
+          {(() => {
+            const pending = users.filter((u) => Number(u.bonus_eligible) === 2);
+            const approved = users.filter((u) => Number(u.bonus_eligible) === 1);
+            if (pending.length === 0 && approved.length === 0) return null;
+            return (
+              <div className="p-4 bg-indigo-500/5 border border-indigo-500/30 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-indigo-300">
+                    법학과정 가산점 신청 심사
+                  </h3>
+                  <span className="text-[11px] text-slate-400">
+                    대기 {pending.length}건 · 승인 {approved.length}명
+                  </span>
+                </div>
+                {pending.length === 0 && (
+                  <p className="text-xs text-slate-500">심사 대기 중인 신청이 없습니다.</p>
+                )}
+                {pending.map((u) => (
+                  <div key={u.id} className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-xs text-white font-bold">
+                        {u.name}{" "}
+                        <span className="text-slate-500 font-mono font-normal">
+                          ({u.login_id})
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleReviewBonus(u.id, "APPROVE")}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg"
+                        >
+                          승인
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReviewBonus(u.id, "REJECT")}
+                          className="px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white text-[11px] font-bold rounded-lg"
+                        >
+                          반려
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-300 whitespace-pre-wrap break-all leading-relaxed">
+                      {bonusApplicationText(u.bio)}
+                    </p>
+                  </div>
+                ))}
+                {approved.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-slate-400">
+                      승인된 회원 {approved.length}명 보기
+                    </summary>
+                    <div className="mt-2 space-y-1.5">
+                      {approved.map((u) => (
+                        <div key={u.id} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg">
+                          <span className="text-slate-300">
+                            {u.name}{" "}
+                            <span className="text-slate-500 font-mono">({u.login_id})</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleReviewBonus(u.id, "REVOKE")}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] rounded-lg border border-slate-700"
+                          >
+                            승인 취소
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -2351,7 +2462,7 @@ export default function AdminClient({
                           <span className="text-[10px] text-slate-500">
                             신청일:{" "}
                             {pf.created_at
-                              ? new Date(pf.created_at).toLocaleDateString()
+                              ? formatDbUtcAsKst(pf.created_at).slice(0, 10)
                               : "-"}
                           </span>
                         </div>
@@ -3646,9 +3757,7 @@ export default function AdminClient({
                               className="w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-4 py-2.5 text-xs hover:bg-slate-900/60 transition-colors text-left"
                             >
                               <span className="w-20 text-slate-500 font-mono text-[10px] truncate">
-                                {String(log.created_at || "")
-                                  .replace("T", " ")
-                                  .slice(0, 16)}
+                                {formatDbUtcAsKst(log.created_at)}
                               </span>
                               <span className="text-slate-400 truncate">
                                 {String(

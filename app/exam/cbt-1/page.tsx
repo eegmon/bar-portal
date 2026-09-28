@@ -1,6 +1,7 @@
 "use client";
+import { formatKst } from "@/lib/kst";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Clock,
   AlertTriangle,
@@ -39,6 +40,16 @@ export default function CBT1Page() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [draftChecked, setDraftChecked] = useState(false);
   const [clockOffset, setClockOffset] = useState(0);
+  // 시험 일정/종료 시각 (서버 기준): TIME=일정 종료 시각, MANUAL=관리자 시작 시각+120분
+  const [schedule, setSchedule] = useState<{
+    mode: "TIME" | "MANUAL";
+    startAt: number | null;
+    deadlineAt: number | null;
+  } | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [submitNotice, setSubmitNotice] = useState("");
+  const autoSubmitRef = useRef(false);
+  const [autoRetry, setAutoRetry] = useState(0);
   const [isEntering, setIsEntering] = useState(false);
   const [enterError, setEnterError] = useState("");
   const [saveStatus, setSaveStatus] = useState<
@@ -73,7 +84,15 @@ export default function CBT1Page() {
           if (data.errataNotices) setErrataNotices(data.errataNotices);
           if (data.phase1PdfUrl) setPhase1PdfUrl(data.phase1PdfUrl);
           if (data.phase1Rules) setPhase1Rules(data.phase1Rules);
+          if (data.schedule) {
+            setSchedule(data.schedule);
+            setClockOffset(data.schedule.serverNow - Date.now());
+          }
         } else {
+          if (data.schedule) {
+            setSchedule(data.schedule);
+            setClockOffset(data.schedule.serverNow - Date.now());
+          }
           setQuestionsError(data.error || "문항을 불러올 수 없습니다.");
         }
       })
@@ -192,17 +211,30 @@ export default function CBT1Page() {
     return () => clearTimeout(t);
   }, [saveStatus, saveRetry]);
 
-  // 타이머: 서버 시작 시각 기준 (새로고침·기기 변경해도 시간이 이어짐)
+  // 입장 화면 카운트다운용 시계
+  useEffect(() => {
+    if (isCodeSet) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [isCodeSet]);
+
+  // 타이머: 종료 시각(deadlineAt)이 있으면 그 시각까지, 없으면(기존 시험) 입장 시점부터 120분
   useEffect(() => {
     if (!isCodeSet || startedAt === null || result) return;
+    const deadline = schedule?.deadlineAt ?? null;
     const tick = () => {
-      const elapsed = Math.floor((Date.now() + clockOffset - startedAt) / 1000);
-      setTimeLeft(Math.max(0, EXAM_SECONDS - elapsed));
+      const now = Date.now() + clockOffset;
+      if (deadline !== null) {
+        setTimeLeft(Math.max(0, Math.ceil((deadline - now) / 1000)));
+      } else {
+        const elapsed = Math.floor((now - startedAt) / 1000);
+        setTimeLeft(Math.max(0, EXAM_SECONDS - elapsed));
+      }
     };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [isCodeSet, startedAt, clockOffset, result]);
+  }, [isCodeSet, startedAt, clockOffset, result, schedule]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -215,6 +247,52 @@ export default function CBT1Page() {
       ...prev,
       [qNum]: choiceIdx + 1,
     }));
+  };
+
+  const submitAnswers = async (auto = false) => {
+    setSubmitNotice("");
+    setIsSubmitting(true);
+    let retryable = false;
+    try {
+      const res = await fetch("/api/exam/submit-1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examId,
+          securityCode,
+          answers,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // 이미 제출된 경우에만 임시 저장 삭제 (그 외 실패는 재시도 가능하게 유지)
+        if (String(data.error || "").includes("이미 제출")) {
+          try { localStorage.removeItem(DRAFT_KEY); } catch {}
+        }
+        throw new Error(data.error || "제출 실패");
+      }
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      setResult(data);
+    } catch (err: any) {
+      retryable = err instanceof TypeError; // 네트워크 오류만 자동 재시도
+      if (auto) {
+        setSubmitNotice(
+          retryable
+            ? "시간 종료: 자동 제출에 실패했습니다. 재시도 중… (네트워크 확인)"
+            : `시간 종료: 자동 제출 실패 - ${err.message}`,
+        );
+      } else {
+        alert(`오류: ${err.message}`);
+      }
+    } finally {
+      setIsSubmitting(false);
+      if (auto && retryable) {
+        setTimeout(() => {
+          autoSubmitRef.current = false;
+          setAutoRetry((n) => n + 1);
+        }, 5000);
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -237,33 +315,25 @@ export default function CBT1Page() {
       }
     }
 
-    setIsSubmitting(true);
-    try {
-      const res = await fetch("/api/exam/submit-1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          examId,
-          securityCode,
-          answers,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        // 이미 제출된 경우에만 임시 저장 삭제 (그 외 실패는 재시도 가능하게 유지)
-        if (String(data.error || "").includes("이미 제출")) {
-          try { localStorage.removeItem(DRAFT_KEY); } catch {}
-        }
-        throw new Error(data.error || "제출 실패");
-      }
-      try { localStorage.removeItem(DRAFT_KEY); } catch {}
-      setResult(data);
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
+    await submitAnswers(false);
   };
+
+  // 시간 종료 시 자동 제출 (확인창 없음)
+  useEffect(() => {
+    if (
+      timeLeft > 0 ||
+      !isCodeSet ||
+      startedAt === null ||
+      result ||
+      isSubmitting ||
+      autoSubmitRef.current ||
+      autoRetry > 12
+    )
+      return;
+    autoSubmitRef.current = true;
+    submitAnswers(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, isCodeSet, startedAt, result, isSubmitting, autoRetry]);
 
   // 0. 임시 저장 확인 중
   if (!draftChecked) {
@@ -389,6 +459,42 @@ export default function CBT1Page() {
                 {enterError}
               </div>
             )}
+
+            {schedule && (() => {
+              const now = nowTick + clockOffset;
+              const left =
+                schedule.deadlineAt !== null
+                  ? Math.max(0, Math.ceil((schedule.deadlineAt - now) / 1000))
+                  : null;
+              const notStarted = schedule.startAt !== null && now < schedule.startAt;
+              return (
+                <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-1">
+                  <div className="text-slate-400">
+                    {schedule.mode === "TIME"
+                      ? "일정 기준 진행 (KST)"
+                      : "관리자가 시험을 시작한 시각부터 120분"}
+                  </div>
+                  {notStarted && schedule.startAt !== null && (
+                    <div className="text-slate-200">
+                      시작 예정 {formatKst(schedule.startAt)} KST
+                    </div>
+                  )}
+                  {!notStarted && left !== null && left > 0 && schedule.deadlineAt !== null && (
+                    <div className="text-amber-300 font-mono">
+                      종료 {formatKst(schedule.deadlineAt)} KST · 남은 시간 {formatTime(left)}
+                    </div>
+                  )}
+                  {!notStarted && left === null && (
+                    <div className="text-slate-400">
+                      입장한 시점부터 120분이 적용됩니다.
+                    </div>
+                  )}
+                  {!notStarted && left === 0 && (
+                    <div className="text-red-400">시험 시간이 종료되었습니다.</div>
+                  )}
+                </div>
+              );
+            })()}
 
             {questionsError && (
               <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
@@ -563,7 +669,15 @@ export default function CBT1Page() {
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-950 border border-amber-500/40 rounded-lg text-amber-400 font-mono font-bold text-sm shadow-inner">
               <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
               <span>남은시간 {formatTime(timeLeft)}</span>
+              {schedule?.deadlineAt && (
+                <span className="text-[10px] text-amber-500/70 font-normal">
+                  종료 {formatKst(schedule.deadlineAt).slice(11)} KST
+                </span>
+              )}
             </div>
+            {submitNotice && (
+              <div className="text-[11px] text-red-400 w-full sm:w-auto">{submitNotice}</div>
+            )}
 
             <button
               onClick={handleSubmit}

@@ -1,0 +1,476 @@
+diff --git a/app/api/exam/admin/route.ts b/app/api/exam/admin/route.ts
+index 443deda..e9f1114 100644
+--- a/app/api/exam/admin/route.ts
++++ b/app/api/exam/admin/route.ts
+@@ -186,6 +186,17 @@ export async function POST(req: Request) {
+         ],
+       });
+ 
++      // 처음부터 PHASE1로 개설된 경우에도 시작 시각 기록
++      if (status === "PHASE1") {
++        try {
++          await ensurePublishColumns();
++          await db.execute({
++            sql: "UPDATE exams SET phase1_started_at = ? WHERE id = ?",
++            args: [new Date().toISOString(), examId],
++          });
++        } catch {}
++      }
++
+       if (broadcastNotice) {
+         await sendDiscordWebhook("EXAM", {
+           content: `📝 **[시험 공고] ${title} 일정이 개설되었습니다.**`,
+@@ -267,6 +278,13 @@ export async function POST(req: Request) {
+         );
+       }
+ 
++      await ensurePublishColumns();
++      const prevRes = await db.execute({
++        sql: "SELECT status FROM exams WHERE id = ?",
++        args: [examId],
++      });
++      const prevStatus = String(prevRes.rows[0]?.status || "");
++
+       await db.execute({
+         sql: `UPDATE exams 
+               SET title = COALESCE(?, title),
+@@ -311,6 +329,14 @@ export async function POST(req: Request) {
+         ],
+       });
+ 
++      // 수동 운영: 상태가 PHASE1로 바뀐 순간을 1차 시작 시각으로 기록 (종료 = 시작 + 120분)
++      if (status === "PHASE1" && prevStatus !== "PHASE1") {
++        await db.execute({
++          sql: "UPDATE exams SET phase1_started_at = ? WHERE id = ?",
++          args: [new Date().toISOString(), examId],
++        });
++      }
++
+       return NextResponse.json({
+         success: true,
+         message: "시험 정보 및 진행 상태가 성공적으로 갱신되었습니다.",
+diff --git a/app/api/exam/draft/route.ts b/app/api/exam/draft/route.ts
+index db87ab9..d8ea517 100644
+--- a/app/api/exam/draft/route.ts
++++ b/app/api/exam/draft/route.ts
+@@ -1,6 +1,6 @@
+ import { NextResponse } from "next/server";
+ import db from "@/lib/db";
+-import { isExamPhaseOpen } from "@/lib/exam-timing";
++import { isPhase1EntryOpen, isPhase1SubmitOpen } from "@/lib/exam-timing";
+ import { ensureDraftColumns, sanitizeAnswers } from "@/lib/exam-draft";
+ 
+ // 1차 CBT 진행 중 답안 서버 임시저장
+@@ -24,7 +24,7 @@ export async function POST(req: Request) {
+     if (examRes.rows.length === 0) {
+       return NextResponse.json({ error: "유효하지 않은 시험입니다." }, { status: 404 });
+     }
+-    if (!isExamPhaseOpen(examRes.rows[0], "PHASE1")) {
++    if (!(action === "start" ? isPhase1EntryOpen : isPhase1SubmitOpen)(examRes.rows[0])) {
+       return NextResponse.json(
+         { error: "현재 제1차 시험 응시 시간이 아닙니다." },
+         { status: 403 },
+diff --git a/app/api/exam/questions/route.ts b/app/api/exam/questions/route.ts
+index 959c6b2..688d028 100644
+--- a/app/api/exam/questions/route.ts
++++ b/app/api/exam/questions/route.ts
+@@ -1,6 +1,7 @@
+ import { NextResponse } from "next/server";
+ import db from "@/lib/db";
+-import { isExamPhaseOpen } from "@/lib/exam-timing";
++import { getPhase1Window, isPhase1EntryOpen } from "@/lib/exam-timing";
++import { ensurePublishColumns } from "@/lib/exam-publish";
+ 
+ export async function GET() {
+   try {
+@@ -11,8 +12,9 @@ export async function GET() {
+       // 이미 존재하면 무시
+     }
+ 
++    await ensurePublishColumns();
+     const res = await db.execute({
+-      sql: "SELECT id, title, round_number, phase1_start, phase1_end, phase1_max_score, phase1_questions, errata_notices, status, phase1_operation_mode, phase1_pdf_url, phase1_rules FROM exams ORDER BY round_number DESC LIMIT 1",
++      sql: "SELECT phase1_started_at, id, title, round_number, phase1_start, phase1_end, phase1_max_score, phase1_questions, errata_notices, status, phase1_operation_mode, phase1_pdf_url, phase1_rules FROM exams ORDER BY round_number DESC LIMIT 1",
+     });
+ 
+     if (res.rows.length === 0) {
+@@ -23,9 +25,16 @@ export async function GET() {
+     }
+ 
+     const exam = res.rows[0];
+-    if (!isExamPhaseOpen(exam, "PHASE1")) {
++    const win = getPhase1Window(exam);
++    const schedule = {
++      mode: win.mode,
++      startAt: win.startAt,
++      deadlineAt: win.deadlineAt,
++      serverNow: Date.now(),
++    };
++    if (!isPhase1EntryOpen(exam)) {
+       return NextResponse.json(
+-        { error: "현재 공개할 수 있는 시험 문항이 없습니다." },
++        { error: "현재 공개할 수 있는 시험 문항이 없습니다.", schedule },
+         { status: 403 },
+       );
+     }
+@@ -59,6 +68,7 @@ export async function GET() {
+       phase1Rules: (exam.phase1_rules as string) || "",
+       questions,
+       errataNotices,
++      schedule,
+     });
+   } catch (err: any) {
+     console.error("Questions GET Error:", err);
+diff --git a/app/api/exam/submit-1/route.ts b/app/api/exam/submit-1/route.ts
+index 78dff35..4f77eab 100644
+--- a/app/api/exam/submit-1/route.ts
++++ b/app/api/exam/submit-1/route.ts
+@@ -1,7 +1,7 @@
+ import { NextResponse } from "next/server";
+ import db from "@/lib/db";
+ import { sendDiscordWebhook } from "@/lib/discord";
+-import { isExamPhaseOpen } from "@/lib/exam-timing";
++import { isPhase1SubmitOpen } from "@/lib/exam-timing";
+ import { ensurePublishColumns, isPhase1Published } from "@/lib/exam-publish";
+ 
+ export async function POST(req: Request) {
+@@ -34,7 +34,7 @@ export async function POST(req: Request) {
+     }
+ 
+     const exam = examRes.rows[0];
+-    if (!isExamPhaseOpen(exam, "PHASE1")) {
++    if (!isPhase1SubmitOpen(exam)) {
+       return NextResponse.json(
+         { error: "현재 제1차 시험 응시 시간이 아닙니다." },
+         { status: 403 },
+diff --git a/app/exam/cbt-1/page.tsx b/app/exam/cbt-1/page.tsx
+index 6795fdf..80dcc44 100644
+--- a/app/exam/cbt-1/page.tsx
++++ b/app/exam/cbt-1/page.tsx
+@@ -1,6 +1,7 @@
+ "use client";
++import { formatKst } from "@/lib/kst";
+ 
+-import { useState, useEffect } from "react";
++import { useState, useEffect, useRef } from "react";
+ import {
+   Clock,
+   AlertTriangle,
+@@ -39,6 +40,16 @@ export default function CBT1Page() {
+   const [startedAt, setStartedAt] = useState<number | null>(null);
+   const [draftChecked, setDraftChecked] = useState(false);
+   const [clockOffset, setClockOffset] = useState(0);
++  // 시험 일정/종료 시각 (서버 기준): TIME=일정 종료 시각, MANUAL=관리자 시작 시각+120분
++  const [schedule, setSchedule] = useState<{
++    mode: "TIME" | "MANUAL";
++    startAt: number | null;
++    deadlineAt: number | null;
++  } | null>(null);
++  const [nowTick, setNowTick] = useState(() => Date.now());
++  const [submitNotice, setSubmitNotice] = useState("");
++  const autoSubmitRef = useRef(false);
++  const [autoRetry, setAutoRetry] = useState(0);
+   const [isEntering, setIsEntering] = useState(false);
+   const [enterError, setEnterError] = useState("");
+   const [saveStatus, setSaveStatus] = useState<
+@@ -73,7 +84,15 @@ export default function CBT1Page() {
+           if (data.errataNotices) setErrataNotices(data.errataNotices);
+           if (data.phase1PdfUrl) setPhase1PdfUrl(data.phase1PdfUrl);
+           if (data.phase1Rules) setPhase1Rules(data.phase1Rules);
++          if (data.schedule) {
++            setSchedule(data.schedule);
++            setClockOffset(data.schedule.serverNow - Date.now());
++          }
+         } else {
++          if (data.schedule) {
++            setSchedule(data.schedule);
++            setClockOffset(data.schedule.serverNow - Date.now());
++          }
+           setQuestionsError(data.error || "문항을 불러올 수 없습니다.");
+         }
+       })
+@@ -192,17 +211,30 @@ export default function CBT1Page() {
+     return () => clearTimeout(t);
+   }, [saveStatus, saveRetry]);
+ 
+-  // 타이머: 서버 시작 시각 기준 (새로고침·기기 변경해도 시간이 이어짐)
++  // 입장 화면 카운트다운용 시계
++  useEffect(() => {
++    if (isCodeSet) return;
++    const t = setInterval(() => setNowTick(Date.now()), 1000);
++    return () => clearInterval(t);
++  }, [isCodeSet]);
++
++  // 타이머: 종료 시각(deadlineAt)이 있으면 그 시각까지, 없으면(기존 시험) 입장 시점부터 120분
+   useEffect(() => {
+     if (!isCodeSet || startedAt === null || result) return;
++    const deadline = schedule?.deadlineAt ?? null;
+     const tick = () => {
+-      const elapsed = Math.floor((Date.now() + clockOffset - startedAt) / 1000);
+-      setTimeLeft(Math.max(0, EXAM_SECONDS - elapsed));
++      const now = Date.now() + clockOffset;
++      if (deadline !== null) {
++        setTimeLeft(Math.max(0, Math.ceil((deadline - now) / 1000)));
++      } else {
++        const elapsed = Math.floor((now - startedAt) / 1000);
++        setTimeLeft(Math.max(0, EXAM_SECONDS - elapsed));
++      }
+     };
+     tick();
+     const interval = setInterval(tick, 1000);
+     return () => clearInterval(interval);
+-  }, [isCodeSet, startedAt, clockOffset, result]);
++  }, [isCodeSet, startedAt, clockOffset, result, schedule]);
+ 
+   const formatTime = (seconds: number) => {
+     const m = Math.floor(seconds / 60);
+@@ -217,27 +249,10 @@ export default function CBT1Page() {
+     }));
+   };
+ 
+-  const handleSubmit = async () => {
+-    const answeredCount = Object.keys(answers).length;
+-    if (answeredCount < questions.length) {
+-      if (
+-        !confirm(
+-          `아직 마킹하지 않은 문항이 있습니다. (${answeredCount}/${questions.length}문 마킹)\n그래도 최종 제출하시겠습니까? (제출 후 수정 불가)`,
+-        )
+-      ) {
+-        return;
+-      }
+-    } else {
+-      if (
+-        !confirm(
+-          "답안지를 최종 제출하시겠습니까?\n단 1회만 제출 가능하며, 제출 후 수정할 수 없습니다.",
+-        )
+-      ) {
+-        return;
+-      }
+-    }
+-
++  const submitAnswers = async (auto = false) => {
++    setSubmitNotice("");
+     setIsSubmitting(true);
++    let retryable = false;
+     try {
+       const res = await fetch("/api/exam/submit-1", {
+         method: "POST",
+@@ -259,12 +274,67 @@ export default function CBT1Page() {
+       try { localStorage.removeItem(DRAFT_KEY); } catch {}
+       setResult(data);
+     } catch (err: any) {
+-      alert(`오류: ${err.message}`);
++      retryable = err instanceof TypeError; // 네트워크 오류만 자동 재시도
++      if (auto) {
++        setSubmitNotice(
++          retryable
++            ? "시간 종료: 자동 제출에 실패했습니다. 재시도 중… (네트워크 확인)"
++            : `시간 종료: 자동 제출 실패 - ${err.message}`,
++        );
++      } else {
++        alert(`오류: ${err.message}`);
++      }
+     } finally {
+       setIsSubmitting(false);
++      if (auto && retryable) {
++        setTimeout(() => {
++          autoSubmitRef.current = false;
++          setAutoRetry((n) => n + 1);
++        }, 5000);
++      }
++    }
++  };
++
++  const handleSubmit = async () => {
++    const answeredCount = Object.keys(answers).length;
++    if (answeredCount < questions.length) {
++      if (
++        !confirm(
++          `아직 마킹하지 않은 문항이 있습니다. (${answeredCount}/${questions.length}문 마킹)\n그래도 최종 제출하시겠습니까? (제출 후 수정 불가)`,
++        )
++      ) {
++        return;
++      }
++    } else {
++      if (
++        !confirm(
++          "답안지를 최종 제출하시겠습니까?\n단 1회만 제출 가능하며, 제출 후 수정할 수 없습니다.",
++        )
++      ) {
++        return;
++      }
+     }
++
++    await submitAnswers(false);
+   };
+ 
++  // 시간 종료 시 자동 제출 (확인창 없음)
++  useEffect(() => {
++    if (
++      timeLeft > 0 ||
++      !isCodeSet ||
++      startedAt === null ||
++      result ||
++      isSubmitting ||
++      autoSubmitRef.current ||
++      autoRetry > 12
++    )
++      return;
++    autoSubmitRef.current = true;
++    submitAnswers(true);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [timeLeft, isCodeSet, startedAt, result, isSubmitting, autoRetry]);
++
+   // 0. 임시 저장 확인 중
+   if (!draftChecked) {
+     return (
+@@ -390,6 +460,42 @@ export default function CBT1Page() {
+               </div>
+             )}
+ 
++            {schedule && (() => {
++              const now = nowTick + clockOffset;
++              const left =
++                schedule.deadlineAt !== null
++                  ? Math.max(0, Math.ceil((schedule.deadlineAt - now) / 1000))
++                  : null;
++              const notStarted = schedule.startAt !== null && now < schedule.startAt;
++              return (
++                <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-1">
++                  <div className="text-slate-400">
++                    {schedule.mode === "TIME"
++                      ? "일정 기준 진행 (KST)"
++                      : "관리자가 시험을 시작한 시각부터 120분"}
++                  </div>
++                  {notStarted && schedule.startAt !== null && (
++                    <div className="text-slate-200">
++                      시작 예정 {formatKst(schedule.startAt)} KST
++                    </div>
++                  )}
++                  {!notStarted && left !== null && left > 0 && schedule.deadlineAt !== null && (
++                    <div className="text-amber-300 font-mono">
++                      종료 {formatKst(schedule.deadlineAt)} KST · 남은 시간 {formatTime(left)}
++                    </div>
++                  )}
++                  {!notStarted && left === null && (
++                    <div className="text-slate-400">
++                      입장한 시점부터 120분이 적용됩니다.
++                    </div>
++                  )}
++                  {!notStarted && left === 0 && (
++                    <div className="text-red-400">시험 시간이 종료되었습니다.</div>
++                  )}
++                </div>
++              );
++            })()}
++
+             {questionsError && (
+               <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
+                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+@@ -563,7 +669,15 @@ export default function CBT1Page() {
+             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-950 border border-amber-500/40 rounded-lg text-amber-400 font-mono font-bold text-sm shadow-inner">
+               <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
+               <span>남은시간 {formatTime(timeLeft)}</span>
++              {schedule?.deadlineAt && (
++                <span className="text-[10px] text-amber-500/70 font-normal">
++                  종료 {formatKst(schedule.deadlineAt).slice(11)} KST
++                </span>
++              )}
+             </div>
++            {submitNotice && (
++              <div className="text-[11px] text-red-400 w-full sm:w-auto">{submitNotice}</div>
++            )}
+ 
+             <button
+               onClick={handleSubmit}
+diff --git a/lib/exam-publish.ts b/lib/exam-publish.ts
+index f93b8cd..822cb1c 100644
+--- a/lib/exam-publish.ts
++++ b/lib/exam-publish.ts
+@@ -29,6 +29,16 @@ export function ensurePublishColumns(): Promise<void> {
+           throw e;
+         }
+       }
++      try {
++        await db.execute(
++          "ALTER TABLE exams ADD COLUMN phase1_started_at TEXT DEFAULT ''",
++        );
++      } catch (e: any) {
++        if (!/duplicate column/i.test(String(e?.message || e))) {
++          ensured = null;
++          throw e;
++        }
++      }
+       // 컬럼을 처음 만든 순간, 이미 1차가 끝난 기존 회차는 발표된 것으로 간주(기존 동작 유지)
+       if (added) {
+         await db.execute(
+diff --git a/lib/exam-timing.ts b/lib/exam-timing.ts
+index 4646da0..3b990f0 100644
+--- a/lib/exam-timing.ts
++++ b/lib/exam-timing.ts
+@@ -1,4 +1,4 @@
+-import { parseKst } from "@/lib/kst";
++import { parseKst, parseDbUtc } from "@/lib/kst";
+ 
+ export type ExamOperationMode = "TIME" | "MANUAL";
+ 
+@@ -29,3 +29,59 @@ export function isExamPhaseOpen(
+     now <= endAt
+   );
+ }
++
++// ── 1차 CBT 제한 시간 ─────────────────────────────────────────────
++//  - TIME  : 일정(phase1_start ~ phase1_end, KST)에 맞춰 진행. 종료 시각 = phase1_end
++//  - MANUAL: 관리자가 상태를 PHASE1로 바꾼 시각(phase1_started_at)부터 120분
++export const PHASE1_DURATION_MS = 120 * 60 * 1000;
++export const SUBMIT_GRACE_MS = 90 * 1000; // 종료 직후 자동 제출이 도착할 수 있는 여유
++
++export interface Phase1Window {
++  mode: "TIME" | "MANUAL";
++  startAt: number | null;
++  deadlineAt: number | null; // null = 고정 종료 시각 없음(기존 시험: 입장 시점부터 120분)
++}
++
++export function getPhase1Window(exam: Record<string, unknown>): Phase1Window {
++  const mode =
++    String(exam.phase1_operation_mode || "MANUAL").trim().toUpperCase() === "TIME"
++      ? "TIME"
++      : "MANUAL";
++  if (mode === "TIME") {
++    const startAt = parseKst(exam.phase1_start);
++    const endAt = parseKst(exam.phase1_end);
++    return {
++      mode,
++      startAt: Number.isFinite(startAt) ? startAt : null,
++      deadlineAt: Number.isFinite(endAt) ? endAt : null,
++    };
++  }
++  const started = parseDbUtc(exam.phase1_started_at);
++  return {
++    mode,
++    startAt: Number.isFinite(started) ? started : null,
++    deadlineAt: Number.isFinite(started) ? started + PHASE1_DURATION_MS : null,
++  };
++}
++
++// 입장/문항 열람 가능: 시험이 열려 있고 종료 시각 전
++export function isPhase1EntryOpen(exam: Record<string, unknown>, now = Date.now()): boolean {
++  if (!isExamPhaseOpen(exam, "PHASE1", now)) return false;
++  const w = getPhase1Window(exam);
++  return w.deadlineAt === null || now < w.deadlineAt;
++}
++
++// 제출/자동저장 가능: 종료 후 SUBMIT_GRACE_MS 까지 허용 (종료 순간 자동 제출 보장)
++export function isPhase1SubmitOpen(exam: Record<string, unknown>, now = Date.now()): boolean {
++  const w = getPhase1Window(exam);
++  if (w.mode === "TIME") {
++    return (
++      w.startAt !== null &&
++      w.deadlineAt !== null &&
++      now >= w.startAt &&
++      now <= w.deadlineAt + SUBMIT_GRACE_MS
++    );
++  }
++  if (!isExamPhaseOpen(exam, "PHASE1", now)) return false;
++  return w.deadlineAt === null || now <= w.deadlineAt + SUBMIT_GRACE_MS;
++}

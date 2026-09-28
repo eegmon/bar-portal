@@ -49,6 +49,48 @@ function toDateTimeLocal(value: unknown): string {
     .slice(0, 16);
 }
 
+// 24시간제(KST) 일시 입력: 브라우저 로케일의 오전/오후 표시와 무관하게 00~23시로 입력
+function KstDateTimeInput({
+  value,
+  onChange,
+  required,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  required?: boolean;
+}) {
+  const [date = "", time = ""] = (value || "").replace(" ", "T").split("T");
+  const [hh = "", mm = ""] = time.split(":");
+  const update = (d: string, h: string, m: string) => {
+    if (!d) return onChange("");
+    onChange(`${d}T${h || "00"}:${m || "00"}`);
+  };
+  const cls =
+    "bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono";
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="date"
+        value={date}
+        required={required}
+        onChange={(e) => update(e.target.value, hh, mm)}
+        className={`${cls} flex-1 min-w-0`}
+      />
+      <select value={hh || "00"} onChange={(e) => update(date, e.target.value, mm)} className={cls}>
+        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+          <option key={h} value={h}>{h}시</option>
+        ))}
+      </select>
+      <select value={mm || "00"} onChange={(e) => update(date, hh, e.target.value)} className={cls}>
+        {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((m) => (
+          <option key={m} value={m}>{m}분</option>
+        ))}
+      </select>
+      <span className="text-[10px] text-slate-500 shrink-0">KST</span>
+    </div>
+  );
+}
+
 // 문제지 파일: URL 직접 입력 또는 파일 업로드(DB 저장) 후 다운로드 링크 자동 입력
 function PdfUrlField({
   value,
@@ -2119,25 +2161,13 @@ export default function ExamAdminClient({
                     <label className="block text-[11px] text-slate-400 mb-1">
                       1차 시작 일시
                     </label>
-                    <input
-                      type="datetime-local"
-                      value={newPhase1Start}
-                      onChange={(e) => setNewPhase1Start(e.target.value)}
-                      required
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
-                    />
+                    <KstDateTimeInput value={newPhase1Start} onChange={setNewPhase1Start} required />
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">
                       1차 마감 일시 (120분)
                     </label>
-                    <input
-                      type="datetime-local"
-                      value={newPhase1End}
-                      onChange={(e) => setNewPhase1End(e.target.value)}
-                      required
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
-                    />
+                    <KstDateTimeInput value={newPhase1End} onChange={setNewPhase1End} required />
                   </div>
                 </div>
               </div>
@@ -2152,25 +2182,13 @@ export default function ExamAdminClient({
                     <label className="block text-[11px] text-slate-400 mb-1">
                       2차 시작 일시
                     </label>
-                    <input
-                      type="datetime-local"
-                      value={newPhase2Start}
-                      onChange={(e) => setNewPhase2Start(e.target.value)}
-                      required
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
-                    />
+                    <KstDateTimeInput value={newPhase2Start} onChange={setNewPhase2Start} required />
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">
                       2차 마감 일시 (24시간)
                     </label>
-                    <input
-                      type="datetime-local"
-                      value={newPhase2End}
-                      onChange={(e) => setNewPhase2End(e.target.value)}
-                      required
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
-                    />
+                    <KstDateTimeInput value={newPhase2End} onChange={setNewPhase2End} required />
                   </div>
                 </div>
               </div>
@@ -2400,23 +2418,13 @@ export default function ExamAdminClient({
                   <label className="block text-[11px] text-slate-400 mb-1">
                     1차 시작 일시
                   </label>
-                  <input
-                    type="datetime-local"
-                    value={editPhase1Start}
-                    onChange={(e) => setEditPhase1Start(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
-                  />
+                  <KstDateTimeInput value={editPhase1Start} onChange={setEditPhase1Start} />
                 </div>
                 <div>
                   <label className="block text-[11px] text-slate-400 mb-1">
                     1차 마감 일시
                   </label>
-                  <input
-                    type="datetime-local"
-                    value={editPhase1End}
-                    onChange={(e) => setEditPhase1End(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
-                  />
+                  <KstDateTimeInput value={editPhase1End} onChange={setEditPhase1End} />
                 </div>
               </div>
 
@@ -2425,23 +2433,13 @@ export default function ExamAdminClient({
                   <label className="block text-[11px] text-slate-400 mb-1">
                     2차 시작 일시
                   </label>
-                  <input
-                    type="datetime-local"
-                    value={editPhase2Start}
-                    onChange={(e) => setEditPhase2Start(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
-                  />
+                  <KstDateTimeInput value={editPhase2Start} onChange={setEditPhase2Start} />
                 </div>
                 <div>
                   <label className="block text-[11px] text-slate-400 mb-1">
                     2차 마감 일시
                   </label>
-                  <input
-                    type="datetime-local"
-                    value={editPhase2End}
-                    onChange={(e) => setEditPhase2End(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
-                  />
+                  <KstDateTimeInput value={editPhase2End} onChange={setEditPhase2End} />
                 </div>
               </div>
 

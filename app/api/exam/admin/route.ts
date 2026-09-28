@@ -186,6 +186,17 @@ export async function POST(req: Request) {
         ],
       });
 
+      // 처음부터 PHASE1로 개설된 경우에도 시작 시각 기록
+      if (status === "PHASE1") {
+        try {
+          await ensurePublishColumns();
+          await db.execute({
+            sql: "UPDATE exams SET phase1_started_at = ? WHERE id = ?",
+            args: [new Date().toISOString(), examId],
+          });
+        } catch {}
+      }
+
       if (broadcastNotice) {
         await sendDiscordWebhook("EXAM", {
           content: `📝 **[시험 공고] ${title} 일정이 개설되었습니다.**`,
@@ -267,6 +278,13 @@ export async function POST(req: Request) {
         );
       }
 
+      await ensurePublishColumns();
+      const prevRes = await db.execute({
+        sql: "SELECT status FROM exams WHERE id = ?",
+        args: [examId],
+      });
+      const prevStatus = String(prevRes.rows[0]?.status || "");
+
       await db.execute({
         sql: `UPDATE exams 
               SET title = COALESCE(?, title),
@@ -310,6 +328,14 @@ export async function POST(req: Request) {
           examId,
         ],
       });
+
+      // 수동 운영: 상태가 PHASE1로 바뀐 순간을 1차 시작 시각으로 기록 (종료 = 시작 + 120분)
+      if (status === "PHASE1" && prevStatus !== "PHASE1") {
+        await db.execute({
+          sql: "UPDATE exams SET phase1_started_at = ? WHERE id = ?",
+          args: [new Date().toISOString(), examId],
+        });
+      }
 
       return NextResponse.json({
         success: true,

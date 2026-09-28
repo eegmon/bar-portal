@@ -1,4 +1,5 @@
 "use client";
+import { formatKst } from "@/lib/kst";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
@@ -515,7 +516,7 @@ export default function VoteClient({
               <RefreshCw className="w-3.5 h-3.5" />
               {lastRefresh && (
                 <span className="text-[10px]">
-                  {lastRefresh.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  {formatKst(lastRefresh, true).slice(11)}
                 </span>
               )}
             </button>

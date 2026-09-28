@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { sendDiscordWebhook } from "@/lib/discord";
-import { isExamPhaseOpen } from "@/lib/exam-timing";
+import { isPhase1SubmitOpen } from "@/lib/exam-timing";
 import { ensurePublishColumns, isPhase1Published } from "@/lib/exam-publish";
 
 export async function POST(req: Request) {
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     }
 
     const exam = examRes.rows[0];
-    if (!isExamPhaseOpen(exam, "PHASE1")) {
+    if (!isPhase1SubmitOpen(exam)) {
       return NextResponse.json(
         { error: "현재 제1차 시험 응시 시간이 아닙니다." },
         { status: 403 },
