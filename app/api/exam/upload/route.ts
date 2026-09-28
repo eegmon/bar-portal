@@ -1,20 +1,13 @@
-import { randomBytes } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import {
+  MAX_FILE_SIZE,
+  resolveFileType,
+  saveExamFile,
+  fileUrlOf,
+} from "@/lib/exam-files";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-const ALLOWED_TYPES = new Map([
-  ["application/pdf", ".pdf"],
-  ["application/msword", ".doc"],
-  [
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".docx",
-  ],
-  ["application/x-hwp", ".hwp"],
-]);
-
+// 수험생 2차 답안 파일 업로드 → DB(exam_files)에 저장
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -35,8 +28,8 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
-    const extension = ALLOWED_TYPES.get(file.type);
-    if (!extension)
+    const type = resolveFileType(file);
+    if (!type)
       return NextResponse.json(
         { error: "PDF, DOC, DOCX, HWP 파일만 업로드할 수 있습니다." },
         { status: 400 },
@@ -60,23 +53,16 @@ export async function POST(req: Request) {
         { status: 400 },
       );
 
-    const uploadDir = path.join(
-      process.cwd(),
-      "public",
-      "uploads",
-      "exam",
+    const id = await saveExamFile({
+      kind: "answer",
       examId,
-    );
-    await mkdir(uploadDir, { recursive: true });
-    const filename = `${securityCode}-${Date.now()}-${randomBytes(8).toString("hex")}${extension}`;
-    await writeFile(
-      path.join(uploadDir, filename),
-      Buffer.from(await file.arrayBuffer()),
-      { flag: "wx" },
-    );
+      securityCode,
+      file,
+      mime: type.mime,
+    });
     return NextResponse.json({
       success: true,
-      fileUrl: `/uploads/exam/${encodeURIComponent(examId)}/${filename}`,
+      fileUrl: fileUrlOf(id),
       fileName: file.name,
     });
   } catch (error: unknown) {

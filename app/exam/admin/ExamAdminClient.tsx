@@ -49,6 +49,76 @@ function toDateTimeLocal(value: unknown): string {
     .slice(0, 16);
 }
 
+// 문제지 파일: URL 직접 입력 또는 파일 업로드(DB 저장) 후 다운로드 링크 자동 입력
+function PdfUrlField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setErr("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/exam/admin-upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "업로드 실패");
+      onChange(data.fileUrl);
+    } catch (e: any) {
+      setErr(e.message || "업로드 실패");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
+        />
+        <label className="shrink-0 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold cursor-pointer">
+          {uploading ? "업로드중..." : "파일 업로드"}
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.hwp"
+            className="hidden"
+            disabled={uploading}
+            onChange={handleFile}
+          />
+        </label>
+        {value && (
+          <a
+            href={value}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs"
+          >
+            받기
+          </a>
+        )}
+      </div>
+      {err && <p className="text-[11px] text-red-400">{err}</p>}
+    </div>
+  );
+}
+
+
 export default function ExamAdminClient({
   allExams = [],
   initialExam,
@@ -1478,7 +1548,6 @@ export default function ExamAdminClient({
                             {sub.phase2_file_url && (
                               <a
                                 href={sub.phase2_file_url}
-                                download={`2차답안_#${sub.security_code}.pdf`}
                                 className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
                               >
                                 <Download className="w-3.5 h-3.5" />
@@ -2037,37 +2106,19 @@ export default function ExamAdminClient({
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-[11px] text-slate-400 leading-relaxed">
                   <p>
                     <span className="text-blue-400 font-bold">1차 PDF:</span>{" "}
-                    1차 CBT 입장 화면에서 수험생에게 문제지 다운로드 버튼으로 제공됩니다. Google Drive 등 공개 URL을 입력하세요.
+                    1차 CBT 입장 화면에서 수험생에게 문제지 다운로드 버튼으로 제공됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개 URL을 입력하세요.
                   </p>
                   <p>
                     <span className="text-purple-400 font-bold">2차 제1문 / 제2문 PDF:</span>{" "}
                     2차 서술형 제출실(
                     <span className="font-mono">/exam/session-2</span>)에서
-                    수험생에게 문제지 다운로드 버튼으로 제공됩니다. Google
-                    Drive 공유 링크 또는 외부 공개 URL을 입력하세요.
+                    수험생에게 문제지 다운로드 버튼으로 제공됩니다. 파일을 직접 업로드하거나 Google
+                    Drive 공유 링크 등 외부 공개 URL을 입력하세요.
                   </p>
                 </div>
-                <input
-                  type="text"
-                  placeholder="1차 필기 문제지 PDF 링크 (선택 · 현재 비노출)"
-                  value={newPhase1Pdf}
-                  onChange={(e) => setNewPhase1Pdf(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
-                />
-                <input
-                  type="text"
-                  placeholder="2차 제1문 논술 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨"
-                  value={newPhase2Doc1Pdf}
-                  onChange={(e) => setNewPhase2Doc1Pdf(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
-                />
-                <input
-                  type="text"
-                  placeholder="2차 제2문 실무기록 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨"
-                  value={newPhase2Doc2Pdf}
-                  onChange={(e) => setNewPhase2Doc2Pdf(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono"
-                />
+                <PdfUrlField placeholder="1차 필기 문제지 PDF 링크 (선택 · 현재 비노출)" value={newPhase1Pdf} onChange={setNewPhase1Pdf} />
+                <PdfUrlField placeholder="2차 제1문 논술 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨" value={newPhase2Doc1Pdf} onChange={setNewPhase2Doc1Pdf} />
+                <PdfUrlField placeholder="2차 제2문 실무기록 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨" value={newPhase2Doc2Pdf} onChange={setNewPhase2Doc2Pdf} />
               </div>
 
               {/* 디스코드 방송 체크박스 */}
@@ -2323,33 +2374,15 @@ export default function ExamAdminClient({
                 </label>
                 <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-400 leading-relaxed space-y-1">
                   <p>
-                    <span className="text-blue-400 font-bold">1차:</span> 1차 CBT 입장 화면에서 수험생 다운로드 버튼에 연결됩니다. Google Drive 등 공개 URL을 입력하세요.
+                    <span className="text-blue-400 font-bold">1차:</span> 1차 CBT 입장 화면에서 수험생 다운로드 버튼에 연결됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개 URL을 입력하세요.
                   </p>
                   <p>
-                    <span className="text-purple-400 font-bold">2차 제1문 / 제2문:</span> 2차 서술형 제출실에서 수험생 다운로드 버튼에 직접 연결됩니다. Google Drive 등 공개 URL을 입력하세요.
+                    <span className="text-purple-400 font-bold">2차 제1문 / 제2문:</span> 2차 서술형 제출실에서 수험생 다운로드 버튼에 직접 연결됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개 URL을 입력하세요.
                   </p>
                 </div>
-                <input
-                  type="text"
-                  placeholder="1차 필기 PDF URL (현재 비노출)"
-                  value={editPhase1Pdf}
-                  onChange={(e) => setEditPhase1Pdf(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
-                />
-                <input
-                  type="text"
-                  placeholder="2차 제1문 논술 PDF URL → 2차 제출실 다운로드 버튼"
-                  value={editPhase2Doc1Pdf}
-                  onChange={(e) => setEditPhase2Doc1Pdf(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
-                />
-                <input
-                  type="text"
-                  placeholder="2차 제2문 실무기록 PDF URL → 2차 제출실 다운로드 버튼"
-                  value={editPhase2Doc2Pdf}
-                  onChange={(e) => setEditPhase2Doc2Pdf(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1 text-xs text-white font-mono"
-                />
+                <PdfUrlField placeholder="1차 필기 PDF URL (현재 비노출)" value={editPhase1Pdf} onChange={setEditPhase1Pdf} />
+                <PdfUrlField placeholder="2차 제1문 논술 PDF URL → 2차 제출실 다운로드 버튼" value={editPhase2Doc1Pdf} onChange={setEditPhase2Doc1Pdf} />
+                <PdfUrlField placeholder="2차 제2문 실무기록 PDF URL → 2차 제출실 다운로드 버튼" value={editPhase2Doc2Pdf} onChange={setEditPhase2Doc2Pdf} />
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
