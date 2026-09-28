@@ -17,7 +17,11 @@ import {
   Moon,
   Building,
 } from "lucide-react";
-import { OFFICER_POSITIONS, SessionUser, hasAdminPanelAccess } from "@/lib/types";
+import {
+  OFFICER_POSITIONS,
+  SessionUser,
+  hasAdminPanelAccess,
+} from "@/lib/types";
 
 interface NavbarProps {
   user?: SessionUser | null;
@@ -34,7 +38,8 @@ export default function Navbar({ user }: NavbarProps) {
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("bar_theme");
-    const isSystemLight = !savedTheme && window.matchMedia("(prefers-color-scheme: light)").matches;
+    const isSystemLight =
+      !savedTheme && window.matchMedia("(prefers-color-scheme: light)").matches;
     if (savedTheme === "light" || isSystemLight) {
       setIsLight(true);
       document.documentElement.classList.add("light");
@@ -63,12 +68,36 @@ export default function Navbar({ user }: NavbarProps) {
       : null;
 
   const navLinks = [
-    { href: "/lawyers", label: "변호사 명부", icon: <Scale className="w-4 h-4 text-amber-500" /> },
-    { href: "/firms", label: "법무법인", icon: <Building className="w-4 h-4 text-amber-400" /> },
-    { href: "/exam", label: "변호사시험", icon: <FileText className="w-4 h-4 text-blue-400" /> },
-    { href: "/assembly", label: "총회 & 투표", icon: <Vote className="w-4 h-4 text-emerald-400" /> },
-    { href: "/discipline", label: "징계·공시", icon: <ShieldCheck className="w-4 h-4 text-red-400" /> },
-    { href: "/rules", label: "회칙·규정집", icon: <FileText className="w-4 h-4 text-purple-400" /> },
+    {
+      href: "/lawyers",
+      label: "변호사 명부",
+      icon: <Scale className="w-4 h-4 text-amber-500" />,
+    },
+    {
+      href: "/firms",
+      label: "법무법인",
+      icon: <Building className="w-4 h-4 text-amber-400" />,
+    },
+    {
+      href: "/exam",
+      label: "변호사시험",
+      icon: <FileText className="w-4 h-4 text-blue-400" />,
+    },
+    {
+      href: "/assembly",
+      label: "총회 & 투표",
+      icon: <Vote className="w-4 h-4 text-emerald-400" />,
+    },
+    {
+      href: "/discipline",
+      label: "징계·공시",
+      icon: <ShieldCheck className="w-4 h-4 text-red-400" />,
+    },
+    {
+      href: "/rules",
+      label: "회칙·규정집",
+      icon: <FileText className="w-4 h-4 text-purple-400" />,
+    },
   ];
 
   return (
@@ -76,7 +105,10 @@ export default function Navbar({ user }: NavbarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* 로고 & 기관명 */}
-          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group shrink-0">
+          <Link
+            href="/"
+            className="flex items-center gap-2.5 sm:gap-3 group shrink-0"
+          >
             <div className="p-2 bg-gradient-to-br from-amber-500 to-amber-700 rounded-lg shadow-inner group-hover:scale-105 transition-transform">
               <Scale className="w-5 h-5 sm:w-6 sm:h-6 text-slate-950 stroke-[2.5]" />
             </div>
@@ -87,7 +119,9 @@ export default function Navbar({ user }: NavbarProps) {
                   공식 포털
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-400 -mt-0.5">DOS BAR ASSOCIATION</p>
+              <p className="text-[10px] sm:text-[11px] text-slate-400 -mt-0.5">
+                DOSE BAR ASSOCIATION
+              </p>
             </div>
           </Link>
 
@@ -127,7 +161,11 @@ export default function Navbar({ user }: NavbarProps) {
                 title={isLight ? "다크 모드로 전환" : "라이트 모드로 전환"}
                 aria-label="테마 전환"
               >
-                {isLight ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
+                {isLight ? (
+                  <Moon className="w-4 h-4 text-indigo-400" />
+                ) : (
+                  <Sun className="w-4 h-4 text-amber-400" />
+                )}
               </button>
             )}
 
@@ -146,7 +184,13 @@ export default function Navbar({ user }: NavbarProps) {
                     </span>
                   ) : (
                     <span className="text-[10px] px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded">
-                      {user.isTrainee ? "견습변호사" : user.role === "ADMIN" ? "관리자" : user.role === "LAWYER" ? "변호사" : "회원"}
+                      {user.isTrainee
+                        ? "견습변호사"
+                        : user.role === "ADMIN"
+                          ? "관리자"
+                          : user.role === "LAWYER"
+                            ? "변호사"
+                            : "회원"}
                     </span>
                   )}
                 </Link>
@@ -178,7 +222,11 @@ export default function Navbar({ user }: NavbarProps) {
               className="lg:hidden p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 focus:outline-none"
               aria-label="모바일 메뉴 열기"
             >
-              {isMobileMenuOpen ? <X className="w-5 h-5 text-amber-400" /> : <Menu className="w-5 h-5" />}
+              {isMobileMenuOpen ? (
+                <X className="w-5 h-5 text-amber-400" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
             </button>
           </div>
         </div>
@@ -203,7 +251,9 @@ export default function Navbar({ user }: NavbarProps) {
                       </span>
                     )}
                   </div>
-                  <div className="text-[10px] text-slate-400">{user.loginId}</div>
+                  <div className="text-[10px] text-slate-400">
+                    {user.loginId}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

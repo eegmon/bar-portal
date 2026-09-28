@@ -18,8 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "도스변호사협회 | 공식 웹 포털 (DOS BAR ASSOCIATION)",
-  description: "기본적 인권의 옹호와 사회정의 실현 - 도스변호사협회 통합 사법 포털",
+  title: "도스변호사협회 | 공식 웹 포털 (DOSE BAR ASSOCIATION)",
+  description:
+    "기본적 인권의 옹호와 사회정의 실현 - 도스변호사협회 통합 사법 포털",
 };
 
 export default async function RootLayout({
@@ -32,7 +33,9 @@ export default async function RootLayout({
   // 팝업 공지 설정 조회
   let popupData: PopupData | null = null;
   try {
-    const res = await db.execute("SELECT key, value FROM settings WHERE key LIKE 'popup_%'");
+    const res = await db.execute(
+      "SELECT key, value FROM settings WHERE key LIKE 'popup_%'",
+    );
     const popupMap: Record<string, string> = {};
     for (const row of res.rows) {
       popupMap[row.key as string] = row.value as string;

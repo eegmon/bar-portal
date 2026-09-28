@@ -10,7 +10,7 @@ export default function Footer() {
           <div className="space-y-3 md:col-span-2">
             <div className="flex items-center gap-2 text-white font-bold text-base">
               <Scale className="w-5 h-5 text-amber-500" />
-              도스변호사협회 (DOS BAR ASSOCIATION)
+              도스변호사협회 (DOSE BAR ASSOCIATION)
             </div>
             <p className="text-slate-400 leading-relaxed max-w-md text-xs">
               도스변호사협회는 「변호사법」에 의하여 설립된 법인으로서 기본적
@@ -89,7 +89,7 @@ export default function Footer() {
 
         <div className="pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-400">
           <p>
-            © 2026 DOS BAR ASSOCIATION. All rights reserved. (도스온라인 RP)
+            © 2026 DOSE BAR ASSOCIATION. All rights reserved. (도스온라인 RP)
           </p>
           <div className="flex items-center gap-4">
             <span className="text-slate-400 flex items-center gap-1">
