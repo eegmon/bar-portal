@@ -21,10 +21,30 @@ interface Question {
   choices: string[];
 }
 
+const DRAFT_KEY = "bar-portal:cbt1:draft";
+const EXAM_SECONDS = 120 * 60;
+
+interface Draft {
+  examId: string;
+  securityCode: string;
+  startedAt: number; // 서버 기준 시작 시각(ms)
+  clockOffset: number; // 서버시각 - 내 기기시각(ms)
+  answers: Record<number, number>;
+}
+
 export default function CBT1Page() {
   const [securityCode, setSecurityCode] = useState("");
   const [isCodeSet, setIsCodeSet] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(120 * 60); // 120분 (초 단위)
+  const [timeLeft, setTimeLeft] = useState(EXAM_SECONDS); // 120분 (초 단위)
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [draftChecked, setDraftChecked] = useState(false);
+  const [clockOffset, setClockOffset] = useState(0);
+  const [isEntering, setIsEntering] = useState(false);
+  const [enterError, setEnterError] = useState("");
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "offline" | "rejected"
+  >("idle");
+  const [saveRetry, setSaveRetry] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -66,14 +86,123 @@ export default function CBT1Page() {
       });
   }, []);
 
-  // 타이머 작동
+  // 입장/복원: 서버에 시작 시각을 기록하고, 서버에 저장된 임시답안을 받아온다.
+  // 서버에 닿지 않으면(오프라인) 이 기기의 저장본으로 이어서 진행한다.
+  const enterExam = async (code: string, local?: Draft) => {
+    setEnterError("");
+    setIsEntering(true);
+    try {
+      const res = await fetch("/api/exam/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", examId, securityCode: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "입장 실패");
+      setClockOffset(data.serverNow - Date.now());
+      setStartedAt(data.startedAt);
+      // 서버 저장본 + 이 기기 저장본 병합 (이 기기 쪽이 더 최신)
+      setAnswers({ ...(data.answers || {}), ...(local?.answers || {}) });
+      setSecurityCode(code);
+      setIsCodeSet(true);
+    } catch (err: any) {
+      if (err instanceof TypeError && local) {
+        // 네트워크 오류: 이 기기 저장본으로 계속 진행
+        setClockOffset(local.clockOffset || 0);
+        setStartedAt(local.startedAt);
+        setAnswers(local.answers || {});
+        setSecurityCode(local.securityCode);
+        setIsCodeSet(true);
+        setSaveStatus("offline");
+      } else {
+        if (local) {
+          try { localStorage.removeItem(DRAFT_KEY); } catch {}
+        }
+        setEnterError(
+          err instanceof TypeError
+            ? "네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+            : err.message,
+        );
+      }
+    } finally {
+      setIsEntering(false);
+    }
+  };
+
+  const saveToServer = async (a: Record<number, number>) => {
+    setSaveStatus("saving");
+    try {
+      const res = await fetch("/api/exam/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "save",
+          examId,
+          securityCode,
+          answers: a,
+        }),
+      });
+      setSaveStatus(res.ok ? "saved" : "rejected");
+    } catch {
+      setSaveStatus("offline"); // 서버 다운/네트워크 끊김 → 아래 effect가 재시도
+    }
+  };
+
+  // 페이지 진입 시: 문항 로드가 끝나면 이 기기 저장본이 있는지 확인
   useEffect(() => {
-    if (!isCodeSet || timeLeft <= 0 || result) return;
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => Math.max(0, prev - 1));
-    }, 1000);
+    if (isLoadingQuestions || draftChecked) return;
+    if (questionsError) {
+      setDraftChecked(true);
+      return;
+    }
+    (async () => {
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const d: Draft = JSON.parse(raw);
+          if (d.examId === examId) await enterExam(d.securityCode, d);
+          else localStorage.removeItem(DRAFT_KEY);
+        }
+      } catch {}
+      setDraftChecked(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoadingQuestions, questionsError, examId, draftChecked]);
+
+  // 이 기기(localStorage)에 즉시 저장 — 서버가 죽어도 남는 2차 안전장치
+  useEffect(() => {
+    if (!draftChecked || !isCodeSet || startedAt === null || result) return;
+    try {
+      const d: Draft = { examId, securityCode, startedAt, clockOffset, answers };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    } catch {}
+  }, [draftChecked, isCodeSet, startedAt, clockOffset, result, examId, securityCode, answers]);
+
+  // 서버 자동저장: 답안이 바뀌면 1.2초 뒤 저장, 실패하면 8초마다 재시도
+  useEffect(() => {
+    if (!draftChecked || !isCodeSet || startedAt === null || result) return;
+    const t = setTimeout(() => saveToServer(answers), 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, draftChecked, isCodeSet, startedAt, result, saveRetry]);
+
+  useEffect(() => {
+    if (saveStatus !== "offline") return;
+    const t = setTimeout(() => setSaveRetry((n) => n + 1), 8000);
+    return () => clearTimeout(t);
+  }, [saveStatus, saveRetry]);
+
+  // 타이머: 서버 시작 시각 기준 (새로고침·기기 변경해도 시간이 이어짐)
+  useEffect(() => {
+    if (!isCodeSet || startedAt === null || result) return;
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() + clockOffset - startedAt) / 1000);
+      setTimeLeft(Math.max(0, EXAM_SECONDS - elapsed));
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [isCodeSet, timeLeft, result]);
+  }, [isCodeSet, startedAt, clockOffset, result]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -120,7 +249,14 @@ export default function CBT1Page() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "제출 실패");
+      if (!res.ok) {
+        // 이미 제출된 경우에만 임시 저장 삭제 (그 외 실패는 재시도 가능하게 유지)
+        if (String(data.error || "").includes("이미 제출")) {
+          try { localStorage.removeItem(DRAFT_KEY); } catch {}
+        }
+        throw new Error(data.error || "제출 실패");
+      }
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
       setResult(data);
     } catch (err: any) {
       alert(`오류: ${err.message}`);
@@ -128,6 +264,15 @@ export default function CBT1Page() {
       setIsSubmitting(false);
     }
   };
+
+  // 0. 임시 저장 확인 중
+  if (!draftChecked) {
+    return (
+      <div className="flex justify-center py-32 text-slate-400">
+        <Loader2 className="w-5 h-5 animate-spin" />
+      </div>
+    );
+  }
 
   // 1. 보안코드 입력 전 화면
   if (!isCodeSet) {
@@ -214,11 +359,20 @@ export default function CBT1Page() {
 
             <button
               type="button"
-              disabled={!securityCode.trim() || isLoadingQuestions || !!questionsError}
-              onClick={() => setIsCodeSet(true)}
+              disabled={
+                !securityCode.trim() ||
+                isLoadingQuestions ||
+                !!questionsError ||
+                isEntering
+              }
+              onClick={() => enterExam(securityCode.trim().toUpperCase())}
               className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
             >
-              {isLoadingQuestions ? (
+              {isEntering ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> 입장 확인중...
+                </>
+              ) : isLoadingQuestions ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> 시험 문항
                   로딩중...
@@ -229,6 +383,12 @@ export default function CBT1Page() {
                 "CBT 시험장 입장하기 (120분 시작)"
               )}
             </button>
+
+            {enterError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300">
+                {enterError}
+              </div>
+            )}
 
             {questionsError && (
               <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-start gap-2">
@@ -345,6 +505,21 @@ export default function CBT1Page() {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* 자동저장 상태 */}
+            <div
+              className={`text-[11px] ${
+                saveStatus === "offline" || saveStatus === "rejected"
+                  ? "text-red-400"
+                  : "text-slate-500"
+              }`}
+            >
+              {saveStatus === "saving" && "저장 중…"}
+              {saveStatus === "saved" && "✓ 서버에 자동저장됨"}
+              {saveStatus === "offline" &&
+                "⚠ 서버 저장 실패 · 이 기기에 보관 중 (자동 재시도)"}
+              {saveStatus === "rejected" && "⚠ 서버가 저장을 거부했습니다"}
+            </div>
+
             {/* 120분 타이머 */}
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-slate-950 border border-amber-500/40 rounded-lg text-amber-400 font-mono font-bold text-sm shadow-inner">
               <Clock className="w-4 h-4 text-amber-500 animate-pulse" />

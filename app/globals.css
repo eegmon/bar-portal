@@ -157,7 +157,7 @@ html.light .text-slate-700 {
 
 /* ── 그라디언트 ──────────────────────────────────────────────────────────── */
 /*
- * Tailwind의 from-*/via-*/to-* 는 --tw-gradient-from/stops 변수를 통해 동작.
+ * Tailwind의 from /via / to 는 --tw-gradient-from/stops 변수를 통해 동작.
  * slate 기반 그라디언트만 선택적으로 무력화하고, amber/emerald 등은 유지합니다.
  *
  * 접근: from-slate-900, from-slate-950 을 오버라이드해서
