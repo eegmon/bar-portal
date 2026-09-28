@@ -335,6 +335,10 @@ export default function ExamAdminClient({
   >({});
   const [isGrading, setIsGrading] = useState<string | null>(null);
   const [isReleasing, setIsReleasing] = useState(false);
+  const [phase1Published, setPhase1Published] = useState(
+    Boolean(Number(exam?.phase1_published ?? 0)),
+  );
+  const [isPublishingP1, setIsPublishingP1] = useState(false);
   const [isDeletingExam, setIsDeletingExam] = useState(false);
 
   // 4. 가산점 승인 관련 상태
@@ -763,6 +767,39 @@ export default function ExamAdminClient({
       alert(`오류: ${err.message}`);
     } finally {
       setIsGrading(null);
+    }
+  };
+
+  // 1차 CBT 성적 공개/비공개 전환
+  const handlePublishPhase1 = async () => {
+    const next = !phase1Published;
+    const submitted = submissions.filter(
+      (sub: any) => sub.phase1_answers && sub.phase1_answers !== "[]",
+    ).length;
+    const msg = next
+      ? `1차 성적을 공개할까요?\n(답안 제출 ${submitted}명이 내 성적 조회에서 점수·합격 여부를 확인하게 됩니다.)`
+      : "1차 성적 공개를 취소할까요?\n(수험생에게 다시 성적이 보이지 않습니다.)";
+    if (!confirm(msg)) return;
+
+    setIsPublishingP1(true);
+    try {
+      const res = await fetch("/api/exam/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "PUBLISH_PHASE1",
+          examId: exam.id,
+          publish: next,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "처리 실패");
+      setPhase1Published(next);
+      alert(data.message);
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsPublishingP1(false);
     }
   };
 
@@ -1425,6 +1462,46 @@ export default function ExamAdminClient({
           {/* ========================================================================= */}
           {/* 탭 3: 2차 채점 및 최종 합격 공고 (PDF 답안 지원) */}
           {/* ========================================================================= */}
+          {activeTab === "grading" && (
+            <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-bold text-white flex items-center gap-2">
+                  1차 CBT 성적 공개
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                      phase1Published
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                        : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                    }`}
+                  >
+                    {phase1Published ? "공개됨" : "비공개"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  비공개일 때는 수험생이 제출 후에도 점수·합격 여부를 볼 수 없고,
+                  2차 시험 입장도 막힙니다. 공개하면 즉시 확인 및 2차 응시가
+                  가능합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handlePublishPhase1}
+                disabled={isPublishingP1}
+                className={`px-5 py-2.5 text-white font-bold text-xs rounded-xl shadow-lg transition-all disabled:bg-slate-800 ${
+                  phase1Published
+                    ? "bg-slate-700 hover:bg-slate-600"
+                    : "bg-blue-600 hover:bg-blue-500"
+                }`}
+              >
+                {isPublishingP1
+                  ? "처리중..."
+                  : phase1Published
+                    ? "공개 취소"
+                    : "1차 성적 공개(발표)"}
+              </button>
+            </div>
+          )}
+
           {activeTab === "grading" && (
             <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">

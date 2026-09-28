@@ -87,8 +87,25 @@ export default function MyScorePage() {
         )}
       </form>
 
+      {/* 1차 성적 발표 전 */}
+      {scoreData && scoreData.phase1_published === false && (
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-2 text-center">
+          <span className="text-xs font-mono px-2.5 py-1 bg-slate-800 text-blue-400 rounded-md">
+            #{scoreData.security_code}
+          </span>
+          <h2 className="text-lg font-bold text-white mt-2">
+            {scoreData.submitted ? "성적 발표 대기중" : "응시 기록이 없습니다"}
+          </h2>
+          <p className="text-xs text-slate-400">
+            {scoreData.submitted
+              ? "답안은 정상 접수되었습니다. 관리자가 성적을 발표하면 이 화면에서 확인할 수 있습니다."
+              : "아직 1차 답안을 제출하지 않았습니다."}
+          </p>
+        </div>
+      )}
+
       {/* 성적표 결과 */}
-      {scoreData && (
+      {scoreData && scoreData.phase1_published !== false && (
         <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl space-y-6">
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
             <div className="space-y-1">

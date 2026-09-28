@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { ensurePublishColumns, isPhase1Published } from "@/lib/exam-publish";
 import {
   MAX_FILE_SIZE,
   resolveFileType,
@@ -34,13 +35,17 @@ export async function POST(req: Request) {
         { error: "PDF, DOC, DOCX, HWP 파일만 업로드할 수 있습니다." },
         { status: 400 },
       );
+    await ensurePublishColumns();
     const submissionRes = await db.execute({
-      sql: "SELECT id, phase1_passed, is_instant_grade_pledged FROM exam_submissions WHERE exam_id = ? AND security_code = ?",
+      sql: `SELECT es.id, es.phase1_passed, es.is_instant_grade_pledged, e.phase1_published
+            FROM exam_submissions es JOIN exams e ON e.id = es.exam_id
+            WHERE es.exam_id = ? AND es.security_code = ?`,
       args: [examId, securityCode],
     });
     if (
       submissionRes.rows.length === 0 ||
-      !submissionRes.rows[0].phase1_passed
+      !submissionRes.rows[0].phase1_passed ||
+      !isPhase1Published(submissionRes.rows[0])
     ) {
       return NextResponse.json(
         { error: "유효한 1차 합격 수험번호가 아닙니다." },

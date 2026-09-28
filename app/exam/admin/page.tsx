@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import db from "@/lib/db";
+import { ensurePublishColumns } from "@/lib/exam-publish";
 import Link from "next/link";
 import { getSessionUser, canManageExam } from "@/lib/auth";
 import ExamAdminClient from "./ExamAdminClient";
@@ -26,6 +27,7 @@ export default async function ExamAdminPage({
   let submissions: any[] = [];
 
   try {
+    await ensurePublishColumns();
     const examsRes = await db.execute("SELECT * FROM exams ORDER BY round_number DESC");
     allExams = examsRes.rows;
 

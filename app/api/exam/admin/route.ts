@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import db from "@/lib/db";
+import { ensurePublishColumns } from "@/lib/exam-publish";
 import { getSessionUser, canManageExam } from "@/lib/auth";
 import { sendDiscordWebhook } from "@/lib/discord";
 
@@ -619,6 +620,35 @@ export async function POST(req: Request) {
         message: approved
           ? `${sub.claimed_name} 응시자의 가산점이 승인되었습니다.`
           : `${sub.claimed_name} 응시자의 가산점이 취소되었습니다.`,
+      });
+    }
+    // 1차 CBT 성적 발표/발표 취소 (수험생에게 점수·합격 여부 공개)
+    if (action === "PUBLISH_PHASE1") {
+      const { examId, publish } = body;
+      if (!examId)
+        return NextResponse.json(
+          { error: "examId가 필요합니다." },
+          { status: 400 },
+        );
+      await ensurePublishColumns();
+      const flag = publish ? 1 : 0;
+      const upd = await db.execute({
+        sql: `UPDATE exams SET phase1_published = ?,
+                phase1_published_at = CASE WHEN ? = 1 THEN datetime('now') ELSE '' END
+              WHERE id = ?`,
+        args: [flag, flag, examId],
+      });
+      if (upd.rowsAffected === 0)
+        return NextResponse.json(
+          { error: "시험을 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      return NextResponse.json({
+        success: true,
+        published: Boolean(flag),
+        message: flag
+          ? "1차 성적이 공개되었습니다. 수험생이 내 성적 조회에서 확인할 수 있습니다."
+          : "1차 성적 공개가 취소되었습니다.",
       });
     }
     if (action === "RELEASE_RESULTS") {

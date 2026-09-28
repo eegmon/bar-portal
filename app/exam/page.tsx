@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileText, Clock, AlertCircle, CheckCircle, ShieldAlert, Award, ArrowRight } from "lucide-react";
 import db from "@/lib/db";
+import { ensurePublishColumns } from "@/lib/exam-publish";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function ExamHubPage() {
   let userSubmission: any = null;
 
   try {
+    await ensurePublishColumns();
     const examRes = await db.execute("SELECT * FROM exams ORDER BY round_number DESC LIMIT 1");
     if (examRes.rows.length > 0) {
       exam = examRes.rows[0];
@@ -60,9 +62,11 @@ export default async function ExamHubPage() {
                   응시 상태:{" "}
                   <strong className="text-white">
                     {userSubmission
-                      ? userSubmission.phase1_passed
-                        ? "1차 합격 / 2차 진행"
-                        : "1차 응시완료"
+                      ? !exam.phase1_published
+                        ? "1차 응시완료 (성적 발표 전)"
+                        : userSubmission.phase1_passed
+                          ? "1차 합격 / 2차 진행"
+                          : "1차 응시완료"
                       : "미응시"}
                   </strong>
                 </span>

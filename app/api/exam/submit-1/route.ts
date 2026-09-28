@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { sendDiscordWebhook } from "@/lib/discord";
 import { isExamPhaseOpen } from "@/lib/exam-timing";
+import { ensurePublishColumns, isPhase1Published } from "@/lib/exam-publish";
 
 export async function POST(req: Request) {
   try {
@@ -16,6 +17,8 @@ export async function POST(req: Request) {
     }
 
     const code = String(securityCode).trim().toUpperCase();
+
+    await ensurePublishColumns();
 
     // 시험 정보 및 정답표 조회
     const examRes = await db.execute({
@@ -118,8 +121,18 @@ export async function POST(req: Request) {
         ],
       });
 
+      // 관리자가 성적을 발표하기 전에는 점수/합격 여부를 응답하지 않는다.
+      if (!isPhase1Published(exam)) {
+        return NextResponse.json({
+          success: true,
+          published: false,
+          securityCode: code,
+          totalQuestions: questions.length,
+        });
+      }
       return NextResponse.json({
         success: true,
+        published: true,
         securityCode: code,
         score,
         passed: Boolean(passed),

@@ -407,6 +407,45 @@ export default function CBT1Page() {
   }
 
   // 2. 시험 제출 완료 화면
+  if (result && result.published === false) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 w-full">
+        <div className="p-8 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl text-center space-y-6">
+          <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-blue-500/10 text-blue-400 border border-blue-500/30">
+            <CheckCircle className="w-8 h-8" />
+          </div>
+          <div className="space-y-1">
+            <span className="text-xs font-mono px-2.5 py-1 bg-slate-800 text-slate-300 rounded-md">
+              보안코드: #{result.securityCode}
+            </span>
+            <h1 className="text-2xl font-extrabold text-white mt-2">
+              제1차 CBT 답안 제출 완료
+            </h1>
+            <p className="text-sm text-slate-400">
+              답안지가 정상 접수되었습니다. 성적과 합격 여부는 관리자의 성적
+              발표 후 <strong className="text-slate-200">내 성적 조회</strong>에서
+              확인할 수 있습니다.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <Link
+              href="/exam/my-score"
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-lg shadow-md transition-colors"
+            >
+              내 성적 조회
+            </Link>
+            <Link
+              href="/exam"
+              className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 transition-colors"
+            >
+              시험 센터 허브로
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (result) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 w-full">

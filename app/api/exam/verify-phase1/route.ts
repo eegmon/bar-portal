@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { ensurePublishColumns, isPhase1Published } from "@/lib/exam-publish";
 import { isExamPhaseOpen } from "@/lib/exam-timing";
 
 export async function POST(req: Request) {
@@ -33,6 +34,23 @@ export async function POST(req: Request) {
     }
 
     const sub = res.rows[0];
+
+    // 1차 성적 발표 전에는 합격 여부를 알려주지 않는다.
+    await ensurePublishColumns();
+    const pubRes = await db.execute({
+      sql: "SELECT phase1_published FROM exams WHERE id = ?",
+      args: [sub.exam_id as string],
+    });
+    if (!isPhase1Published(pubRes.rows[0])) {
+      return NextResponse.json(
+        {
+          eligible: false,
+          error: "1차 성적 발표 전입니다. 발표 후 2차 시험에 응시할 수 있습니다.",
+        },
+        { status: 403 },
+      );
+    }
+
     if (!sub.phase1_passed) {
       return NextResponse.json(
         {

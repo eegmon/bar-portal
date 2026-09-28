@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import { ensurePublishColumns, isPhase1Published } from "@/lib/exam-publish";
 import { sendDiscordWebhook } from "@/lib/discord";
 import { isExamPhaseOpen } from "@/lib/exam-timing";
 
@@ -37,8 +38,9 @@ export async function POST(req: Request) {
       );
     }
 
+    await ensurePublishColumns();
     const examRes = await db.execute({
-      sql: "SELECT status, phase2_start, phase2_end, phase2_operation_mode FROM exams WHERE id = ?",
+      sql: "SELECT status, phase2_start, phase2_end, phase2_operation_mode, phase1_published FROM exams WHERE id = ?",
       args: [examId],
     });
     const exam = examRes.rows[0];
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
     }
 
     const existing = subRes.rows[0];
-    if (!existing.phase1_passed) {
+    if (!existing.phase1_passed || !isPhase1Published(exam)) {
       return NextResponse.json(
         { error: "1차 합격자만 2차 답안을 제출할 수 있습니다." },
         { status: 403 },
