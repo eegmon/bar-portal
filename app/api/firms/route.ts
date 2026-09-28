@@ -345,6 +345,66 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: "구성원이 제거되었습니다." });
     }
 
+    // ── 6. 파트너(구성원 변호사) 여부 토글 ─────────────────────
+    if (action === "TOGGLE_PARTNER") {
+      const { firmId, lawyerId, isPartner } = body;
+
+      const firmRes = await db.execute({ sql: "SELECT * FROM law_firms WHERE id = ?", args: [firmId] });
+      const firm = firmRes.rows[0];
+      if (!firm) return NextResponse.json({ error: "법인을 찾을 수 없습니다." }, { status: 404 });
+
+      if (firm.representative_id !== user.id && !canManageUsers(user)) {
+        return NextResponse.json({ error: "법인 대표변호사 또는 관리자만 수정할 수 있습니다." }, { status: 403 });
+      }
+
+      await db.execute({
+        sql: "UPDATE firm_members SET is_partner = ? WHERE firm_id = ? AND lawyer_id = ?",
+        args: [isPartner ? 1 : 0, firmId, lawyerId],
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `${isPartner ? "구성원 변호사" : "소속 변호사"}로 변경되었습니다.`,
+      });
+    }
+
+    // ── 7. 법인 해산 (관리자 전용) ──────────────────────────────
+    if (action === "DISSOLVE_FIRM") {
+      if (!canManageUsers(user)) {
+        return NextResponse.json({ error: "관리자 권한이 필요합니다." }, { status: 403 });
+      }
+
+      const { firmId, reason } = body;
+      if (!firmId) return NextResponse.json({ error: "법인 ID가 필요합니다." }, { status: 400 });
+
+      const firmRes = await db.execute({ sql: "SELECT * FROM law_firms WHERE id = ?", args: [firmId] });
+      const firm = firmRes.rows[0];
+      if (!firm) return NextResponse.json({ error: "법인을 찾을 수 없습니다." }, { status: 404 });
+
+      // 상태를 CANCELLED로 변경
+      await db.execute({
+        sql: "UPDATE law_firms SET status = 'CANCELLED' WHERE id = ?",
+        args: [firmId],
+      });
+
+      // 구성원 전원의 office_name 초기화
+      await db.execute({
+        sql: "UPDATE users SET office_name = '' WHERE id IN (SELECT lawyer_id FROM firm_members WHERE firm_id = ?)",
+        args: [firmId],
+      });
+
+      await sendDiscordWebhook("ADMIN", {
+        embeds: [{
+          title: `🏚️ 법무법인 해산 처리: ${firm.name}`,
+          description: `관리자 **${user.name}**이(가) 법무법인 등록을 취소(해산)하였습니다.${reason ? `\n사유: ${reason}` : ""}`,
+          color: 0xEF4444,
+          timestamp: new Date().toISOString(),
+        }],
+      });
+
+      return NextResponse.json({ success: true, message: `${firm.name}이(가) 해산 처리되었습니다.` });
+    }
+
     return NextResponse.json({ error: "유효하지 않은 명령입니다." }, { status: 400 });
   } catch (err: any) {
     console.error("법무법인 API 오류:", err);

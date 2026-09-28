@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Building, Plus, CheckCircle2, XCircle, Users, UserPlus,
-  Trash2, Search, Edit, Save, ChevronDown, ChevronUp, Crown,
+  Trash2, Search, Edit, Save, ChevronDown, ChevronUp, Crown, ExternalLink,
 } from "lucide-react";
 
 const FIRM_TYPES: Record<string, string> = {
@@ -277,6 +278,29 @@ export default function FirmsClient({
     }
   };
 
+  const handleTogglePartner = async (lawyerId: string, currentIsPartner: boolean) => {
+    if (!myFirm) return;
+    try {
+      const res = await fetch("/api/firms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "TOGGLE_PARTNER",
+          firmId: myFirm.id,
+          lawyerId,
+          isPartner: !currentIsPartner,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMembers((prev) =>
+        prev.map((m) => (m.id === lawyerId ? { ...m, is_partner: !currentIsPartner ? 1 : 0 } : m))
+      );
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    }
+  };
+
   const isRepresentative = myFirm?.representative_id === currentUser?.id;
 
   return (
@@ -382,7 +406,13 @@ export default function FirmsClient({
                               <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded font-semibold">공증인가</span>
                             ) : null}
                           </div>
-                          <h3 className="text-sm font-bold text-white">{firm.name}</h3>
+                          <Link
+                            href={`/firms/${firm.id}`}
+                            className="text-sm font-bold text-white hover:text-amber-400 flex items-center gap-1 transition-colors"
+                          >
+                            {firm.name}
+                            <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
+                          </Link>
                           <p className="text-xs text-slate-400 mt-0.5">대표: {firm.rep_name || "미지정"}</p>
                         </div>
                         <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded font-bold shrink-0">정상 등록</span>
@@ -616,14 +646,31 @@ export default function FirmsClient({
                           </span>
                         )}
                       </div>
-                      {(isRepresentative || isAdmin) && m.id !== myFirm.representative_id && (
-                        <button
-                          onClick={() => handleRemoveMember(m.id, m.name)}
-                          className="text-red-400 hover:text-red-300 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {(isRepresentative || isAdmin) && (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePartner(m.id, !!m.is_partner)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                              m.is_partner
+                                ? "bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20"
+                                : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 text-slate-300"
+                            }`}
+                            title="클릭하여 구성원/소속 변호사 직급 전환"
+                          >
+                            {m.is_partner ? "구성원 ➔ 소속 전환" : "소속 ➔ 구성원 전환"}
+                          </button>
+                        )}
+                        {(isRepresentative || isAdmin) && m.id !== myFirm.representative_id && (
+                          <button
+                            onClick={() => handleRemoveMember(m.id, m.name)}
+                            className="text-red-400 hover:text-red-300 p-1"
+                            title="구성원 제거"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
