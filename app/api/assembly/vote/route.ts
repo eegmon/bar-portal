@@ -102,7 +102,25 @@ export async function GET(req: Request) {
       args: [],
     });
     const presentRes = await db.execute({
-      sql: "SELECT COALESCE(SUM(CASE WHEN attended = 1 OR is_proxy = 1 THEN COALESCE(voting_power, 1) ELSE 0 END), 0) as present_rights FROM assembly_attendances WHERE assembly_id = ? AND approval_status = 'APPROVED'",
+      sql: `SELECT COALESCE(SUM(
+              CASE
+                -- 직접 출석: attended=1이면 반영
+                WHEN aa.is_proxy = 0 AND aa.attended = 1
+                  THEN COALESCE(aa.voting_power, 1)
+                -- 위임: 수임인(proxy_to_user_id)이 실제 출석(attended=1)한 경우에만 반영
+                WHEN aa.is_proxy = 1 AND EXISTS (
+                  SELECT 1 FROM assembly_attendances proxy_att
+                  WHERE proxy_att.assembly_id = aa.assembly_id
+                    AND proxy_att.user_id     = aa.proxy_to_user_id
+                    AND proxy_att.is_proxy    = 0
+                    AND proxy_att.attended    = 1
+                    AND proxy_att.approval_status = 'APPROVED'
+                ) THEN COALESCE(aa.voting_power, 1)
+                ELSE 0
+              END
+            ), 0) as present_rights
+            FROM assembly_attendances aa
+            WHERE aa.assembly_id = ? AND aa.approval_status = 'APPROVED'`,
       args: [agenda.assembly_id],
     });
     const castRes = await db.execute({
@@ -126,6 +144,8 @@ export async function GET(req: Request) {
 
     const stats: {
       totalRights: number;
+      personalRights: number;
+      firmRights: number;
       presentRights: number;
       voters: number;
       casted: number;
@@ -136,6 +156,8 @@ export async function GET(req: Request) {
       namedVotes?: { userName: string; userId: string; choice: string; votes_count: number }[];
     } = {
       totalRights,
+      personalRights,
+      firmRights,
       presentRights,
       voters:      Number(voterRes.rows[0]?.voters || 0),
       casted,
@@ -246,10 +268,19 @@ export async function POST(req: Request) {
         args: [agenda.assembly_id, user.id],
       });
       const att = attRes.rows[0];
+
+      // 위임한 사람(grantor)은 직접 투표 불가 — 수임인이 대신 행사
+      if (att && att.is_proxy === 1 && att.approval_status === "APPROVED") {
+        return NextResponse.json(
+          { error: "의결권을 위임하셨습니다. 직접 투표할 수 없으며, 수임인이 귀하의 의결권을 대신 행사합니다." },
+          { status: 403 },
+        );
+      }
+
       const approved =
         att &&
         att.approval_status === "APPROVED" &&
-        (att.attended === 1 || att.is_proxy === 1);
+        att.attended === 1;
 
       if (!approved) {
         const reason =
@@ -257,8 +288,7 @@ export async function POST(req: Request) {
             ? "출석 확인을 완료하지 않았습니다."
             : att.approval_status === "PENDING"
               ? "출석 확인이 접수되었으나 아직 의장의 승인을 기다리고 있습니다."
-              : "출석이 승인되지 않은 상태입니다.";
-        return NextResponse.json(
+              : "출석이 승인되지 않은 상태입니다.";        return NextResponse.json(
           {
             error: `투표 자격이 없습니다. ${reason} 총회 페이지에서 출석을 먼저 확인해 주세요.`,
             attendanceStatus: att?.approval_status ?? "NONE",

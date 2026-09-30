@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { OFFICER_POSITIONS, SessionUser } from "@/lib/types";
+import UserSearchCombobox from "@/components/UserSearchCombobox";
 
 interface AdminClientProps {
   currentUser: SessionUser;
@@ -270,6 +271,8 @@ export default function AdminClient({
     pending: number;
     absent: number;
     totalRights: number;
+    personalRights: number;
+    firmRights: number;
     presentRights: number;
     quorumNeeded: number;
     quorumMet: boolean;
@@ -1029,6 +1032,14 @@ export default function AdminClient({
 
   const [offlineAttendeeId, setOfflineAttendeeId] = useState("");
   const [isAddingAttendance, setIsAddingAttendance] = useState(false);
+  const [attendanceSearch, setAttendanceSearch] = useState("");
+
+  // 직권 위임 상태
+  const [adminProxyGrantorId, setAdminProxyGrantorId] = useState("");
+  const [adminProxyToId, setAdminProxyToId] = useState("");
+  const [isSettingAdminProxy, setIsSettingAdminProxy] = useState(false);
+  // 위임 회수 중인 attendanceId
+  const [revokingProxyId, setRevokingProxyId] = useState<string | null>(null);
 
   const handleAddOfflineAttendance = async () => {
     if (!selectedAssemblyId || !offlineAttendeeId) return;
@@ -1051,6 +1062,63 @@ export default function AdminClient({
       alert(`오류: ${err.message}`);
     } finally {
       setIsAddingAttendance(false);
+    }
+  };
+
+  const handleAdminSetProxy = async () => {
+    if (!selectedAssemblyId || !adminProxyGrantorId || !adminProxyToId) {
+      alert("총회, 위임인, 수임인을 모두 선택해 주세요.");
+      return;
+    }
+    if (!confirm(`직권 위임 처리하시겠습니까?\n기존 출석/위임 기록은 무효화됩니다.`)) return;
+    setIsSettingAdminProxy(true);
+    try {
+      const res = await fetch("/api/assembly/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ADMIN_SET_PROXY",
+          assemblyId: selectedAssemblyId,
+          grantorId: adminProxyGrantorId,
+          proxyToUserId: adminProxyToId,
+          reason: "관리자 직권 위임",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "직권 위임 실패");
+      alert(`✅ ${data.message}`);
+      setAdminProxyGrantorId("");
+      setAdminProxyToId("");
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsSettingAdminProxy(false);
+    }
+  };
+
+  const handleRevokeProxy = async (attendanceId: string) => {
+    if (!confirm("이 위임을 회수하시겠습니까? 수임인의 위임표도 함께 취소됩니다.")) return;
+    setRevokingProxyId(attendanceId);
+    try {
+      const res = await fetch("/api/assembly/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REVOKE_PROXY", attendanceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "위임 회수 실패");
+      alert("✅ 위임이 회수되었습니다.");
+      setAttendances((prev) =>
+        prev.map((a) =>
+          a.id === attendanceId
+            ? { ...a, approval_status: "REJECTED", rejection_reason: "직권 위임 회수" }
+            : a,
+        ),
+      );
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setRevokingProxyId(null);
     }
   };
 
@@ -1279,6 +1347,8 @@ export default function AdminClient({
         // 의결권 통계는 vote API에서 첫 안건 agendaId로 조회
         const firstAgenda = agendas.find((ag) => ag.assembly_id === assemblyId);
         let totalRights = activeLawyers;
+        let personalRights = activeLawyers;
+        let firmRights = 0;
         let presentRights = attended + proxy;
         let quorumNeeded = Math.ceil(totalRights / 3);
         if (firstAgenda) {
@@ -1289,6 +1359,8 @@ export default function AdminClient({
             const data = await res.json();
             if (res.ok && data.stats) {
               totalRights = data.stats.totalRights;
+              personalRights = data.stats.personalRights ?? totalRights;
+              firmRights = data.stats.firmRights ?? 0;
               presentRights = data.stats.presentRights;
               quorumNeeded = data.stats.quorumNeeded;
             }
@@ -1304,6 +1376,8 @@ export default function AdminClient({
           pending,
           absent: activeLawyers - attended - proxy - pending,
           totalRights,
+          personalRights,
+          firmRights,
           presentRights,
           quorumNeeded,
           quorumMet: presentRights >= quorumNeeded,
@@ -3296,9 +3370,7 @@ export default function AdminClient({
                                 <div className="text-[11px] text-slate-500 mb-0.5">
                                   {s.label}
                                 </div>
-                                <div
-                                  className={`text-2xl font-extrabold font-mono ${s.cls}`}
-                                >
+                                <div className={`text-2xl font-extrabold font-mono ${s.cls}`}>
                                   {s.value}
                                 </div>
                                 <div className="text-[10px] text-slate-600 mt-0.5">
@@ -3306,6 +3378,38 @@ export default function AdminClient({
                                 </div>
                               </div>
                             ))}
+                            {/* 의결권 세부 구분 */}
+                            <div className="col-span-2 sm:col-span-4 grid grid-cols-3 gap-3 pt-1 border-t border-slate-800/60">
+                              {[
+                                {
+                                  label: "개인 의결권",
+                                  value: `${attendanceStats.personalRights}표`,
+                                  cls: "text-white",
+                                  sub: "정회원 변호사",
+                                },
+                                {
+                                  label: "법인 의결권",
+                                  value: `${attendanceStats.firmRights}표`,
+                                  cls: "text-purple-400",
+                                  sub: "구성원 2인당 1표",
+                                },
+                                {
+                                  label: "총 의결권",
+                                  value: `${attendanceStats.totalRights}표`,
+                                  cls: "text-amber-400",
+                                  sub: "개인 + 법인",
+                                },
+                              ].map((s) => (
+                                <div
+                                  key={s.label}
+                                  className="p-3 bg-slate-950 border border-slate-800 rounded-xl"
+                                >
+                                  <div className="text-[11px] text-slate-500 mb-0.5">{s.label}</div>
+                                  <div className={`text-xl font-extrabold font-mono ${s.cls}`}>{s.value}</div>
+                                  <div className="text-[10px] text-slate-600 mt-0.5">{s.sub}</div>
+                                </div>
+                              ))}
+                            </div>
                           </>
                         ) : (
                           <div className="col-span-4 text-center">
@@ -3700,23 +3804,14 @@ export default function AdminClient({
                         직접 출석 처리합니다.
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          value={offlineAttendeeId}
-                          onChange={(e) => setOfflineAttendeeId(e.target.value)}
-                          className="flex-1 min-w-[200px] px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                        >
-                          <option value="">회원 선택...</option>
-                          {users
-                            .filter(
-                              (u) =>
-                                u.role === "LAWYER" && u.status === "ACTIVE",
-                            )
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({u.office_name || "개인/미기재"})
-                              </option>
-                            ))}
-                        </select>
+                        <div className="flex-1 min-w-[200px]">
+                          <UserSearchCombobox
+                            users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
+                            value={offlineAttendeeId}
+                            onChange={(id) => setOfflineAttendeeId(id)}
+                            placeholder="이름 또는 아이디로 검색..."
+                          />
+                        </div>
                         <button
                           onClick={handleAddOfflineAttendance}
                           disabled={!offlineAttendeeId || isAddingAttendance}
@@ -3729,24 +3824,70 @@ export default function AdminClient({
                     </div>
                   )}
 
+                  {/* 직권 위임 */}
+                  {selectedAssemblyId && (
+                    <div className="p-4 bg-slate-950 border border-blue-800/40 rounded-xl space-y-2">
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Link2 className="w-4 h-4 text-blue-400" />
+                        관리자 직권 위임 처리
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        의장이 특정 회원의 의결권을 다른 변호사에게 강제 위임합니다. 기존 출석/위임 기록은 자동 무효화됩니다.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[11px] text-slate-400 mb-1 block">위임인 (의결권 보유자)</label>
+                          <UserSearchCombobox
+                            users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
+                            value={adminProxyGrantorId}
+                            onChange={(id) => setAdminProxyGrantorId(id)}
+                            placeholder="위임인 검색..."
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-400 mb-1 block">수임인 (의결권 행사자)</label>
+                          <UserSearchCombobox
+                            users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE" && u.id !== adminProxyGrantorId)}
+                            value={adminProxyToId}
+                            onChange={(id) => setAdminProxyToId(id)}
+                            placeholder="수임인 검색..."
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleAdminSetProxy}
+                        disabled={!adminProxyGrantorId || !adminProxyToId || isSettingAdminProxy}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                        {isSettingAdminProxy ? "처리 중..." : "직권 위임 처리"}
+                      </button>
+                    </div>
+                  )}
+
                   {/* 출석 목록 */}
                   <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300">
                       <span>
                         출석·위임 신청 현황 ({assAttendances.length}건)
                       </span>
                       <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={attendanceSearch}
+                            onChange={(e) => setAttendanceSearch(e.target.value)}
+                            placeholder="이름 검색..."
+                            className="pl-7 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-36"
+                          />
+                        </div>
                         <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold">
                           대기 {pendingAttendances.length}건
                         </span>
                         <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-[10px] font-bold">
                           승인{" "}
-                          {
-                            assAttendances.filter(
-                              (a) => a.approval_status === "APPROVED",
-                            ).length
-                          }
-                          건
+                          {assAttendances.filter((a) => a.approval_status === "APPROVED").length}건
                         </span>
                       </div>
                     </div>
@@ -3756,7 +3897,13 @@ export default function AdminClient({
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        {assAttendances.map((item) => (
+                        {assAttendances
+                          .filter((item) =>
+                            !attendanceSearch.trim() ||
+                            (item.grantor_name && item.grantor_name.toLowerCase().includes(attendanceSearch.toLowerCase())) ||
+                            (item.proxy_name && item.proxy_name.toLowerCase().includes(attendanceSearch.toLowerCase()))
+                          )
+                          .map((item) => (
                           <div
                             key={item.id}
                             className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs transition-colors ${
@@ -3843,6 +3990,16 @@ export default function AdminClient({
                                   반려
                                 </button>
                               )}
+                              {/* 위임 레코드만 회수 버튼 표시 */}
+                              {item.is_proxy === 1 && item.approval_status !== "REJECTED" && (
+                                <button
+                                  onClick={() => handleRevokeProxy(item.id)}
+                                  disabled={revokingProxyId === item.id}
+                                  className="px-3 py-1.5 bg-orange-900/60 hover:bg-orange-900/80 text-orange-300 rounded-lg text-xs font-bold disabled:opacity-50"
+                                >
+                                  {revokingProxyId === item.id ? "처리중..." : "위임 회수"}
+                                </button>
+                              )}
                               {item.approval_status === "APPROVED" &&
                                 !item.attended && (
                                   <button
@@ -3887,22 +4044,13 @@ export default function AdminClient({
                           </option>
                         ))}
                       </select>
-                      <select
+                      <UserSearchCombobox
+                        users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
                         value={rightUserId}
-                        onChange={(e) => setRightUserId(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
-                      >
-                        <option value="">회원 선택</option>
-                        {users
-                          .filter(
-                            (u) => u.role === "LAWYER" && u.status === "ACTIVE",
-                          )
-                          .map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name} ({u.login_id})
-                            </option>
-                          ))}
-                      </select>
+                        onChange={(id) => setRightUserId(id)}
+                        placeholder="회원 검색..."
+                        className="bg-slate-900"
+                      />
                       <input
                         type="number"
                         min={0}
@@ -4170,23 +4318,12 @@ export default function AdminClient({
                         <label className="block text-slate-400 font-bold mb-1">
                           대상 회원 <span className="text-rose-400">*</span>
                         </label>
-                        <select
+                        <UserSearchCombobox
+                          users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
                           value={linkTargetUserId}
-                          onChange={(e) => setLinkTargetUserId(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                        >
-                          <option value="">회원을 선택하세요</option>
-                          {users
-                            .filter(
-                              (u) =>
-                                u.role === "LAWYER" && u.status === "ACTIVE",
-                            )
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({u.login_id})
-                              </option>
-                            ))}
-                        </select>
+                          onChange={(id) => setLinkTargetUserId(id)}
+                          placeholder="이름 또는 아이디로 검색..."
+                        />
                       </div>
                       <div>
                         <label className="block text-slate-400 font-bold mb-1">

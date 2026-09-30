@@ -716,6 +716,11 @@ export async function POST(req: Request) {
           args: [attId, assemblyId, userId, `${user.name} 의장 현장 출석 확인`],
         });
       }
+      // 위임 레코드가 있으면 무효화 (직접 출석 우선)
+      await db.execute({
+        sql: "UPDATE assembly_attendances SET approval_status = 'REJECTED', rejection_reason = '의장 직권 출석 처리로 위임 무효화' WHERE assembly_id = ? AND user_id = ? AND is_proxy = 1 AND approval_status != 'REJECTED'",
+        args: [assemblyId, userId],
+      });
       await db.execute({
         sql: "UPDATE users SET status = 'ACTIVE', last_renewed_at = datetime('now') WHERE id = ? AND role = 'LAWYER'",
         args: [userId],
@@ -1034,7 +1039,23 @@ export async function POST(req: Request) {
         args: [],
       });
       const presentRes = await db.execute({
-        sql: "SELECT COALESCE(SUM(CASE WHEN attended = 1 OR is_proxy = 1 THEN COALESCE(voting_power, 1) ELSE 0 END), 0) as present_rights FROM assembly_attendances WHERE assembly_id = ? AND approval_status = 'APPROVED'",
+        sql: `SELECT COALESCE(SUM(
+                CASE
+                  WHEN aa.is_proxy = 0 AND aa.attended = 1
+                    THEN COALESCE(aa.voting_power, 1)
+                  WHEN aa.is_proxy = 1 AND EXISTS (
+                    SELECT 1 FROM assembly_attendances proxy_att
+                    WHERE proxy_att.assembly_id = aa.assembly_id
+                      AND proxy_att.user_id     = aa.proxy_to_user_id
+                      AND proxy_att.is_proxy    = 0
+                      AND proxy_att.attended    = 1
+                      AND proxy_att.approval_status = 'APPROVED'
+                  ) THEN COALESCE(aa.voting_power, 1)
+                  ELSE 0
+                END
+              ), 0) as present_rights
+              FROM assembly_attendances aa
+              WHERE aa.assembly_id = ? AND aa.approval_status = 'APPROVED'`,
         args: [agenda.assembly_id],
       });
       const totalRights =
@@ -1289,12 +1310,108 @@ export async function POST(req: Request) {
       });
     }
 
+    // ── 직권 위임 (관리자/의장이 A→B 위임을 강제 생성) ──────────────────────
+    if (action === "ADMIN_SET_PROXY") {
+      if (!isChair(user)) {
+        return NextResponse.json({ error: "의장단 권한이 필요합니다." }, { status: 403 });
+      }
+      const { assemblyId, grantorId, proxyToUserId, votingPower = 1, reason = "관리자 직권 위임" } = body;
+      if (!assemblyId || !grantorId || !proxyToUserId) {
+        return NextResponse.json({ error: "총회, 위임인, 수임인이 필요합니다." }, { status: 400 });
+      }
+      if (grantorId === proxyToUserId) {
+        return NextResponse.json({ error: "위임인과 수임인이 동일할 수 없습니다." }, { status: 400 });
+      }
+
+      const [grantorRes, proxyRes, assRes] = await Promise.all([
+        db.execute({ sql: "SELECT id, name, role, status FROM users WHERE id = ?", args: [grantorId] }),
+        db.execute({ sql: "SELECT id, name, role, status FROM users WHERE id = ?", args: [proxyToUserId] }),
+        db.execute({ sql: "SELECT id, status FROM assemblies WHERE id = ?", args: [assemblyId] }),
+      ]);
+      if (!grantorRes.rows[0]) return NextResponse.json({ error: "위임인을 찾을 수 없습니다." }, { status: 404 });
+      if (!proxyRes.rows[0] || proxyRes.rows[0].role !== "LAWYER" || proxyRes.rows[0].status !== "ACTIVE") {
+        return NextResponse.json({ error: "수임인은 활성 정회원 변호사여야 합니다." }, { status: 400 });
+      }
+      if (!assRes.rows[0]) return NextResponse.json({ error: "총회를 찾을 수 없습니다." }, { status: 404 });
+
+      // 기존 직접출석 레코드 무효화, 기존 위임 레코드 교체
+      await db.execute({
+        sql: "UPDATE assembly_attendances SET approval_status = 'REJECTED', rejection_reason = '직권 위임으로 대체' WHERE assembly_id = ? AND user_id = ? AND approval_status != 'REJECTED'",
+        args: [assemblyId, grantorId],
+      });
+
+      const attId = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      await db.execute({
+        sql: `INSERT INTO assembly_attendances
+              (id, assembly_id, user_id, voting_power, attended, is_proxy, proxy_to_user_id, signature, approval_status)
+              VALUES (?, ?, ?, ?, 0, 1, ?, ?, 'APPROVED')`,
+        args: [attId, assemblyId, grantorId, Number(votingPower), proxyToUserId, `${user.name} 직권 위임 (${reason})`],
+      });
+
+      await writeAudit(assemblyId, null, user.id, "ADMIN_SET_PROXY", {
+        grantorId, grantorName: grantorRes.rows[0].name,
+        proxyToUserId, proxyName: proxyRes.rows[0].name,
+        votingPower: Number(votingPower), reason,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `${grantorRes.rows[0].name} → ${proxyRes.rows[0].name} 직권 위임이 완료되었습니다.`,
+        attendanceId: attId,
+      });
+    }
+
+    // ── 위임 회수 (관리자/의장이 위임 레코드를 강제 취소) ──────────────────
+    if (action === "REVOKE_PROXY") {
+      if (!isChair(user)) {
+        return NextResponse.json({ error: "의장단 권한이 필요합니다." }, { status: 403 });
+      }
+      const { attendanceId, assemblyId, grantorId } = body;
+
+      // attendanceId 직접 지정 또는 assemblyId+grantorId로 조회
+      let targetId = attendanceId;
+      if (!targetId && assemblyId && grantorId) {
+        const res = await db.execute({
+          sql: "SELECT id FROM assembly_attendances WHERE assembly_id = ? AND user_id = ? AND is_proxy = 1 AND approval_status != 'REJECTED'",
+          args: [assemblyId, grantorId],
+        });
+        if (res.rows.length === 0) {
+          return NextResponse.json({ error: "해당 위임 기록을 찾을 수 없습니다." }, { status: 404 });
+        }
+        targetId = res.rows[0].id;
+      }
+      if (!targetId) {
+        return NextResponse.json({ error: "attendanceId 또는 assemblyId+grantorId가 필요합니다." }, { status: 400 });
+      }
+
+      const attRes = await db.execute({
+        sql: "SELECT * FROM assembly_attendances WHERE id = ?",
+        args: [targetId],
+      });
+      if (!attRes.rows[0] || attRes.rows[0].is_proxy !== 1) {
+        return NextResponse.json({ error: "위임 기록이 아니거나 존재하지 않습니다." }, { status: 404 });
+      }
+      const att = attRes.rows[0];
+
+      await db.execute({
+        sql: "UPDATE assembly_attendances SET approval_status = 'REJECTED', rejection_reason = ? WHERE id = ?",
+        args: [`${user.name} 직권 위임 회수`, targetId],
+      });
+
+      await writeAudit(String(att.assembly_id), null, user.id, "REVOKE_PROXY", {
+        attendanceId: targetId,
+        grantorId: att.user_id,
+        proxyToUserId: att.proxy_to_user_id,
+      });
+
+      return NextResponse.json({ success: true, message: "위임이 회수되었습니다." });
+    }
+
     return NextResponse.json(
       { error: "유효하지 않은 명령입니다." },
       { status: 400 },
     );
-  } catch (err: any) {
-    console.error("총회 관리 API 에러:", err);
+  } catch (err: any) {    console.error("총회 관리 API 에러:", err);
     return NextResponse.json(
       { error: err.message || "서버 오류" },
       { status: 500 },
