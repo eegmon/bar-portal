@@ -4548,6 +4548,11 @@ export default function AdminClient({
                     onChange={(e) => setNewAgQuorum(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
                   />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {newAgQuorum === 0
+                      ? `자동: 전체 의결권 1/3 = ${Math.ceil(stats.activeLawyers / 3)}표`
+                      : `직접 설정: ${newAgQuorum}표`}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-slate-300 mb-1">
@@ -4782,6 +4787,11 @@ export default function AdminClient({
                     onChange={(e) => setEditAgQuorum(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
                   />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {editAgQuorum === 0
+                      ? `자동: 전체 의결권 1/3 = ${Math.ceil(stats.activeLawyers / 3)}표`
+                      : `직접 설정: ${editAgQuorum}표`}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">
