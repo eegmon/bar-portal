@@ -219,6 +219,9 @@ export default function AdminClient({
   const [assemblies, setAssemblies] = useState<any[]>(initialAssemblies);
   const [agendas, setAgendas] = useState<any[]>(initialAgendas);
   const [attendances, setAttendances] = useState<any[]>(initialAttendances);
+  const [isExpiringAbsentMembers, setIsExpiringAbsentMembers] = useState(false);
+  const [approvingReregistrationId, setApprovingReregistrationId] =
+    useState<string | null>(null);
   const [selectedAssemblyId, setSelectedAssemblyId] = useState(
     initialAssemblies[0]?.id || "",
   );
@@ -1027,6 +1030,81 @@ export default function AdminClient({
       );
     } catch (err: any) {
       alert(`오류: ${err.message}`);
+    }
+  };
+
+  const handleApproveReregistration = async (attendance: any) => {
+    const memberName = attendance.grantor_name || "해당 회원";
+    if (!confirm(`${memberName}님의 재등록 신청서를 수리하고 자격을 갱신할까요?`))
+      return;
+    setApprovingReregistrationId(attendance.id);
+    try {
+      const res = await fetch("/api/assembly/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "APPROVE_REREGISTRATION",
+          attendanceId: attendance.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "재등록 신청 수리 실패");
+      setAttendances((prev) =>
+        prev.map((item) =>
+          item.id === attendance.id
+            ? { ...item, approval_status: "APPROVED" }
+            : item,
+        ),
+      );
+      setUsers((prev) =>
+        prev.map((member) =>
+          member.id === attendance.user_id
+            ? { ...member, status: "ACTIVE" }
+            : member,
+        ),
+      );
+      alert(data.message || "재등록 신청을 수리했습니다.");
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setApprovingReregistrationId(null);
+    }
+  };
+
+  const handleExpireAbsentMembers = async (
+    assembly: any,
+    absentCount: number,
+  ) => {
+    if (assembly?.status !== "CLOSED" || absentCount < 1) return;
+    if (
+      !confirm(
+        `${assembly.title} 불출석 회원 ${absentCount}명의 자격을 만료할까요?\n\n승인된 출석·위임과 처리 대기 중인 신청은 제외됩니다. 이 작업은 되돌릴 수 없습니다.`,
+      )
+    )
+      return;
+    setIsExpiringAbsentMembers(true);
+    try {
+      const res = await fetch("/api/assembly/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "EXPIRE_ABSENT_MEMBERS",
+          assemblyId: assembly.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "불출석자 처리 실패");
+      const expiredIds = new Set<string>(data.userIds || []);
+      setUsers((prev) =>
+        prev.map((member) =>
+          expiredIds.has(member.id) ? { ...member, status: "EXPIRED" } : member,
+        ),
+      );
+      alert(data.message || "불출석자 자격 만료 처리가 완료되었습니다.");
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsExpiringAbsentMembers(false);
     }
   };
 
@@ -3099,6 +3177,34 @@ export default function AdminClient({
           const pendingAttendances = assAttendances.filter(
             (a) => a.approval_status === "PENDING",
           );
+          const absentMemberCount = users.filter((member) => {
+            if (member.role !== "LAWYER" || member.status !== "ACTIVE")
+              return false;
+            const heldAt = Date.parse(
+              String(selectedAssembly?.held_at || "").replace(" ", "T"),
+            );
+            const lastRenewedAt = Date.parse(
+              String(member.last_renewed_at || member.created_at || "").replace(
+                " ",
+                "T",
+              ),
+            );
+            if (
+              Number.isFinite(heldAt) &&
+              Number.isFinite(lastRenewedAt) &&
+              lastRenewedAt > heldAt
+            ) {
+              return false;
+            }
+            return !assAttendances.some(
+              (attendance) =>
+                attendance.user_id === member.id &&
+                (attendance.approval_status === "PENDING" ||
+                  (attendance.approval_status === "APPROVED" &&
+                    (Number(attendance.attended) === 1 ||
+                      Number(attendance.is_proxy) === 1))),
+            );
+          }).length;
 
           // 감사 로그 액션 종류 (필터용)
           const uniqueActions = [
@@ -3792,6 +3898,45 @@ export default function AdminClient({
               {/* ═══════════════════════════════════════════════════════════════════ */}
               {assemblySubTab === "attendance" && (
                 <div className="space-y-4">
+                  {selectedAssembly && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-red-950/20 border border-red-800/40 rounded-xl">
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4 text-red-400" />
+                          총회 불출석자 자격 만료
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          총회 당시 등록된 회원 중 승인된 출석·위임 및 처리 대기 신청을 제외한 {absentMemberCount}명
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          handleExpireAbsentMembers(
+                            selectedAssembly,
+                            absentMemberCount,
+                          )
+                        }
+                        disabled={
+                          selectedAssembly.status !== "CLOSED" ||
+                          absentMemberCount === 0 ||
+                          isExpiringAbsentMembers
+                        }
+                        title={
+                          selectedAssembly.status !== "CLOSED"
+                            ? "총회 폐회 후 처리할 수 있습니다."
+                            : undefined
+                        }
+                        className="px-3 py-2 bg-red-700 hover:bg-red-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold rounded-lg transition-colors"
+                      >
+                        {isExpiringAbsentMembers
+                          ? "처리 중..."
+                          : selectedAssembly.status !== "CLOSED"
+                            ? "폐회 후 처리 가능"
+                            : `자격 만료 처리 (${absentMemberCount}명)`}
+                      </button>
+                    </div>
+                  )}
+
                   {/* 현장 출석 수동 등록 */}
                   {selectedAssemblyId && (
                     <div className="p-4 bg-slate-950 border border-emerald-800/40 rounded-xl space-y-2">
@@ -3904,6 +4049,21 @@ export default function AdminClient({
                             (item.proxy_name && item.proxy_name.toLowerCase().includes(attendanceSearch.toLowerCase()))
                           )
                           .map((item) => (
+                          (() => {
+                            const member = users.find(
+                              (candidate) => candidate.id === item.user_id,
+                            );
+                            const isReregistration =
+                              Number(item.is_proxy) !== 1 &&
+                              Number(item.attended) !== 1 &&
+                              (((item.approval_status === "PENDING" ||
+                                item.approval_status === "REJECTED") &&
+                                ["EXPIRED", "SUSPENDED"].includes(
+                                  String(member?.status),
+                                )) ||
+                                (item.approval_status === "APPROVED" &&
+                                  member?.status === "ACTIVE"));
+                            return (
                           <div
                             key={item.id}
                             className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs transition-colors ${
@@ -3947,7 +4107,7 @@ export default function AdminClient({
                                   </>
                                 ) : (
                                   <span className="text-slate-400">
-                                    직접 출석
+                                    {isReregistration ? "재등록 신청" : "직접 출석"}
                                   </span>
                                 )}
                               </div>
@@ -3963,7 +4123,9 @@ export default function AdminClient({
                                 {item.approval_status === "PENDING"
                                   ? "⏳ 승인 대기"
                                   : item.approval_status === "APPROVED"
-                                    ? item.attended
+                                    ? isReregistration
+                                      ? "✅ 재등록 수리됨"
+                                      : item.attended
                                       ? "✅ 출석 확인됨"
                                       : "✅ 위임 승인됨"
                                     : "❌ 반려됨"}
@@ -3971,14 +4133,26 @@ export default function AdminClient({
                             </div>
                             <div className="flex gap-1.5">
                               {item.approval_status !== "APPROVED" && (
-                                <button
-                                  onClick={() =>
-                                    handleAttendance(item.id, "APPROVED", true)
-                                  }
-                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
-                                >
-                                  승인·출석
-                                </button>
+                                isReregistration ? (
+                                  <button
+                                    onClick={() => handleApproveReregistration(item)}
+                                    disabled={approvingReregistrationId === item.id}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold"
+                                  >
+                                    {approvingReregistrationId === item.id
+                                      ? "수리 중..."
+                                      : "재등록 신청 수리"}
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() =>
+                                      handleAttendance(item.id, "APPROVED", true)
+                                    }
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
+                                  >
+                                    승인·출석
+                                  </button>
+                                )
                               )}
                               {item.approval_status !== "REJECTED" && (
                                 <button
@@ -4017,6 +4191,8 @@ export default function AdminClient({
                                 )}
                             </div>
                           </div>
+                            );
+                          })()
                         ))}
                       </div>
                     )}

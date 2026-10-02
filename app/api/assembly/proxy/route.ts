@@ -150,25 +150,18 @@ export async function POST(req: Request) {
         );
       }
       await db.execute({
-        sql: `INSERT OR REPLACE INTO assembly_attendances (id, assembly_id, user_id, attended, is_proxy, proxy_to_user_id, signature, evidence_url)
-            VALUES (?, ?, ?, 0, 0, NULL, ?, ?)`,
+        sql: `INSERT OR REPLACE INTO assembly_attendances
+              (id, assembly_id, user_id, attended, is_proxy, proxy_to_user_id, signature, evidence_url, approval_status)
+              VALUES (?, ?, ?, 0, 0, NULL, ?, ?, 'PENDING')`,
         args: [attId, assemblyId, userId, signature, evidenceUrl || ""],
       });
-
-      // 변호사 자격 1개월 연장 처리 (변호사법 제6조제4항)
-      if (sessionUser) {
-        await db.execute({
-          sql: "UPDATE users SET last_renewed_at = datetime('now'), status = 'ACTIVE' WHERE id = ?",
-          args: [sessionUser.id],
-        });
-      }
 
       // 디스코드 사무국 관리자 알림
       await sendDiscordWebhook("ADMIN", {
         embeds: [
           {
             title: "📋 [사무국 알림] 정기총회 불참 자격 재등록 신청서 접수",
-            description: `**${lawyerName}** 변호사님이 정기총회 불참에 따른 자격 재등록 신청서를 제출하였습니다.\n• 소속: ${affiliation || "개인/미기재"}\n• 사유: ${reason || "직무 수행"}\n• 자격 갱신: **✅ 1개월 연장 처리 완료 (변호사법 제6조제4항)**`,
+            description: `**${lawyerName}** 변호사님이 정기총회 불참에 따른 자격 재등록 신청서를 제출하였습니다.\n• 소속: ${affiliation || "개인/미기재"}\n• 사유: ${reason || "직무 수행"}\n• 처리 상태: **관리자 수리 대기**`,
             color: 0xf59e0b,
             timestamp: new Date().toISOString(),
           },
@@ -177,8 +170,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message:
-          "정기총회 불참 자격 재등록 신청서가 정상 접수되었습니다. (변호사 자격 1개월 연장 완료)",
+        message: "정기총회 불참 자격 재등록 신청서가 접수되었습니다. 관리자 수리 후 자격이 갱신됩니다.",
       });
     }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSessionUser, canManageAssembly } from "@/lib/auth";
-import { sendDiscordWebhook } from "@/lib/discord";
+import { sendDiscordWebhook, syncUserDiscordRoles } from "@/lib/discord";
 
 function getChoiceLabels(rawConfig: unknown): string[] {
   try {
@@ -592,6 +592,150 @@ export async function POST(req: Request) {
         { status },
       );
       return NextResponse.json({ success: true, status });
+    }
+
+    if (action === "EXPIRE_ABSENT_MEMBERS") {
+      const { assemblyId } = body;
+      if (!assemblyId) {
+        return NextResponse.json(
+          { error: "총회 선택이 필요합니다." },
+          { status: 400 },
+        );
+      }
+      const assemblyRes = await db.execute({
+        sql: "SELECT id, title, status FROM assemblies WHERE id = ?",
+        args: [assemblyId],
+      });
+      const assembly = assemblyRes.rows[0];
+      if (!assembly) {
+        return NextResponse.json(
+          { error: "총회를 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
+      if (assembly.status !== "CLOSED") {
+        return NextResponse.json(
+          { error: "폐회된 총회에서만 불출석자 자격을 만료할 수 있습니다." },
+          { status: 400 },
+        );
+      }
+
+      const absentRes = await db.execute({
+        sql: `SELECT u.id, u.name, u.discord_id, u.is_trainee, u.positions
+              FROM users u
+              WHERE u.role = 'LAWYER' AND u.status = 'ACTIVE'
+                AND julianday(COALESCE(u.last_renewed_at, u.created_at)) <= julianday(?)
+                AND NOT EXISTS (
+                  SELECT 1 FROM assembly_attendances aa
+                  WHERE aa.assembly_id = ? AND aa.user_id = u.id
+                    AND (
+                      (aa.approval_status = 'APPROVED' AND (aa.attended = 1 OR aa.is_proxy = 1))
+                      OR aa.approval_status = 'PENDING'
+                    )
+                )`,
+        args: [assembly.held_at, assemblyId],
+      });
+      const absentMembers = absentRes.rows;
+      for (const member of absentMembers) {
+        await db.execute({
+          sql: "UPDATE users SET status = 'EXPIRED' WHERE id = ? AND status = 'ACTIVE'",
+          args: [member.id],
+        });
+        let positions: string[] = [];
+        try {
+          positions = JSON.parse(String(member.positions || "[]"));
+        } catch {
+          positions = [];
+        }
+        await syncUserDiscordRoles({
+          discordUserId: String(member.discord_id || ""),
+          role: "LAWYER",
+          status: "EXPIRED",
+          isTrainee: Number(member.is_trainee || 0),
+          positions,
+        });
+      }
+
+      await writeAudit(assemblyId, null, user.id, "EXPIRE_ABSENT_MEMBERS", {
+        count: absentMembers.length,
+        userIds: absentMembers.map((member) => member.id),
+      });
+      return NextResponse.json({
+        success: true,
+        count: absentMembers.length,
+        userIds: absentMembers.map((member) => member.id),
+        message: `${absentMembers.length}명의 불출석 회원 자격을 만료했습니다.`,
+      });
+    }
+
+    if (action === "APPROVE_REREGISTRATION") {
+      const { attendanceId } = body;
+      if (!attendanceId) {
+        return NextResponse.json(
+          { error: "재등록 신청 기록이 필요합니다." },
+          { status: 400 },
+        );
+      }
+      const applicationRes = await db.execute({
+        sql: `SELECT aa.*, u.name, u.role, u.discord_id, u.is_trainee, u.positions
+              FROM assembly_attendances aa
+              JOIN users u ON u.id = aa.user_id
+              WHERE aa.id = ?`,
+        args: [attendanceId],
+      });
+      const application = applicationRes.rows[0];
+      if (
+        !application ||
+        application.role !== "LAWYER" ||
+        application.is_proxy === 1 ||
+        application.attended === 1
+      ) {
+        return NextResponse.json(
+          { error: "유효한 재등록 신청서를 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
+      if (application.approval_status !== "PENDING") {
+        return NextResponse.json(
+          { error: "대기 중인 재등록 신청서만 수리할 수 있습니다." },
+          { status: 400 },
+        );
+      }
+
+      await db.execute({
+        sql: "UPDATE assembly_attendances SET approval_status = 'APPROVED' WHERE id = ?",
+        args: [attendanceId],
+      });
+      await db.execute({
+        sql: "UPDATE users SET status = 'ACTIVE', last_renewed_at = datetime('now') WHERE id = ? AND role = 'LAWYER'",
+        args: [application.user_id],
+      });
+      let positions: string[] = [];
+      try {
+        positions = JSON.parse(String(application.positions || "[]"));
+      } catch {
+        positions = [];
+      }
+      await syncUserDiscordRoles({
+        discordUserId: String(application.discord_id || ""),
+        role: "LAWYER",
+        status: "ACTIVE",
+        isTrainee: Number(application.is_trainee || 0),
+        positions,
+      });
+      await writeAudit(
+        application.assembly_id,
+        null,
+        user.id,
+        "APPROVE_REREGISTRATION",
+        { attendanceId, userId: application.user_id },
+      );
+      return NextResponse.json({
+        success: true,
+        userId: application.user_id,
+        attendanceId,
+        message: `${application.name}님의 재등록 신청을 수리했습니다.`,
+      });
     }
 
     // 6. 출석·위임장 승인/반려 및 출석 체크
