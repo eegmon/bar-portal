@@ -41,7 +41,8 @@ export default async function AssemblyHubPage({
 
     // assemblyId 없으면 IN_SESSION 총회를 자동 선택
     if (!assembly) {
-      assembly = assemblies.find((item) => item.status === "IN_SESSION") || null;
+      assembly =
+        assemblies.find((item) => item.status === "IN_SESSION") || null;
     }
 
     if (assembly) {
@@ -119,7 +120,10 @@ export default async function AssemblyHubPage({
         method="get"
         className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-wrap items-center gap-3"
       >
-        <label htmlFor="assemblyId" className="text-xs font-bold text-white shrink-0">
+        <label
+          htmlFor="assemblyId"
+          className="text-xs font-bold text-white shrink-0"
+        >
           열람할 총회 선택
         </label>
         <select
@@ -153,7 +157,6 @@ export default async function AssemblyHubPage({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* 좌측 2열 */}
           <div className="lg:col-span-2 space-y-6">
-
             {/* 총회 현황 카드 */}
             <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-5">
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -179,7 +182,9 @@ export default async function AssemblyHubPage({
               </div>
 
               <div>
-                <h2 className="text-2xl font-bold text-white">{assembly.title}</h2>
+                <h2 className="text-2xl font-bold text-white">
+                  {assembly.title}
+                </h2>
                 <p className="text-xs text-slate-400 mt-1">
                   의사정족수: 전체 의결권 3분의 1 이상 출석 (회칙 제15조제1항)
                 </p>
@@ -200,7 +205,8 @@ export default async function AssemblyHubPage({
                         </span>
                       ) : isPendingAttendance ? (
                         <span className="text-amber-400 font-semibold">
-                          ⏳ 출석 확인 접수 — 의장 승인 대기 중 (승인 후 투표 가능)
+                          ⏳ 출석 확인 접수 — 의장 승인 대기 중 (승인 후 투표
+                          가능)
                         </span>
                       ) : hasProxy ? (
                         <span className="text-blue-400 font-semibold">
@@ -230,12 +236,14 @@ export default async function AssemblyHubPage({
                           hasVotingAgenda={hasVotingAgenda}
                         />
                       )}
-                      {attendanceInfo?.approval_status === "APPROVED" && (attendanceInfo?.attended === 1 || attendanceInfo?.is_proxy === 1) && (
-                        <span className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-semibold text-xs rounded-lg flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          출석 완료
-                        </span>
-                      )}
+                      {attendanceInfo?.approval_status === "APPROVED" &&
+                        (attendanceInfo?.attended === 1 ||
+                          attendanceInfo?.is_proxy === 1) && (
+                          <span className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-semibold text-xs rounded-lg flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            출석 완료
+                          </span>
+                        )}
                       {attendanceInfo?.approval_status === "PENDING" && (
                         <span className="px-4 py-2 bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold text-xs rounded-lg flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5" />
@@ -292,7 +300,8 @@ export default async function AssemblyHubPage({
                       className={`p-4 rounded-xl border transition-all ${
                         ag.status === "VOTING"
                           ? "bg-emerald-950/30 border-emerald-500/40 shadow-sm shadow-emerald-900/30"
-                          : ag.status === "CLOSED" || ag.status === "RESULT_CONFIRMED"
+                          : ag.status === "CLOSED" ||
+                              ag.status === "RESULT_CONFIRMED"
                             ? "bg-slate-950/50 border-slate-800/60 opacity-80"
                             : ag.status === "ON_HOLD"
                               ? "bg-slate-950/30 border-slate-700/40 opacity-60"
@@ -305,7 +314,8 @@ export default async function AssemblyHubPage({
                           className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
                             ag.status === "VOTING"
                               ? "bg-emerald-500/20 text-emerald-300"
-                              : ag.status === "CLOSED" || ag.status === "RESULT_CONFIRMED"
+                              : ag.status === "CLOSED" ||
+                                  ag.status === "RESULT_CONFIRMED"
                                 ? "bg-slate-800 text-slate-500"
                                 : "bg-slate-800 text-slate-400"
                           }`}
@@ -348,21 +358,22 @@ export default async function AssemblyHubPage({
                             >
                               {ag.is_secret ? "🔒 무기명" : "기명투표"}
                             </span>
-                            {ag.result_status && ag.result_status !== "PENDING" && (
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
-                                  ag.result_status === "PASS"
-                                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                                    : "bg-red-500/20 text-red-300 border-red-500/30"
-                                }`}
-                              >
-                                {ag.result_method === "NO_OBJECTION"
-                                  ? "이의 없음 가결"
-                                  : ag.result_status === "PASS"
-                                    ? "가결"
-                                    : "부결"}
-                              </span>
-                            )}
+                            {ag.result_status &&
+                              ag.result_status !== "PENDING" && (
+                                <span
+                                  className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
+                                    ag.result_status === "PASS"
+                                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                      : "bg-red-500/20 text-red-300 border-red-500/30"
+                                  }`}
+                                >
+                                  {ag.result_method === "NO_OBJECTION"
+                                    ? "이의 없음 가결"
+                                    : ag.result_status === "PASS"
+                                      ? "가결"
+                                      : "부결"}
+                                </span>
+                              )}
                           </div>
 
                           {/* 제목 */}
@@ -428,15 +439,21 @@ export default async function AssemblyHubPage({
 
                 <div className="text-[11px] text-slate-500 flex items-center justify-between">
                   <span>
-                    * 회칙 제18조제3항에 따라 총회 종료 후 협회 포털에 상시 공표됩니다.
+                    * 회칙 제18조제3항에 따라 총회 종료 후 협회 포털에 상시
+                    공표됩니다.
                   </span>
-                  <span className="font-semibold text-slate-400">도스변호사협회 총회 의장단</span>
+                  <span className="font-semibold text-slate-400">
+                    도스변호사협회 총회 의장단
+                  </span>
                 </div>
               </div>
             ) : isInSession ? (
               <div className="p-5 bg-amber-900/10 border border-amber-500/20 rounded-2xl flex items-start gap-3 text-xs text-amber-200">
                 <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-                <span>총회 개회 중입니다. 의사록은 총회 폐회 후 의장단이 작성·공표합니다.</span>
+                <span>
+                  총회 개회 중입니다. 의사록은 총회 폐회 후 의장단이
+                  작성·공표합니다.
+                </span>
               </div>
             ) : null}
 
@@ -466,7 +483,8 @@ export default async function AssemblyHubPage({
                                 : "bg-blue-500/20 text-blue-300 border border-blue-500/30"
                             }`}
                           >
-                            {item.is_regular ? "정기총회" : "임시총회"} · 제{item.round_number}회
+                            {item.is_regular ? "정기총회" : "임시총회"} · 제
+                            {item.round_number}회
                           </span>
                           <span className="text-sm font-bold text-white group-open:text-amber-400 transition-colors">
                             {item.title}
@@ -504,22 +522,29 @@ export default async function AssemblyHubPage({
                   </div>
                 </div>
                 <div className="pb-3 border-b border-slate-800">
-                  <div className="font-semibold text-slate-200">법인회원 (법무법인 등)</div>
+                  <div className="font-semibold text-slate-200">
+                    법인회원 (법무법인 등)
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
                     법인 구성원 2명당 1개의 의결권 행사
                   </div>
                 </div>
                 <div className="pb-3 border-b border-slate-800">
-                  <div className="font-semibold text-slate-200">의결권 위임 (불참 회원)</div>
+                  <div className="font-semibold text-slate-200">
+                    의결권 위임 (불참 회원)
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
                     개인회원에게 서면으로 의결권을 위임할 수 있으며 수임인이
                     합산하여 대리 행사
                   </div>
                 </div>
                 <div>
-                  <div className="font-semibold text-slate-200">표 분배 및 무기명 보장</div>
+                  <div className="font-semibold text-slate-200">
+                    표 분배 및 무기명 보장
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    보유한 다수의 의결권을 후보/선택지별로 분배하여 교차 투표 가능
+                    보유한 다수의 의결권을 후보/선택지별로 분배하여 교차 투표
+                    가능
                   </div>
                 </div>
               </div>
@@ -549,8 +574,11 @@ export default async function AssemblyHubPage({
                         </div>
                       </Link>
                     ))}
-                  {agendas.filter((ag) => ag.status === "VOTING").length === 0 && (
-                    <p className="text-xs text-slate-500">현재 진행 중인 표결 안건 없음</p>
+                  {agendas.filter((ag) => ag.status === "VOTING").length ===
+                    0 && (
+                    <p className="text-xs text-slate-500">
+                      현재 진행 중인 표결 안건 없음
+                    </p>
                   )}
                 </div>
               </div>
@@ -562,7 +590,8 @@ export default async function AssemblyHubPage({
           <Vote className="w-10 h-10 text-slate-600 mx-auto" />
           <p className="text-slate-400 font-semibold">총회를 선택해 주세요.</p>
           <p className="text-xs text-slate-600">
-            위 드롭다운에서 총회를 선택하면 안건과 출석·의결 정보를 확인할 수 있습니다.
+            위 드롭다운에서 총회를 선택하면 안건과 출석·의결 정보를 확인할 수
+            있습니다.
           </p>
         </div>
       )}

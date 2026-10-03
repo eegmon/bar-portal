@@ -1,30 +1,79 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import db from "@/lib/db";
+import { ensureAccountSecuritySchema } from "@/lib/account-security";
+import { getSecuritySecret } from "@/lib/security-secret";
 import { SessionUser } from "./types";
 
 export * from "./types";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dos-bar-association-super-secret-key-2026";
-
-export function signToken(user: SessionUser): string {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+export interface AuthContext {
+  user: SessionUser;
+  sessionId: string;
 }
 
-export function verifyToken(token: string): SessionUser | null {
+export function signToken(user: SessionUser, sessionId: string): string {
+  return jwt.sign({ ...user, sid: sessionId }, getSecuritySecret(), {
+    expiresIn: "7d",
+  });
+}
+
+function verifyTokenContext(token: string): AuthContext | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as SessionUser;
-    if (!decoded.positions) {
-      decoded.positions = [];
-    }
-    return decoded;
+    const decoded = jwt.verify(token, getSecuritySecret()) as SessionUser & {
+      sid?: string;
+    };
+    if (!decoded.sid) return null;
+    const { sid, ...user } = decoded;
+    return {
+      user: { ...user, positions: user.positions || [] },
+      sessionId: sid,
+    };
   } catch {
     return null;
   }
 }
 
-export async function getSessionUser(): Promise<SessionUser | null> {
+export function verifyToken(token: string): SessionUser | null {
+  return verifyTokenContext(token)?.user || null;
+}
+
+export function sessionUserFromDatabaseRow(
+  user: Record<string, unknown>,
+): SessionUser {
+  let positions: string[] = [];
+  try {
+    positions = JSON.parse(String(user.positions || "[]"));
+  } catch {
+    positions = [];
+  }
+  return {
+    id: String(user.id),
+    loginId: String(user.login_id),
+    name: String(user.name),
+    role: user.role as SessionUser["role"],
+    status: user.status as SessionUser["status"],
+    isTrainee: Number(user.is_trainee || 0),
+    positions,
+  };
+}
+
+export async function getSessionContext(): Promise<AuthContext | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("bar_token")?.value;
   if (!token) return null;
-  return verifyToken(token);
+  const context = verifyTokenContext(token);
+  if (!context) return null;
+
+  await ensureAccountSecuritySchema();
+  const session = await db.execute({
+    sql: `SELECT id FROM account_sessions
+          WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?`,
+    args: [context.sessionId, context.user.id, Math.floor(Date.now() / 1000)],
+  });
+  return session.rows.length ? context : null;
+}
+
+export async function getSessionUser(): Promise<SessionUser | null> {
+  return (await getSessionContext())?.user || null;
 }

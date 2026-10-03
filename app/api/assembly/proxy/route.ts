@@ -94,9 +94,20 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     }
+    const currentUserRes = await db.execute({
+      sql: "SELECT role, status FROM users WHERE id = ?",
+      args: [sessionUser.id],
+    });
+    const currentUser = currentUserRes.rows[0];
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: "회원 정보를 찾을 수 없습니다." },
+        { status: 401 },
+      );
+    }
     if (
-      !["LAWYER", "ADMIN"].includes(sessionUser.role) ||
-      !["ACTIVE", "SUSPENDED", "EXPIRED"].includes(sessionUser.status)
+      !["LAWYER", "ADMIN"].includes(String(currentUser.role)) ||
+      !["ACTIVE", "SUSPENDED", "EXPIRED"].includes(String(currentUser.status))
     ) {
       return NextResponse.json(
         { error: "등록된 변호사만 총회 재등록 또는 위임 신청을 제출할 수 있습니다." },
@@ -143,7 +154,7 @@ export async function POST(req: Request) {
 
     // 1. 단독 자격 재등록 신청서인 경우
     if (type === "REREGISTER") {
-      if (sessionUser.status === "ACTIVE") {
+      if (currentUser.status === "ACTIVE") {
         return NextResponse.json(
           { error: "현재 이미 활성 상태인 변호사는 재등록 신청을 할 수 없습니다." },
           { status: 400 },

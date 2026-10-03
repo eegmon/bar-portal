@@ -1341,7 +1341,10 @@ export async function POST(req: Request) {
       });
       if (updateRes.rowsAffected !== 1) {
         return NextResponse.json(
-          { error: "개회 중인 미표결 대기 안건만 이의유무로 처리할 수 있습니다." },
+          {
+            error:
+              "개회 중인 미표결 대기 안건만 이의유무로 처리할 수 있습니다.",
+          },
           { status: 409 },
         );
       }
@@ -1356,10 +1359,16 @@ export async function POST(req: Request) {
         sql: "UPDATE assemblies SET minutes_text = ? WHERE id = ?",
         args: [`${currentMinutes}${minutesSection}`, agenda.assembly_id],
       });
-      await writeAudit(agenda.assembly_id, agendaId, user.id, "RECORD_NO_OBJECTION", {
-        resultStatus: "PASS",
-        resultMethod: "NO_OBJECTION",
-      });
+      await writeAudit(
+        agenda.assembly_id,
+        agendaId,
+        user.id,
+        "RECORD_NO_OBJECTION",
+        {
+          resultStatus: "PASS",
+          resultMethod: "NO_OBJECTION",
+        },
+      );
 
       return NextResponse.json({
         success: true,

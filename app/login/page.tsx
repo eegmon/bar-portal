@@ -8,6 +8,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,7 +27,33 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "로그인 실패");
+      if (data.mfaRequired) {
+        setChallengeToken(data.challengeToken);
+        setPassword("");
+        return;
+      }
 
+      router.push("/portal");
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/verify-mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken, code: mfaCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "2단계 인증에 실패했습니다.");
       router.push("/portal");
       router.refresh();
     } catch (err: any) {
@@ -50,7 +78,7 @@ export default function LoginPage() {
       </div>
 
       <form
-        onSubmit={handleLogin}
+        onSubmit={challengeToken ? handleMfaVerify : handleLogin}
         className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-4"
       >
         {error && (
@@ -60,43 +88,63 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
-            아이디
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-              <User className="w-4 h-4" />
+        {!challengeToken ? (
+          <>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                아이디
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
+                  placeholder="아이디를 입력하세요"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                비밀번호
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="비밀번호를 입력하세요"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              인증 앱 코드 또는 복구 코드
+            </label>
             <input
               type="text"
               required
-              value={loginId}
-              onChange={(e) => setLoginId(e.target.value)}
-              placeholder="아이디를 입력하세요"
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+              autoFocus
+              autoComplete="one-time-code"
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value)}
+              placeholder="인증 코드 입력"
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
             />
           </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">
-            비밀번호
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-              <Lock className="w-4 h-4" />
-            </div>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="비밀번호를 입력하세요"
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
+        )}
 
         <button
           type="submit"
@@ -104,8 +152,25 @@ export default function LoginPage() {
           className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 text-slate-950 font-bold text-xs rounded-lg shadow-md transition-colors flex items-center justify-center gap-1.5 mt-2"
         >
           <LogIn className="w-4 h-4" />
-          {loading ? "로그인 중..." : "로그인"}
+          {loading
+            ? "확인 중..."
+            : challengeToken
+              ? "인증하고 로그인"
+              : "로그인"}
         </button>
+        {challengeToken && (
+          <button
+            type="button"
+            onClick={() => {
+              setChallengeToken("");
+              setMfaCode("");
+              setError("");
+            }}
+            className="w-full text-xs text-slate-400 hover:text-white"
+          >
+            아이디와 비밀번호로 돌아가기
+          </button>
+        )}
       </form>
 
       <p className="text-center text-xs text-slate-500">

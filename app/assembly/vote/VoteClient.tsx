@@ -397,7 +397,7 @@ export default function VoteClient({
             ? "표결 개시가 공식 선포되었습니다."
             : action === "RECORD_NO_OBJECTION"
               ? "이의 없음 가결로 의안 결과를 기록했습니다."
-            : `표결 종료 및 결과 집계가 완료되었습니다. 결과: ${data.resultStatus === "PASS" ? "가결" : "부결"}`,
+              : `표결 종료 및 결과 집계가 완료되었습니다. 결과: ${data.resultStatus === "PASS" ? "가결" : "부결"}`,
       });
       await fetchStats();
     } catch (e: any) {

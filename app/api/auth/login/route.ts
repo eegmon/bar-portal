@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import db from "@/lib/db";
-import { signToken, SessionUser } from "@/lib/auth";
+import { sessionUserFromDatabaseRow, signToken } from "@/lib/auth";
+import {
+  createAccountSession,
+  createMfaChallenge,
+  ensureAccountSecuritySchema,
+} from "@/lib/account-security";
 
 const DISCORD_LOGIN_SYNC_TTL_MS = 5 * 60 * 1000;
 const recentDiscordLoginSync = new Map<string, number>();
@@ -73,17 +78,41 @@ export async function POST(req: Request) {
       }
     }
 
-    const sessionUser: SessionUser = {
-      id: user.id as string,
-      loginId: user.login_id as string,
-      name: user.name as string,
-      role: user.role as any,
-      status: user.status as any,
-      isTrainee: Number(user.is_trainee || 0),
-      positions,
-    };
+    const sessionUser = sessionUserFromDatabaseRow({
+      ...user,
+      positions: JSON.stringify(positions),
+    });
+    await ensureAccountSecuritySchema();
+    const mfaRes = await db.execute({
+      sql: "SELECT enabled FROM account_totp WHERE user_id = ?",
+      args: [user.id],
+    });
+    if (Number(mfaRes.rows[0]?.enabled || 0) === 1) {
+      const attemptsRes = await db.execute({
+        sql: `SELECT COALESCE(SUM(attempts), 0) AS failed_attempts
+              FROM auth_challenges
+              WHERE user_id = ? AND created_at >= datetime('now', '-15 minutes')`,
+        args: [user.id],
+      });
+      if (Number(attemptsRes.rows[0]?.failed_attempts || 0) >= 10) {
+        return NextResponse.json(
+          {
+            error:
+              "2단계 인증 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+          },
+          { status: 429 },
+        );
+      }
+      const challengeToken = await createMfaChallenge(user.id as string);
+      return NextResponse.json({
+        success: true,
+        mfaRequired: true,
+        challengeToken,
+      });
+    }
 
-    const token = signToken(sessionUser);
+    const sessionId = await createAccountSession(user.id as string, req);
+    const token = signToken(sessionUser, sessionId);
 
     const response = NextResponse.json({
       success: true,

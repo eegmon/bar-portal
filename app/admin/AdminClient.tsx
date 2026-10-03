@@ -1599,17 +1599,21 @@ export default function AdminClient({
               agenda.result_method === "NO_OBJECTION"
                 ? "이의유무 의결: 이의 없음으로 가결"
                 : agenda.voting_method === "RANKED"
-                  ? `선호투표 결과: ${(agenda.ranked_rounds || [])
-                      .map((round: any) => {
-                        const tally = round.tally
-                          .map((row: any) => `${row.choice} ${row.total}표`)
-                          .join(", ");
-                        return `${round.round}차 (${tally})`;
-                      })
-                      .join("; ") || "유효 투표 없음"}${agenda.ranked_winner ? `; 당선: ${agenda.ranked_winner}` : ""}`
-                  : `표결 결과: ${(agenda.ballot_tally || [])
-                      .map((row: any) => `${row.choice} ${row.total}표`)
-                      .join(", ") || "투표 내역 없음"}`;
+                  ? `선호투표 결과: ${
+                      (agenda.ranked_rounds || [])
+                        .map((round: any) => {
+                          const tally = round.tally
+                            .map((row: any) => `${row.choice} ${row.total}표`)
+                            .join(", ");
+                          return `${round.round}차 (${tally})`;
+                        })
+                        .join("; ") || "유효 투표 없음"
+                    }${agenda.ranked_winner ? `; 당선: ${agenda.ranked_winner}` : ""}`
+                  : `표결 결과: ${
+                      (agenda.ballot_tally || [])
+                        .map((row: any) => `${row.choice} ${row.total}표`)
+                        .join(", ") || "투표 내역 없음"
+                    }`;
             const progress =
               agenda.status === "VOTING"
                 ? "표결 진행 중"

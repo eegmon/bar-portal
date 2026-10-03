@@ -31,7 +31,7 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
 
   // 구성원 목록 및 파트너 수 집계
   const membersRes = await db.execute({
-    sql: `SELECT u.id, u.name, u.login_id, u.is_trainee, u.specialties, u.bio, fm.is_partner, fm.joined_at
+    sql: `SELECT u.id, u.name, u.login_id, u.is_trainee, u.status, u.specialties, u.bio, fm.is_partner, fm.joined_at
           FROM firm_members fm
           JOIN users u ON u.id = fm.lawyer_id
           WHERE fm.firm_id = ?
@@ -43,15 +43,35 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
   const partnerCount = members.filter((m) => m.is_partner === 1).length;
   const votingPower = Math.floor(partnerCount / 2);
 
+  const isAdmin =
+    user &&
+    (user.role === "ADMIN" ||
+      (user.positions ?? []).some((p) =>
+        ["PRESIDENT", "SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p),
+      ));
+  const isRepresentative = user && user.id === rawFirm.representative_id;
+  const lawyerCandidates =
+    isAdmin || isRepresentative
+      ? await db.execute({
+          sql: `SELECT u.id, u.name, u.login_id, u.office_name, u.role
+              FROM users u
+              WHERE u.role IN ('LAWYER', 'TRAINEE')
+                AND u.status = 'ACTIVE'
+                AND NOT EXISTS (
+                  SELECT 1 FROM firm_members fm
+                  WHERE fm.firm_id = ? AND fm.lawyer_id = u.id
+                )
+              ORDER BY u.name ASC`,
+          args: [id],
+        })
+      : { rows: [] };
+
   const firm = {
     ...rawFirm,
     member_count: members.length,
     partner_count: partnerCount,
     voting_power: votingPower,
   };
-
-  const isAdmin = user && (user.role === "ADMIN" || (user.positions ?? []).some((p) => ["PRESIDENT", "SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p)));
-  const isRepresentative = user && user.id === firm.representative_id;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-6">
@@ -69,15 +89,19 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
           <Building className="w-4 h-4" />
           변호사법 제23조~제40조 · 법무법인 상세정보
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">{firm.name}</h1>
+        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+          {firm.name}
+        </h1>
         <p className="text-slate-400 text-sm mt-1">
-          도스변호사협회에 정식 등록된 법무법인/법률사무소의 구성원 및 의결권 현황입니다.
+          도스변호사협회에 정식 등록된 법무법인/법률사무소의 구성원 및 의결권
+          현황입니다.
         </p>
       </div>
 
       <FirmDetailClient
         firm={firm}
         initialMembers={members}
+        lawyerCandidates={lawyerCandidates.rows as any[]}
         isAdmin={!!isAdmin}
         isRepresentative={!!isRepresentative}
       />

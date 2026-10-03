@@ -1,19 +1,35 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionContext } from "@/lib/auth";
+import { ensureAccountSecuritySchema } from "@/lib/account-security";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
   try {
-    const user = await getSessionUser();
-    if (!user) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    const context = await getSessionContext();
+    if (!context)
+      return NextResponse.json(
+        { error: "로그인이 필요합니다." },
+        { status: 401 },
+      );
+    const user = context.user;
 
     const body = await req.json();
     const { action } = body;
 
     // ── 프로필 수정 ──────────────────────────────────────────────
     if (action === "UPDATE_PROFILE") {
-      const { officeName, officeAddress, selfIntroduction, specialties, discordId, phone, contact, isAvailable, hideContactWhenUnavailable } = body;
+      const {
+        officeName,
+        officeAddress,
+        selfIntroduction,
+        specialties,
+        discordId,
+        phone,
+        contact,
+        isAvailable,
+        hideContactWhenUnavailable,
+      } = body;
 
       // 컬럼 auto-migrate
       for (const sql of [
@@ -21,7 +37,11 @@ export async function POST(req: Request) {
         "ALTER TABLE users ADD COLUMN is_available INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN hide_contact_when_unavailable INTEGER DEFAULT 0",
       ]) {
-        try { await db.execute(sql); } catch { /* 이미 존재 */ }
+        try {
+          await db.execute(sql);
+        } catch {
+          /* 이미 존재 */
+        }
       }
 
       await db.execute({
@@ -44,33 +64,68 @@ export async function POST(req: Request) {
         ],
       });
 
-      return NextResponse.json({ success: true, message: "프로필이 업데이트되었습니다." });
+      return NextResponse.json({
+        success: true,
+        message: "프로필이 업데이트되었습니다.",
+      });
     }
 
     // ── 비밀번호 변경 ────────────────────────────────────────────
     if (action === "CHANGE_PASSWORD") {
       const { currentPassword, newPassword } = body;
       if (!currentPassword || !newPassword || newPassword.length < 8) {
-        return NextResponse.json({ error: "현재 비밀번호와 새 비밀번호(8자 이상)를 입력해 주세요." }, { status: 400 });
+        return NextResponse.json(
+          { error: "현재 비밀번호와 새 비밀번호(8자 이상)를 입력해 주세요." },
+          { status: 400 },
+        );
       }
 
-      const res = await db.execute({ sql: "SELECT password FROM users WHERE id = ?", args: [user.id] });
-      if (res.rows.length === 0) return NextResponse.json({ error: "사용자를 찾을 수 없습니다." }, { status: 404 });
+      const res = await db.execute({
+        sql: "SELECT password FROM users WHERE id = ?",
+        args: [user.id],
+      });
+      if (res.rows.length === 0)
+        return NextResponse.json(
+          { error: "사용자를 찾을 수 없습니다." },
+          { status: 404 },
+        );
 
-      const isMatch = await bcrypt.compare(currentPassword, res.rows[0].password as string);
-      if (!isMatch) return NextResponse.json({ error: "현재 비밀번호가 일치하지 않습니다." }, { status: 400 });
+      const isMatch = await bcrypt.compare(
+        currentPassword,
+        res.rows[0].password as string,
+      );
+      if (!isMatch)
+        return NextResponse.json(
+          { error: "현재 비밀번호가 일치하지 않습니다." },
+          { status: 400 },
+        );
 
       const hashed = await bcrypt.hash(newPassword, 10);
-      await db.execute({ sql: "UPDATE users SET password = ? WHERE id = ?", args: [hashed, user.id] });
+      await db.execute({
+        sql: "UPDATE users SET password = ? WHERE id = ?",
+        args: [hashed, user.id],
+      });
+      await ensureAccountSecuritySchema();
+      await db.execute({
+        sql: `UPDATE account_sessions SET revoked_at = datetime('now')
+          WHERE user_id = ? AND id != ? AND revoked_at IS NULL`,
+        args: [user.id, context.sessionId],
+      });
 
-      return NextResponse.json({ success: true, message: "비밀번호가 변경되었습니다." });
+      return NextResponse.json({
+        success: true,
+        message: "비밀번호가 변경되었습니다.",
+      });
     }
 
     // ── 법학과정 가산점 신청 ──────────────────────────────────────
     if (action === "APPLY_BONUS") {
       const { schoolName, evidence } = body;
       if (!schoolName || !evidence) {
-        return NextResponse.json({ error: "학교명과 증빙자료를 입력해 주세요." }, { status: 400 });
+        return NextResponse.json(
+          { error: "학교명과 증빙자료를 입력해 주세요." },
+          { status: 400 },
+        );
       }
 
       // bonus_eligible = 2 : 심사중 상태
@@ -83,12 +138,22 @@ export async function POST(req: Request) {
         ],
       });
 
-      return NextResponse.json({ success: true, message: "법학과정 가산점 신청이 접수되었습니다. 관리자 심사 후 확정됩니다." });
+      return NextResponse.json({
+        success: true,
+        message:
+          "법학과정 가산점 신청이 접수되었습니다. 관리자 심사 후 확정됩니다.",
+      });
     }
 
-    return NextResponse.json({ error: "유효하지 않은 명령입니다." }, { status: 400 });
+    return NextResponse.json(
+      { error: "유효하지 않은 명령입니다." },
+      { status: 400 },
+    );
   } catch (err: any) {
     console.error("Portal API 오류:", err);
-    return NextResponse.json({ error: err.message || "서버 오류" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "서버 오류" },
+      { status: 500 },
+    );
   }
 }

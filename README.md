@@ -13,6 +13,10 @@ npm run create-admin
 
 Do not commit these values or put them in the source tree.
 
+## Production secrets
+
+Set `JWT_SECRET` to a private, randomly generated value of at least 32 bytes in the production environment. It signs login sessions and encrypts stored two-factor authentication secrets. Keep the value stable across deployments; changing it invalidates current sessions and makes existing authenticator secrets unreadable.
+
 ## Getting Started
 
 First, run the development server:

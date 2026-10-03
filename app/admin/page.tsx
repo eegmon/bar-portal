@@ -92,7 +92,7 @@ export default async function AdminDashboardPage() {
           partner_count: partnerCount,
           voting_power: votingPower,
         };
-      })
+      }),
     );
     firms = allFirms.filter((f) => f.status === "APPROVED");
     pendingFirms = allFirms.filter((f) => f.status === "PENDING");
@@ -162,10 +162,7 @@ export default async function AdminDashboardPage() {
       return {
         ...agenda,
         ballot_tally: agendaBallots
-          .filter(
-            (row) =>
-              !String(row.choice).startsWith(RANKED_BALLOT_PREFIX),
-          )
+          .filter((row) => !String(row.choice).startsWith(RANKED_BALLOT_PREFIX))
           .map((row) => ({
             choice: String(row.choice),
             total: Number(row.total || 0),

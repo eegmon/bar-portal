@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
+import db from "@/lib/db";
+import { getSessionContext } from "@/lib/auth";
 
 export async function POST(req: Request) {
+  try {
+    const context = await getSessionContext();
+    if (context) {
+      await db.execute({
+        sql: "UPDATE account_sessions SET revoked_at = datetime('now') WHERE id = ? AND user_id = ?",
+        args: [context.sessionId, context.user.id],
+      });
+    }
+  } catch (error) {
+    console.error("세션 종료 기록 오류:", error);
+  }
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXTAUTH_URL ||

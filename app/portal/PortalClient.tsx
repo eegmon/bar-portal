@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Scale,
   CheckCircle2,
@@ -67,6 +67,144 @@ export default function PortalClient({
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [isChangingPw, setIsChangingPw] = useState(false);
+
+  const [securitySessions, setSecuritySessions] = useState<any[]>([]);
+  const [isLoadingSecurity, setIsLoadingSecurity] = useState(false);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [recoveryCodeCount, setRecoveryCodeCount] = useState(0);
+  const [securityPassword, setSecurityPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [isSecurityActionPending, setIsSecurityActionPending] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "security") return;
+    let cancelled = false;
+    setIsLoadingSecurity(true);
+    fetch("/api/portal/security")
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok)
+          throw new Error(data.error || "보안 정보를 불러오지 못했습니다.");
+        if (cancelled) return;
+        setSecuritySessions(data.sessions || []);
+        setMfaEnabled(Boolean(data.mfaEnabled));
+        setRecoveryCodeCount(Number(data.recoveryCodeCount || 0));
+      })
+      .catch((error) => {
+        if (!cancelled) alert(`오류: ${error.message}`);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingSecurity(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
+
+  const postSecurityAction = async (
+    action: string,
+    values: Record<string, unknown> = {},
+  ) => {
+    const res = await fetch("/api/portal/security", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...values }),
+    });
+    const data = await res.json();
+    if (!res.ok)
+      throw new Error(data.error || "보안 설정을 처리하지 못했습니다.");
+    return data;
+  };
+
+  const refreshSecuritySessions = async () => {
+    const res = await fetch("/api/portal/security");
+    const data = await res.json();
+    if (!res.ok)
+      throw new Error(data.error || "세션 정보를 불러오지 못했습니다.");
+    setSecuritySessions(data.sessions || []);
+    setMfaEnabled(Boolean(data.mfaEnabled));
+    setRecoveryCodeCount(Number(data.recoveryCodeCount || 0));
+  };
+
+  const handleStartMfaSetup = async () => {
+    setIsSecurityActionPending(true);
+    try {
+      const data = await postSecurityAction("MFA_SETUP", {
+        currentPassword: securityPassword,
+      });
+      setMfaSecret(data.secret);
+      setMfaCode("");
+    } catch (error: any) {
+      alert(`오류: ${error.message}`);
+    } finally {
+      setIsSecurityActionPending(false);
+    }
+  };
+
+  const handleMfaEnable = async () => {
+    setIsSecurityActionPending(true);
+    try {
+      const data = await postSecurityAction("MFA_ENABLE", {
+        currentPassword: securityPassword,
+        code: mfaCode,
+      });
+      setRecoveryCodes(data.recoveryCodes || []);
+      setMfaSecret("");
+      setMfaCode("");
+      await refreshSecuritySessions();
+    } catch (error: any) {
+      alert(`오류: ${error.message}`);
+    } finally {
+      setIsSecurityActionPending(false);
+    }
+  };
+
+  const handleMfaManage = async (
+    action: "MFA_DISABLE" | "MFA_REGENERATE_RECOVERY",
+  ) => {
+    setIsSecurityActionPending(true);
+    try {
+      const data = await postSecurityAction(action, {
+        currentPassword: securityPassword,
+        code: mfaCode,
+      });
+      setMfaCode("");
+      setRecoveryCodes(data.recoveryCodes || []);
+      await refreshSecuritySessions();
+    } catch (error: any) {
+      alert(`오류: ${error.message}`);
+    } finally {
+      setIsSecurityActionPending(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId?: string) => {
+    const isAllOthers = !sessionId;
+    if (
+      !confirm(
+        isAllOthers
+          ? "현재 기기를 제외한 모든 세션을 로그아웃할까요?"
+          : "이 기기의 세션을 종료할까요?",
+      )
+    )
+      return;
+    setIsSecurityActionPending(true);
+    try {
+      await postSecurityAction(
+        isAllOthers ? "REVOKE_OTHERS" : "REVOKE_SESSION",
+        {
+          sessionId,
+        },
+      );
+      await refreshSecuritySessions();
+    } catch (error: any) {
+      alert(`오류: ${error.message}`);
+    } finally {
+      setIsSecurityActionPending(false);
+    }
+  };
 
   // 가산점 신청 상태
   const [bonusSchool, setBonusSchool] = useState("");
@@ -277,7 +415,11 @@ export default function PortalClient({
       <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-md shrink-0">
-            <LawyerAvatar name={lawyerProfile?.name || "변"} isActive={lawyerProfile?.status === "ACTIVE"} size={64} />
+            <LawyerAvatar
+              name={lawyerProfile?.name || "변"}
+              isActive={lawyerProfile?.status === "ACTIVE"}
+              size={64}
+            />
           </div>
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2 flex-wrap">
@@ -351,7 +493,7 @@ export default function PortalClient({
           },
           {
             id: "security",
-            label: "비밀번호 변경",
+            label: "계정 보안",
             icon: <Lock className="w-4 h-4" />,
           },
           {
@@ -720,58 +862,283 @@ export default function PortalClient({
         </div>
       )}
 
-      {/* ── 탭 3: 비밀번호 변경 ── */}
+      {/* ── 탭 3: 계정 보안 ── */}
       {activeTab === "security" && (
-        <form
-          onSubmit={handleChangePassword}
-          className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5 max-w-md"
-        >
-          <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Lock className="w-5 h-5 text-blue-400" />
-            비밀번호 변경
-          </h2>
-          <div className="space-y-4 text-xs">
-            {[
-              {
-                label: "현재 비밀번호",
-                value: currentPw,
-                setter: setCurrentPw,
-              },
-              {
-                label: "새 비밀번호 (8자 이상)",
-                value: newPw,
-                setter: setNewPw,
-              },
-              {
-                label: "새 비밀번호 확인",
-                value: confirmPw,
-                setter: setConfirmPw,
-              },
-            ].map(({ label, value, setter }) => (
-              <div key={label}>
-                <label className="block text-slate-400 mb-1 font-semibold">
-                  {label}
-                </label>
+        <div className="space-y-5">
+          <form
+            onSubmit={handleChangePassword}
+            className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5 max-w-md"
+          >
+            <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Lock className="w-5 h-5 text-blue-400" />
+              비밀번호 변경
+            </h2>
+            <div className="space-y-4 text-xs">
+              {[
+                {
+                  label: "현재 비밀번호",
+                  value: currentPw,
+                  setter: setCurrentPw,
+                },
+                {
+                  label: "새 비밀번호 (8자 이상)",
+                  value: newPw,
+                  setter: setNewPw,
+                },
+                {
+                  label: "새 비밀번호 확인",
+                  value: confirmPw,
+                  setter: setConfirmPw,
+                },
+              ].map(({ label, value, setter }) => (
+                <div key={label}>
+                  <label className="block text-slate-400 mb-1 font-semibold">
+                    {label}
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <button
+                type="submit"
+                disabled={isChangingPw}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow"
+              >
+                {isChangingPw ? "변경중..." : "비밀번호 변경"}
+              </button>
+            </div>
+          </form>
+
+          <section className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-white">2단계 인증</h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  인증 앱 코드로 로그인을 한 번 더 확인합니다.
+                </p>
+              </div>
+              <span
+                className={`text-xs font-bold ${mfaEnabled ? "text-emerald-400" : "text-slate-400"}`}
+              >
+                {mfaEnabled ? "활성화됨" : "비활성화"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl">
+              <label className="text-xs text-slate-400">
+                현재 비밀번호
                 <input
                   type="password"
-                  required
-                  value={value}
-                  onChange={(e) => setter(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-blue-500"
+                  value={securityPassword}
+                  onChange={(e) => setSecurityPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
                 />
+              </label>
+              {(mfaSecret || mfaEnabled) && (
+                <label className="text-xs text-slate-400">
+                  인증 앱 코드 또는 복구 코드
+                  <input
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    autoComplete="one-time-code"
+                    inputMode="text"
+                    className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                  />
+                </label>
+              )}
+            </div>
+
+            {!mfaEnabled && !mfaSecret && (
+              <button
+                type="button"
+                onClick={handleStartMfaSetup}
+                disabled={isSecurityActionPending || !securityPassword}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg"
+              >
+                인증 앱 연결 시작
+              </button>
+            )}
+
+            {mfaSecret && (
+              <div className="max-w-2xl space-y-3 border-t border-slate-800 pt-4">
+                <p className="text-xs text-slate-300">
+                  인증 앱에서 계정을 수동으로 추가하고 아래 비밀키를 입력하세요.
+                </p>
+                <code className="block break-all select-all bg-slate-950 border border-slate-700 rounded-lg p-3 text-amber-300 text-sm font-mono">
+                  {mfaSecret}
+                </code>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleMfaEnable}
+                    disabled={
+                      isSecurityActionPending ||
+                      !mfaCode.trim() ||
+                      !securityPassword
+                    }
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg"
+                  >
+                    코드 확인 후 활성화
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await postSecurityAction("CANCEL_MFA_SETUP");
+                        setMfaSecret("");
+                      } catch (error: any) {
+                        alert(`오류: ${error.message}`);
+                      }
+                    }}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg"
+                  >
+                    설정 취소
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
-          <div className="flex justify-end pt-2 border-t border-slate-800">
-            <button
-              type="submit"
-              disabled={isChangingPw}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow"
-            >
-              {isChangingPw ? "변경중..." : "비밀번호 변경"}
-            </button>
-          </div>
-        </form>
+            )}
+
+            {mfaEnabled && (
+              <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+                <button
+                  type="button"
+                  onClick={() => handleMfaManage("MFA_REGENERATE_RECOVERY")}
+                  disabled={
+                    isSecurityActionPending ||
+                    !securityPassword ||
+                    !mfaCode.trim()
+                  }
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-bold rounded-lg"
+                >
+                  복구 코드 재발급 ({recoveryCodeCount}개 남음)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMfaManage("MFA_DISABLE")}
+                  disabled={
+                    isSecurityActionPending ||
+                    !securityPassword ||
+                    !mfaCode.trim()
+                  }
+                  className="px-4 py-2 bg-red-900/60 hover:bg-red-800 disabled:opacity-50 text-red-200 text-xs font-bold rounded-lg"
+                >
+                  2단계 인증 해제
+                </button>
+              </div>
+            )}
+
+            {recoveryCodes.length > 0 && (
+              <div className="max-w-xl border border-amber-500/30 bg-amber-500/5 rounded-lg p-4">
+                <h3 className="text-sm font-bold text-amber-300">복구 코드</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  각 코드는 한 번만 사용할 수 있습니다. 이 화면을 벗어나면 다시
+                  볼 수 없습니다.
+                </p>
+                <div className="grid grid-cols-2 gap-2 mt-3 font-mono text-sm text-white">
+                  {recoveryCodes.map((code) => (
+                    <code key={code}>{code}</code>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRecoveryCodes([])}
+                  className="mt-3 text-xs text-amber-300 hover:text-amber-200"
+                >
+                  확인 완료
+                </button>
+              </div>
+            )}
+          </section>
+
+          <section className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-white">
+                  로그인 기록 및 기기
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  최근 접속 기록을 확인하고 다른 기기의 세션을 종료합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRevokeSession()}
+                disabled={
+                  isSecurityActionPending ||
+                  !securitySessions.some(
+                    (session) => session.isActive && !session.isCurrent,
+                  )
+                }
+                className="px-3 py-2 bg-red-900/60 hover:bg-red-800 disabled:opacity-40 text-red-200 text-xs font-bold rounded-lg"
+              >
+                다른 기기 모두 로그아웃
+              </button>
+            </div>
+
+            {isLoadingSecurity ? (
+              <p className="text-xs text-slate-400">
+                접속 기록을 불러오는 중...
+              </p>
+            ) : securitySessions.length === 0 ? (
+              <p className="text-xs text-slate-500">로그인 기록이 없습니다.</p>
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {securitySessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-semibold text-white">
+                          {session.isCurrent ? "현재 기기" : "로그인 세션"}
+                        </span>
+                        <span
+                          className={
+                            session.isActive
+                              ? "text-emerald-400"
+                              : "text-slate-500"
+                          }
+                        >
+                          {session.isActive
+                            ? "활성"
+                            : session.revoked_at
+                              ? "종료됨"
+                              : "만료됨"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {session.created_at} · IP{" "}
+                        {session.ip_address || "확인 불가"}
+                      </p>
+                      <p className="mt-1 break-all text-[11px] text-slate-500">
+                        {session.user_agent || "기기 정보 없음"}
+                      </p>
+                    </div>
+                    {session.isActive && !session.isCurrent && (
+                      <button
+                        type="button"
+                        onClick={() => handleRevokeSession(session.id)}
+                        disabled={isSecurityActionPending}
+                        className="px-3 py-1.5 border border-slate-700 hover:border-red-500/60 text-slate-300 hover:text-red-300 text-xs rounded-lg"
+                      >
+                        로그아웃
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       )}
 
       {/* ── 탭 4: 법학과정 가산점 신청 ── */}
