@@ -1562,22 +1562,83 @@ export default function AdminClient({
   const insertMinutesTemplate = () => {
     if (!selectedAssemblyForMinutes) return;
     const isReg = selectedAssemblyForMinutes.is_regular;
+    const assemblyId = String(selectedAssemblyForMinutes.id);
+    const assemblyAttendances = attendances.filter(
+      (attendance) => String(attendance.assembly_id) === assemblyId,
+    );
+    const approvedDirectAttendance = assemblyAttendances.filter(
+      (attendance) =>
+        attendance.approval_status === "APPROVED" &&
+        Number(attendance.is_proxy) !== 1 &&
+        Number(attendance.attended) === 1,
+    ).length;
+    const approvedProxies = assemblyAttendances.filter(
+      (attendance) =>
+        attendance.approval_status === "APPROVED" &&
+        Number(attendance.is_proxy) === 1,
+    ).length;
+    const pendingAttendance = assemblyAttendances.filter(
+      (attendance) => attendance.approval_status === "PENDING",
+    ).length;
+    const assemblyAgendas = agendas
+      .filter((agenda) => String(agenda.assembly_id) === assemblyId)
+      .sort(
+        (left, right) =>
+          Number(left.agenda_order || 0) - Number(right.agenda_order || 0),
+      );
+    const agendaMinutes = assemblyAgendas.length
+      ? assemblyAgendas
+          .map((agenda, index) => {
+            const result =
+              agenda.result_status && agenda.result_status !== "PENDING"
+                ? agenda.result_status === "PASS"
+                  ? "가결"
+                  : "부결"
+                : "의결 결과 미확정";
+            const methodResult =
+              agenda.result_method === "NO_OBJECTION"
+                ? "이의유무 의결: 이의 없음으로 가결"
+                : agenda.voting_method === "RANKED"
+                  ? `선호투표 결과: ${(agenda.ranked_rounds || [])
+                      .map((round: any) => {
+                        const tally = round.tally
+                          .map((row: any) => `${row.choice} ${row.total}표`)
+                          .join(", ");
+                        return `${round.round}차 (${tally})`;
+                      })
+                      .join("; ") || "유효 투표 없음"}${agenda.ranked_winner ? `; 당선: ${agenda.ranked_winner}` : ""}`
+                  : `표결 결과: ${(agenda.ballot_tally || [])
+                      .map((row: any) => `${row.choice} ${row.total}표`)
+                      .join(", ") || "투표 내역 없음"}`;
+            const progress =
+              agenda.status === "VOTING"
+                ? "표결 진행 중"
+                : agenda.status === "READY"
+                  ? "심의/표결 대기"
+                  : agenda.status === "ON_HOLD"
+                    ? "보류"
+                    : null;
+            return `   - 제${index + 1}호 안건: ${agenda.title}
+     * ${agenda.description?.trim() || "안건 내용 미기재"}
+     * ${methodResult}${progress ? ` (${progress})` : ` → ${result}`}
+     * 투표 참여 인원: ${Number(agenda.voter_count || 0)}명`;
+          })
+          .join("\n")
+      : "   - 상정된 안건이 없습니다.";
     const template = `[도스변호사협회 제${selectedAssemblyForMinutes.round_number}회 ${isReg ? "정기총회" : "임시총회"} 공식 의사록]
 
 1. 일시: ${selectedAssemblyForMinutes.held_at}
 2. 장소: 도스변호사협회 온라인 총회 회의실
 3. 출석 현황:
-   - 총 회원: ${stats.activeLawyers}명
-   - 출석 회원: ___명 (위임장 제출에 의한 대리 출석 ___명 포함)
-   - 의사정족수: 전체 의결권 3분의 1 이상 출석 충족 (회칙 제15조제1항)
+   - 직접 출석 승인 회원: ${approvedDirectAttendance}명
+   - 승인된 위임: ${approvedProxies}건
+   - 출석 승인 대기: ${pendingAttendance}건
 
 4. 개회 선언:
    - 의장 ${currentUser.name}의 주재 하에 성원 보고 후 개회를 선포함.
 
 5. 부의 안건 심의 및 표결 결과:
-   - 제1호 안건: [안건명]
-     * 제안 이유 및 주요 내용 심의
-     * 표결 결과: 찬성 ___표, 반대 ___표, 기권 ___표 -> [원안 가결 / 부결]
+${agendaMinutes}
 
 6. 기타 보고 및 토의 사항:
    - 사무국 주요 사법 행정 및 재정 현황 보고

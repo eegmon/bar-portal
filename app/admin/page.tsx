@@ -10,6 +10,11 @@ import {
   canManageDiscipline,
 } from "@/lib/auth";
 import AdminClient from "./AdminClient";
+import {
+  countRankedVotes,
+  parseRankedBallots,
+  RANKED_BALLOT_PREFIX,
+} from "@/lib/ranked-vote";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +115,66 @@ export default async function AdminDashboardPage() {
     const agRes = await db.execute(
       "SELECT * FROM agendas ORDER BY agenda_order ASC, created_at ASC",
     );
-    agendas = agRes.rows;
+    const [ballotRes, voterCountRes] = await Promise.all([
+      db.execute(
+        "SELECT agenda_id, choice, SUM(votes_count) AS total FROM ballot_box GROUP BY agenda_id, choice",
+      ),
+      db.execute(
+        "SELECT agenda_id, COUNT(*) AS count FROM voter_logs GROUP BY agenda_id",
+      ),
+    ]);
+    const ballotsByAgenda = new Map<string, any[]>();
+    for (const ballot of ballotRes.rows) {
+      const agendaId = String(ballot.agenda_id);
+      const rows = ballotsByAgenda.get(agendaId) || [];
+      rows.push(ballot);
+      ballotsByAgenda.set(agendaId, rows);
+    }
+    const voterCounts = new Map(
+      voterCountRes.rows.map((row) => [
+        String(row.agenda_id),
+        Number(row.count || 0),
+      ]),
+    );
+    agendas = agRes.rows.map((agenda) => {
+      const agendaBallots = ballotsByAgenda.get(String(agenda.id)) || [];
+      const rankedChoices = (() => {
+        try {
+          const config = JSON.parse(String(agenda.choice_config || "[]"));
+          return Array.isArray(config)
+            ? config
+                .map((choice) =>
+                  typeof choice === "string" ? choice : choice?.label,
+                )
+                .filter(Boolean)
+            : [];
+        } catch {
+          return [];
+        }
+      })();
+      const rankedOutcome =
+        agenda.voting_method === "RANKED"
+          ? countRankedVotes(
+              parseRankedBallots(agendaBallots, rankedChoices),
+              rankedChoices,
+            )
+          : null;
+      return {
+        ...agenda,
+        ballot_tally: agendaBallots
+          .filter(
+            (row) =>
+              !String(row.choice).startsWith(RANKED_BALLOT_PREFIX),
+          )
+          .map((row) => ({
+            choice: String(row.choice),
+            total: Number(row.total || 0),
+          })),
+        voter_count: voterCounts.get(String(agenda.id)) || 0,
+        ranked_rounds: rankedOutcome?.rounds || [],
+        ranked_winner: rankedOutcome?.winner || null,
+      };
+    });
     const attRes = await db.execute(`
       SELECT aa.*, u.name as grantor_name, p.name as proxy_name, f.name as firm_name
       FROM assembly_attendances aa
