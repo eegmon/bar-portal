@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 interface LawyerAvatarProps {
   name: string;
@@ -24,11 +25,12 @@ export default function LawyerAvatar({ name, isActive, size = 48 }: LawyerAvatar
   if (!imgFailed) {
     return (
       <div className={baseClass} style={{ width: size, height: size }}>
-        <img
+        <Image
           src={skinUrl}
           alt={`${name} 스킨`}
           width={size}
           height={size}
+          unoptimized
           className="w-full h-full object-cover"
           onError={() => setImgFailed(true)}
           style={isActive ? {} : { filter: "grayscale(60%) opacity(0.6)" }}

@@ -1,4 +1,5 @@
 import { Scale, Search, MapPin, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import db from "@/lib/db";
 import LawyerAvatar from "./LawyerAvatar";
 
@@ -90,9 +91,9 @@ export default async function LawyersSearchPage({
         <p className="text-slate-400 text-sm mt-1">
           도스온라인에 정식 등록된 개업 변호사 및 견습변호사의 정보를 열람합니다.
           법무법인 검색은{" "}
-          <a href="/firms" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">
+          <Link href="/firms" className="text-amber-400 hover:text-amber-300 underline underline-offset-2">
             법무법인 페이지
-          </a>에서 확인하세요.
+          </Link>에서 확인하세요.
         </p>
       </div>
 

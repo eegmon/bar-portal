@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, X, User } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 export interface UserOption {
   id: string;

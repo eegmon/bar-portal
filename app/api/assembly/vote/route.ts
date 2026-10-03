@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { canManageAssembly, getSessionUser } from "@/lib/auth";
 import { sendDiscordWebhook } from "@/lib/discord";
-import { getVoteAccessUser } from "@/lib/vote-access";
+import { getVoteAccessUser, verifyVoteAccessToken } from "@/lib/vote-access";
+import {
+  countRankedVotes,
+  parseRankedBallots,
+  RANKED_BALLOT_PREFIX,
+  type RankedVoteRound,
+} from "@/lib/ranked-vote";
 
 const DEFAULT_CHOICES = ["찬성", "반대", "기권"];
 
@@ -32,12 +38,16 @@ async function resolveVotingUser(
   constraints?: { assemblyId?: string; agendaId?: string },
 ) {
   const sessionUser = await getSessionUser();
-  if (sessionUser) return sessionUser;
+  if (sessionUser) return { user: sessionUser, viaVoteAccessToken: false };
   const url = new URL(req.url);
   const accessToken =
     req.headers.get("x-vote-access-token") ||
     url.searchParams.get("accessToken");
-  return getVoteAccessUser(accessToken, constraints);
+  if (!accessToken) return null;
+  const payload = verifyVoteAccessToken(accessToken);
+  if (!payload?.assemblyId || !constraints?.assemblyId) return null;
+  const user = await getVoteAccessUser(accessToken, constraints);
+  return user ? { user, viaVoteAccessToken: true } : null;
 }
 
 /**
@@ -63,7 +73,18 @@ async function migrateBallotBoxOnce() {
 export async function GET(req: Request) {
   try {
     const agendaId = new URL(req.url).searchParams.get("agendaId");
-    const user = await resolveVotingUser(req, { agendaId: agendaId || undefined });
+    const agendaRes = agendaId
+      ? await db.execute({
+          sql: "SELECT * FROM agendas WHERE id = ?",
+          args: [agendaId],
+        })
+      : null;
+    const agenda = agendaRes?.rows[0];
+    const resolvedUser = await resolveVotingUser(req, {
+      agendaId: agendaId || undefined,
+      assemblyId: agenda ? String(agenda.assembly_id) : undefined,
+    });
+    const user = resolvedUser?.user;
     if (!user)
       return NextResponse.json(
         { error: "로그인 또는 유효한 개인 투표 링크가 필요합니다." },
@@ -75,16 +96,11 @@ export async function GET(req: Request) {
         { status: 400 },
       );
 
-    const agendaRes = await db.execute({
-      sql: "SELECT * FROM agendas WHERE id = ?",
-      args: [agendaId],
-    });
-    if (agendaRes.rows.length === 0)
+    if (!agenda)
       return NextResponse.json(
         { error: "안건을 찾을 수 없습니다." },
         { status: 404 },
       );
-    const agenda = agendaRes.rows[0];
 
     const totalRightsRes = await db.execute({
       sql: "SELECT COALESCE(SUM(COALESCE(v.voting_power, 1)), 0) as total FROM users u LEFT JOIN assembly_voting_rights v ON v.user_id = u.id AND v.assembly_id = ? WHERE u.role = 'LAWYER' AND u.status = 'ACTIVE'",
@@ -135,12 +151,27 @@ export async function GET(req: Request) {
       sql: "SELECT choice, SUM(votes_count) as total FROM ballot_box WHERE agenda_id = ? GROUP BY choice",
       args: [agendaId],
     });
+    const isAdminView = canManageAssembly(user);
+    const isFinished = ["CLOSED", "RESULT_CONFIRMED"].includes(
+      String(agenda.status),
+    );
+    let rankedRounds: RankedVoteRound[] = [];
+    if (agenda.voting_method === "RANKED") {
+      const rankedRes = await db.execute({
+        sql: "SELECT choice, votes_count FROM ballot_box WHERE agenda_id = ? AND substr(choice, 1, ?) = ?",
+        args: [agendaId, RANKED_BALLOT_PREFIX.length, RANKED_BALLOT_PREFIX],
+      });
+      rankedRounds = countRankedVotes(
+        parseRankedBallots(rankedRes.rows, getChoices(agenda.choice_config)),
+        getChoices(agenda.choice_config),
+      ).rounds;
+    }
 
     const personalRights = Number(totalRightsRes.rows[0]?.total || 0);
-    const firmRights     = Number(firmRightsRes.rows[0]?.firm_total || 0);
-    const totalRights    = personalRights + firmRights;
-    const presentRights  = Number(presentRes.rows[0]?.present_rights || 0);
-    const casted         = Number(castRes.rows[0]?.casted || 0);
+    const firmRights = Number(firmRightsRes.rows[0]?.firm_total || 0);
+    const totalRights = personalRights + firmRights;
+    const presentRights = Number(presentRes.rows[0]?.present_rights || 0);
+    const casted = Number(castRes.rows[0]?.casted || 0);
 
     const stats: {
       totalRights: number;
@@ -150,31 +181,51 @@ export async function GET(req: Request) {
       voters: number;
       casted: number;
       votingRate: number;
+      attendanceVotingRate: number;
       quorumNeeded: number;
       quorumMet: boolean;
       tally: { choice: string; total: number }[];
-      namedVotes?: { userName: string; userId: string; choice: string; votes_count: number }[];
+      rankedRounds: RankedVoteRound[];
+      namedVotes?: {
+        userName: string;
+        userId: string;
+        choice: string;
+        votes_count: number;
+      }[];
     } = {
       totalRights,
       personalRights,
       firmRights,
       presentRights,
-      voters:      Number(voterRes.rows[0]?.voters || 0),
+      voters: Number(voterRes.rows[0]?.voters || 0),
       casted,
-      votingRate:  totalRights ? Number(((casted / totalRights) * 100).toFixed(2)) : 0,
+      votingRate: totalRights
+        ? Number(((casted / totalRights) * 100).toFixed(2))
+        : 0,
+      attendanceVotingRate: presentRights
+        ? Number(Math.min(100, (casted / presentRights) * 100).toFixed(2))
+        : 0,
       quorumNeeded: Number(agenda.quorum_needed || Math.ceil(totalRights / 3)),
       quorumMet:
-        presentRights >= Number(agenda.quorum_needed || Math.ceil(totalRights / 3)),
-      tally: tallyRes.rows.map((row) => ({
-        choice: String(row.choice),
-        total:  Number(row.total || 0),
-      })),
+        presentRights >=
+        Number(agenda.quorum_needed || Math.ceil(totalRights / 3)),
+      tally:
+        agenda.voting_method === "RANKED"
+          ? []
+          : tallyRes.rows.map((row) => ({
+              choice: String(row.choice),
+              total: Number(row.total || 0),
+            })),
+      rankedRounds:
+        agenda.voting_method === "RANKED" && (isAdminView || isFinished)
+          ? rankedRounds
+          : [],
     };
 
-    const isAdminView = canManageAssembly(user);
-    const isFinished  = ["CLOSED", "RESULT_CONFIRMED"].includes(String(agenda.status));
-
-    if (!isAdminView && !isFinished) stats.tally = [];
+    if (!isAdminView && !isFinished) {
+      stats.tally = [];
+      stats.rankedRounds = [];
+    }
 
     // 기명투표 + 관리자 + 종료 후 → 이름별 선택 명단 추가
     if (!agenda.is_secret && isAdminView && isFinished) {
@@ -190,9 +241,9 @@ export async function GET(req: Request) {
           args: [agendaId],
         });
         stats.namedVotes = namedRes.rows.map((r) => ({
-          userId:      String(r.user_id  ?? ""),
-          userName:    String(r.user_name ?? "알 수 없음"),
-          choice:      String(r.choice),
+          userId: String(r.user_id ?? ""),
+          userName: String(r.user_name ?? "알 수 없음"),
+          choice: String(r.choice),
           votes_count: Number(r.votes_count),
         }));
       } catch {
@@ -223,11 +274,23 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. 세션 로그인 또는 개인 투표 링크 인증
-    const user = await resolveVotingUser(req, { agendaId });
+    // 안건의 총회 범위까지 확인한 뒤 인증합니다.
+    const agRes = await db.execute({
+      sql: "SELECT a.*, ass.status as assembly_status FROM agendas a JOIN assemblies ass ON ass.id = a.assembly_id WHERE a.id = ?",
+      args: [agendaId],
+    });
+    const agenda = agRes.rows[0];
+    const resolvedUser = await resolveVotingUser(req, {
+      agendaId,
+      assemblyId: agenda ? String(agenda.assembly_id) : undefined,
+    });
+    const user = resolvedUser?.user;
     if (!user) {
       return NextResponse.json(
-        { error: "총회 전자투표는 로그인한 회원 또는 유효한 개인별 투표 링크 사용자만 참여할 수 있습니다." },
+        {
+          error:
+            "총회 전자투표는 로그인한 회원 또는 유효한 개인별 투표 링크 사용자만 참여할 수 있습니다.",
+        },
         { status: 401 },
       );
     }
@@ -239,25 +302,21 @@ export async function POST(req: Request) {
     }
     if (user.status !== "ACTIVE") {
       return NextResponse.json(
-        { error: `현재 자격 상태(${user.status})로는 의결권을 행사할 수 없습니다.` },
+        {
+          error: `현재 자격 상태(${user.status})로는 의결권을 행사할 수 없습니다.`,
+        },
         { status: 403 },
       );
     }
 
-    // 2. 안건 조회
-    const agRes = await db.execute({
-      sql: "SELECT a.*, ass.status as assembly_status FROM agendas a JOIN assemblies ass ON ass.id = a.assembly_id WHERE a.id = ?",
-      args: [agendaId],
-    });
-    if (agRes.rows.length === 0) {
+    if (!agenda) {
       return NextResponse.json(
         { error: "안건을 찾을 수 없습니다." },
         { status: 404 },
       );
     }
-    const agenda = agRes.rows[0];
 
-    // 3. 출석 자격 검증 — ADMIN 면제, 일반 변호사는 출석 APPROVED 필수
+    // 3. 출석 자격 검증 — ADMIN과 총회 범위가 일치하는 개인 링크는 면제
     //    - 직접 출석(is_proxy=0, attended=1) 또는 위임 출석(is_proxy=1) 모두 인정
     if (user.role !== "ADMIN") {
       const attRes = await db.execute({
@@ -272,23 +331,24 @@ export async function POST(req: Request) {
       // 위임한 사람(grantor)은 직접 투표 불가 — 수임인이 대신 행사
       if (att && att.is_proxy === 1 && att.approval_status === "APPROVED") {
         return NextResponse.json(
-          { error: "의결권을 위임하셨습니다. 직접 투표할 수 없으며, 수임인이 귀하의 의결권을 대신 행사합니다." },
+          {
+            error:
+              "의결권을 위임하셨습니다. 직접 투표할 수 없으며, 수임인이 귀하의 의결권을 대신 행사합니다.",
+          },
           { status: 403 },
         );
       }
 
-      const approved =
-        att &&
-        att.approval_status === "APPROVED" &&
-        att.attended === 1;
+      const approvedByAttendance =
+        att && att.approval_status === "APPROVED" && att.attended === 1;
 
-      if (!approved) {
-        const reason =
-          !att
-            ? "출석 확인을 완료하지 않았습니다."
-            : att.approval_status === "PENDING"
-              ? "출석 확인이 접수되었으나 아직 의장의 승인을 기다리고 있습니다."
-              : "출석이 승인되지 않은 상태입니다.";        return NextResponse.json(
+      if (!resolvedUser?.viaVoteAccessToken && !approvedByAttendance) {
+        const reason = !att
+          ? "출석 확인을 완료하지 않았습니다."
+          : att.approval_status === "PENDING"
+            ? "출석 확인이 접수되었으나 아직 의장의 승인을 기다리고 있습니다."
+            : "출석이 승인되지 않은 상태입니다.";
+        return NextResponse.json(
           {
             error: `투표 자격이 없습니다. ${reason} 총회 페이지에서 출석을 먼저 확인해 주세요.`,
             attendanceStatus: att?.approval_status ?? "NONE",
@@ -326,7 +386,9 @@ export async function POST(req: Request) {
         !Array.isArray(ranking) ||
         ranking.length !== allowedChoices.length ||
         new Set(ranking).size !== ranking.length ||
-        ranking.some((choice: unknown) => !allowedChoices.includes(String(choice)))
+        ranking.some(
+          (choice: unknown) => !allowedChoices.includes(String(choice)),
+        )
       ) {
         return NextResponse.json(
           { error: "모든 선택지를 한 번씩 순위에 배치해야 합니다." },
@@ -338,7 +400,11 @@ export async function POST(req: Request) {
       allocations as Record<string, unknown>,
     )) {
       const count = Number(rawCount);
-      if (!allowedChoices.includes(choice) || !Number.isInteger(count) || count < 0) {
+      if (
+        !allowedChoices.includes(choice) ||
+        !Number.isInteger(count) ||
+        count < 0
+      ) {
         return NextResponse.json(
           { error: "허용되지 않은 선택지 또는 표 수입니다." },
           { status: 400 },
@@ -397,13 +463,13 @@ export async function POST(req: Request) {
 
     const voteStatements: Parameters<typeof db.batch>[0] = [
       {
-        sql:  "INSERT INTO voter_logs (agenda_id, user_id, voted_at) VALUES (?, ?, datetime('now'))",
+        sql: "INSERT INTO voter_logs (agenda_id, user_id, voted_at) VALUES (?, ?, datetime('now'))",
         args: [agendaId, user.id],
       },
     ];
     if (agenda.voting_method === "RANKED") {
       voteStatements.push({
-        sql:  isSecret
+        sql: isSecret
           ? "INSERT INTO ballot_box (id, agenda_id, choice, votes_count) VALUES (?, ?, ?, ?)"
           : "INSERT INTO ballot_box (id, agenda_id, choice, votes_count, user_id) VALUES (?, ?, ?, ?, ?)",
         args: isSecret
@@ -465,10 +531,10 @@ export async function POST(req: Request) {
     await sendDiscordWebhook("ASSEMBLY_VOTE", {
       embeds: [
         {
-          title:       `🗳️ [총회 전자투표] 표결 접수 (${agenda.title})`,
+          title: `🗳️ [총회 전자투표] 표결 접수 (${agenda.title})`,
           description: `회원 한 분이 총 **${totalCasted}표**(본인표 + 위임표)의 의결권을 행사하였습니다.\n• 투표 방식: **${agenda.is_secret ? "🔒 무기명 비밀투표" : "📝 기명투표"}**`,
-          color:       0x10b981,
-          timestamp:   new Date().toISOString(),
+          color: 0x10b981,
+          timestamp: new Date().toISOString(),
         },
       ],
     });

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import {
-  Building,
   Users,
   Crown,
   MapPin,
@@ -10,9 +9,6 @@ import {
   Calendar,
   UserPlus,
   Trash2,
-  CheckCircle2,
-  FileText,
-  Scale,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -27,7 +23,6 @@ const FIRM_TYPES: Record<string, string> = {
 interface FirmDetailClientProps {
   firm: any;
   initialMembers: any[];
-  currentUser: any;
   isAdmin: boolean;
   isRepresentative: boolean;
 }
@@ -35,7 +30,6 @@ interface FirmDetailClientProps {
 export default function FirmDetailClient({
   firm,
   initialMembers,
-  currentUser,
   isAdmin,
   isRepresentative,
 }: FirmDetailClientProps) {

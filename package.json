@@ -9,6 +9,7 @@
     "create-admin": "node create-admin.mjs",
     "migrate-all": "node init-db.mjs && node migrate-settings.mjs && node migrate-positions.mjs && node migrate-assembly-agendas.mjs && node migrate-rules.mjs && node migrate-discord-sync.mjs && node migrate-exam-phase2.mjs && node migrate-exam-scoring.mjs && node migrate-exam-operation-mode.mjs && node migrate-audit-logs.mjs && node migrate-member-profile-fields.mjs && node create-admin.mjs",
     "build": "next build",
+    "test": "vitest run",
     "start": "next start",
     "lint": "eslint"
   },
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "eslint": "^9",
-    "eslint-config-next": "16.3.5"
+    "eslint-config-next": "16.3.5",
+    "vitest": "^4.1.11"
   }
 }

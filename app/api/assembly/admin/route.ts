@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSessionUser, canManageAssembly } from "@/lib/auth";
 import { sendDiscordWebhook, syncUserDiscordRoles } from "@/lib/discord";
+import {
+  countRankedVotes,
+  parseRankedBallots,
+  RANKED_BALLOT_PREFIX,
+} from "@/lib/ranked-vote";
 
 function getChoiceLabels(rawConfig: unknown): string[] {
   try {
@@ -1016,6 +1021,12 @@ export async function POST(req: Request) {
 
     // 8. 의장의 표결 개시 선언
     if (action === "START_VOTING") {
+      if (!isChair(user)) {
+        return NextResponse.json(
+          { error: "총회 의장단 권한이 필요합니다." },
+          { status: 403 },
+        );
+      }
       const { agendaId } = body;
       if (!agendaId) {
         return NextResponse.json(
@@ -1078,6 +1089,12 @@ export async function POST(req: Request) {
 
     // 7. 의장의 표결 종료 및 결과 선포
     if (action === "CLOSE_VOTING") {
+      if (!isChair(user)) {
+        return NextResponse.json(
+          { error: "총회 의장단 권한이 필요합니다." },
+          { status: 403 },
+        );
+      }
       const { agendaId } = body;
       if (!agendaId) {
         return NextResponse.json(
@@ -1122,50 +1139,23 @@ export async function POST(req: Request) {
         tallyRes.rows
           .map((r) => `• **${r.choice}**: ${r.total}표`)
           .join("\n") || "투표 내역 없음";
-      let rankedTally: { choice: string; total: number }[] = [];
+      let rankedRounds: ReturnType<typeof countRankedVotes>["rounds"] = [];
+      let rankedWinner: string | null = null;
       if (agenda.voting_method === "RANKED") {
         const rankedRes = await db.execute({
-          sql: "SELECT choice, votes_count FROM ballot_box WHERE agenda_id = ? AND choice LIKE '__RANKING:%'",
-          args: [agendaId],
+          sql: "SELECT choice, votes_count FROM ballot_box WHERE agenda_id = ? AND substr(choice, 1, ?) = ?",
+          args: [agendaId, RANKED_BALLOT_PREFIX.length, RANKED_BALLOT_PREFIX],
         });
-        const rankings: string[][] = [];
-        for (const row of rankedRes.rows) {
-          try {
-            const parsed = JSON.parse(
-              String(row.choice).slice("__RANKING:".length),
-            );
-            for (
-              let index = 0;
-              index < Number(row.votes_count || 0);
-              index += 1
-            )
-              rankings.push(parsed);
-          } catch {
-            /* 잘못된 순위 표는 집계에서 제외합니다. */
-          }
-        }
-        const remaining = new Set<string>(
+        const ballots = parseRankedBallots(
+          rankedRes.rows,
           getChoiceLabels(agenda.choice_config),
         );
-        while (remaining.size > 0 && rankings.length > 0) {
-          const counts = new Map<string, number>();
-          for (const ballot of rankings) {
-            const preferred = ballot.find((choice) => remaining.has(choice));
-            if (preferred)
-              counts.set(preferred, (counts.get(preferred) || 0) + 1);
-          }
-          const round = [...remaining].map((choice) => ({
-            choice,
-            total: counts.get(choice) || 0,
-          }));
-          rankedTally = round.sort((a, b) => b.total - a.total);
-          const winner = rankedTally[0];
-          const total = round.reduce((sum, item) => sum + item.total, 0);
-          if (winner && winner.total > total / 2) break;
-          const lowest = round.sort((a, b) => a.total - b.total)[0];
-          if (!lowest) break;
-          remaining.delete(lowest.choice);
-        }
+        const outcome = countRankedVotes(
+          ballots,
+          getChoiceLabels(agenda.choice_config),
+        );
+        rankedRounds = outcome.rounds;
+        rankedWinner = outcome.winner;
       }
       const totalRightsRes = await db.execute({
         sql: "SELECT COALESCE(SUM(COALESCE(v.voting_power, 1)), 0) as total FROM users u LEFT JOIN assembly_voting_rights v ON v.user_id = u.id AND v.assembly_id = ? WHERE u.role = 'LAWYER' AND u.status = 'ACTIVE'",
@@ -1211,7 +1201,7 @@ export async function POST(req: Request) {
       );
       const resultTally =
         agenda.voting_method === "RANKED"
-          ? rankedTally
+          ? (rankedRounds.at(-1)?.tally ?? [])
           : tallyRes.rows.map((row) => ({
               choice: String(row.choice),
               total: Number(row.total || 0),
@@ -1235,9 +1225,7 @@ export async function POST(req: Request) {
       const resultStatus =
         quorumMet &&
         (agenda.voting_method === "RANKED"
-          ? resultTally.length > 0 &&
-            resultTally[0].total >
-              Number(totalVotersRes.rows[0]?.count || 0) / 2
+          ? rankedWinner !== null
           : agenda.voting_method === "TWO_THIRDS"
             ? totalDecisive > 0 && approval / totalDecisive >= 2 / 3
             : agenda.voting_method === "PLURALITY"
@@ -1247,7 +1235,7 @@ export async function POST(req: Request) {
           : "REJECT";
 
       const closeRes = await db.execute({
-        sql: "UPDATE agendas SET status = 'CLOSED', voting_closed_at = datetime('now'), result_status = ? WHERE id = ? AND status = 'VOTING'",
+        sql: "UPDATE agendas SET status = 'CLOSED', voting_closed_at = datetime('now'), result_status = ?, result_method = 'VOTE' WHERE id = ? AND status = 'VOTING'",
         args: [resultStatus, agendaId],
       });
       if (closeRes.rowsAffected !== 1) {
@@ -1263,9 +1251,17 @@ export async function POST(req: Request) {
       const currentMinutes = String(assemblyRes.rows[0]?.minutes_text || "");
       const resultText =
         agenda.voting_method === "RANKED"
-          ? rankedTally
-              .map((row) => `• **${row.choice}**: ${row.total}표`)
-              .join("\n")
+          ? rankedRounds
+              .map((round) => {
+                const tally = round.tally
+                  .map((row) => `${row.choice} ${row.total}표`)
+                  .join(", ");
+                const outcome = round.winner
+                  ? `당선: ${round.winner}`
+                  : `탈락: ${round.eliminatedChoice}`;
+                return `• ${round.round}라운드 (${tally}) - ${outcome}`;
+              })
+              .join("\n") || "유효한 순위표 없음"
           : tallyText;
       const minutesSection = `\n\n[안건 표결 자동 집계] ${agenda.title}\n- 표결 종료: ${new Date().toISOString()}\n- 출석 의결권: ${presentRights}표 / 전체 의결권 ${totalRights}표\n- 의결권 정족수: ${quorumNeeded}표 기준, ${quorumMet ? "충족" : "미충족"}\n- 투표 참여 인원: ${voterCount}명\n${resultText}\n- 의결 결과: ${resultStatus === "PASS" ? "가결" : "부결"}`;
       await db.execute({
@@ -1299,6 +1295,77 @@ export async function POST(req: Request) {
         resultStatus,
         quorumMet,
         tally: tallyRes.rows,
+        rankedRounds,
+      });
+    }
+
+    if (action === "RECORD_NO_OBJECTION") {
+      if (!isChair(user)) {
+        return NextResponse.json(
+          { error: "총회 의장단 권한이 필요합니다." },
+          { status: 403 },
+        );
+      }
+      const { agendaId } = body;
+      if (!agendaId) {
+        return NextResponse.json(
+          { error: "안건 ID가 누락되었습니다." },
+          { status: 400 },
+        );
+      }
+
+      const agendaRes = await db.execute({
+        sql: "SELECT id, assembly_id, title, status FROM agendas WHERE id = ?",
+        args: [agendaId],
+      });
+      if (agendaRes.rows.length === 0) {
+        return NextResponse.json(
+          { error: "안건을 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      }
+      const agenda = agendaRes.rows[0];
+      const updateRes = await db.execute({
+        sql: `UPDATE agendas
+              SET status = 'CLOSED', voting_closed_at = datetime('now'),
+                  result_status = 'PASS', result_method = 'NO_OBJECTION'
+              WHERE id = ? AND status = 'READY'
+                AND EXISTS (
+                  SELECT 1 FROM assemblies
+                  WHERE assemblies.id = agendas.assembly_id
+                    AND assemblies.status = 'IN_SESSION'
+                )
+                AND NOT EXISTS (SELECT 1 FROM voter_logs WHERE agenda_id = agendas.id)
+                AND NOT EXISTS (SELECT 1 FROM ballot_box WHERE agenda_id = agendas.id)`,
+        args: [agendaId],
+      });
+      if (updateRes.rowsAffected !== 1) {
+        return NextResponse.json(
+          { error: "개회 중인 미표결 대기 안건만 이의유무로 처리할 수 있습니다." },
+          { status: 409 },
+        );
+      }
+
+      const assemblyRes = await db.execute({
+        sql: "SELECT minutes_text FROM assemblies WHERE id = ?",
+        args: [agenda.assembly_id],
+      });
+      const currentMinutes = String(assemblyRes.rows[0]?.minutes_text || "");
+      const minutesSection = `\n\n[안건 이의유무 의결] ${agenda.title}\n- 의결 방식: 의장의 이의 유무 확인\n- 의결 결과: 이의 없음으로 가결`;
+      await db.execute({
+        sql: "UPDATE assemblies SET minutes_text = ? WHERE id = ?",
+        args: [`${currentMinutes}${minutesSection}`, agenda.assembly_id],
+      });
+      await writeAudit(agenda.assembly_id, agendaId, user.id, "RECORD_NO_OBJECTION", {
+        resultStatus: "PASS",
+        resultMethod: "NO_OBJECTION",
+      });
+
+      return NextResponse.json({
+        success: true,
+        status: "CLOSED",
+        resultStatus: "PASS",
+        resultMethod: "NO_OBJECTION",
       });
     }
 
@@ -1457,26 +1524,65 @@ export async function POST(req: Request) {
     // ── 직권 위임 (관리자/의장이 A→B 위임을 강제 생성) ──────────────────────
     if (action === "ADMIN_SET_PROXY") {
       if (!isChair(user)) {
-        return NextResponse.json({ error: "의장단 권한이 필요합니다." }, { status: 403 });
+        return NextResponse.json(
+          { error: "의장단 권한이 필요합니다." },
+          { status: 403 },
+        );
       }
-      const { assemblyId, grantorId, proxyToUserId, votingPower = 1, reason = "관리자 직권 위임" } = body;
+      const {
+        assemblyId,
+        grantorId,
+        proxyToUserId,
+        votingPower = 1,
+        reason = "관리자 직권 위임",
+      } = body;
       if (!assemblyId || !grantorId || !proxyToUserId) {
-        return NextResponse.json({ error: "총회, 위임인, 수임인이 필요합니다." }, { status: 400 });
+        return NextResponse.json(
+          { error: "총회, 위임인, 수임인이 필요합니다." },
+          { status: 400 },
+        );
       }
       if (grantorId === proxyToUserId) {
-        return NextResponse.json({ error: "위임인과 수임인이 동일할 수 없습니다." }, { status: 400 });
+        return NextResponse.json(
+          { error: "위임인과 수임인이 동일할 수 없습니다." },
+          { status: 400 },
+        );
       }
 
       const [grantorRes, proxyRes, assRes] = await Promise.all([
-        db.execute({ sql: "SELECT id, name, role, status FROM users WHERE id = ?", args: [grantorId] }),
-        db.execute({ sql: "SELECT id, name, role, status FROM users WHERE id = ?", args: [proxyToUserId] }),
-        db.execute({ sql: "SELECT id, status FROM assemblies WHERE id = ?", args: [assemblyId] }),
+        db.execute({
+          sql: "SELECT id, name, role, status FROM users WHERE id = ?",
+          args: [grantorId],
+        }),
+        db.execute({
+          sql: "SELECT id, name, role, status FROM users WHERE id = ?",
+          args: [proxyToUserId],
+        }),
+        db.execute({
+          sql: "SELECT id, status FROM assemblies WHERE id = ?",
+          args: [assemblyId],
+        }),
       ]);
-      if (!grantorRes.rows[0]) return NextResponse.json({ error: "위임인을 찾을 수 없습니다." }, { status: 404 });
-      if (!proxyRes.rows[0] || proxyRes.rows[0].role !== "LAWYER" || proxyRes.rows[0].status !== "ACTIVE") {
-        return NextResponse.json({ error: "수임인은 활성 정회원 변호사여야 합니다." }, { status: 400 });
+      if (!grantorRes.rows[0])
+        return NextResponse.json(
+          { error: "위임인을 찾을 수 없습니다." },
+          { status: 404 },
+        );
+      if (
+        !proxyRes.rows[0] ||
+        proxyRes.rows[0].role !== "LAWYER" ||
+        proxyRes.rows[0].status !== "ACTIVE"
+      ) {
+        return NextResponse.json(
+          { error: "수임인은 활성 정회원 변호사여야 합니다." },
+          { status: 400 },
+        );
       }
-      if (!assRes.rows[0]) return NextResponse.json({ error: "총회를 찾을 수 없습니다." }, { status: 404 });
+      if (!assRes.rows[0])
+        return NextResponse.json(
+          { error: "총회를 찾을 수 없습니다." },
+          { status: 404 },
+        );
 
       // 기존 직접출석 레코드 무효화, 기존 위임 레코드 교체
       await db.execute({
@@ -1489,13 +1595,23 @@ export async function POST(req: Request) {
         sql: `INSERT INTO assembly_attendances
               (id, assembly_id, user_id, voting_power, attended, is_proxy, proxy_to_user_id, signature, approval_status)
               VALUES (?, ?, ?, ?, 0, 1, ?, ?, 'APPROVED')`,
-        args: [attId, assemblyId, grantorId, Number(votingPower), proxyToUserId, `${user.name} 직권 위임 (${reason})`],
+        args: [
+          attId,
+          assemblyId,
+          grantorId,
+          Number(votingPower),
+          proxyToUserId,
+          `${user.name} 직권 위임 (${reason})`,
+        ],
       });
 
       await writeAudit(assemblyId, null, user.id, "ADMIN_SET_PROXY", {
-        grantorId, grantorName: grantorRes.rows[0].name,
-        proxyToUserId, proxyName: proxyRes.rows[0].name,
-        votingPower: Number(votingPower), reason,
+        grantorId,
+        grantorName: grantorRes.rows[0].name,
+        proxyToUserId,
+        proxyName: proxyRes.rows[0].name,
+        votingPower: Number(votingPower),
+        reason,
       });
 
       return NextResponse.json({
@@ -1508,7 +1624,10 @@ export async function POST(req: Request) {
     // ── 위임 회수 (관리자/의장이 위임 레코드를 강제 취소) ──────────────────
     if (action === "REVOKE_PROXY") {
       if (!isChair(user)) {
-        return NextResponse.json({ error: "의장단 권한이 필요합니다." }, { status: 403 });
+        return NextResponse.json(
+          { error: "의장단 권한이 필요합니다." },
+          { status: 403 },
+        );
       }
       const { attendanceId, assemblyId, grantorId } = body;
 
@@ -1520,12 +1639,18 @@ export async function POST(req: Request) {
           args: [assemblyId, grantorId],
         });
         if (res.rows.length === 0) {
-          return NextResponse.json({ error: "해당 위임 기록을 찾을 수 없습니다." }, { status: 404 });
+          return NextResponse.json(
+            { error: "해당 위임 기록을 찾을 수 없습니다." },
+            { status: 404 },
+          );
         }
         targetId = res.rows[0].id;
       }
       if (!targetId) {
-        return NextResponse.json({ error: "attendanceId 또는 assemblyId+grantorId가 필요합니다." }, { status: 400 });
+        return NextResponse.json(
+          { error: "attendanceId 또는 assemblyId+grantorId가 필요합니다." },
+          { status: 400 },
+        );
       }
 
       const attRes = await db.execute({
@@ -1533,7 +1658,10 @@ export async function POST(req: Request) {
         args: [targetId],
       });
       if (!attRes.rows[0] || attRes.rows[0].is_proxy !== 1) {
-        return NextResponse.json({ error: "위임 기록이 아니거나 존재하지 않습니다." }, { status: 404 });
+        return NextResponse.json(
+          { error: "위임 기록이 아니거나 존재하지 않습니다." },
+          { status: 404 },
+        );
       }
       const att = attRes.rows[0];
 
@@ -1548,14 +1676,18 @@ export async function POST(req: Request) {
         proxyToUserId: att.proxy_to_user_id,
       });
 
-      return NextResponse.json({ success: true, message: "위임이 회수되었습니다." });
+      return NextResponse.json({
+        success: true,
+        message: "위임이 회수되었습니다.",
+      });
     }
 
     return NextResponse.json(
       { error: "유효하지 않은 명령입니다." },
       { status: 400 },
     );
-  } catch (err: any) {    console.error("총회 관리 API 에러:", err);
+  } catch (err: any) {
+    console.error("총회 관리 API 에러:", err);
     return NextResponse.json(
       { error: err.message || "서버 오류" },
       { status: 500 },

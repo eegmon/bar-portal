@@ -13,7 +13,6 @@ import {
   Edit,
   Send,
   Plus,
-  Calendar,
   ExternalLink,
   Search,
   Scale,
@@ -29,13 +28,11 @@ import {
   Trash2,
   Building,
   Link2,
-  Activity,
   ClipboardList,
   UserCheck,
   RefreshCw,
   Copy,
   Clock,
-  Lock,
   Filter,
   ChevronDown,
   ChevronRight,
@@ -165,13 +162,19 @@ export default function AdminClient({
   const [isProcessingFirm, setIsProcessingFirm] = useState(false);
 
   // firms 탭 서브탭
-  const [firmSubTab, setFirmSubTab] = useState<"list" | "pending" | "create">("list");
+  const [firmSubTab, setFirmSubTab] = useState<"list" | "pending" | "create">(
+    "list",
+  );
 
   // 법인 카드 펼치기 상태 (어드민)
-  const [expandedAdminFirmId, setExpandedAdminFirmId] = useState<string | null>(null);
+  const [expandedAdminFirmId, setExpandedAdminFirmId] = useState<string | null>(
+    null,
+  );
 
   // 법인 기본 정보 인라인 편집 상태
-  const [adminEditingFirmId, setAdminEditingFirmId] = useState<string | null>(null);
+  const [adminEditingFirmId, setAdminEditingFirmId] = useState<string | null>(
+    null,
+  );
   const [adminEditFirmName, setAdminEditFirmName] = useState("");
   const [adminEditFirmType, setAdminEditFirmType] = useState("FIRM");
   const [adminEditFirmAddr, setAdminEditFirmAddr] = useState("");
@@ -220,13 +223,13 @@ export default function AdminClient({
   const [agendas, setAgendas] = useState<any[]>(initialAgendas);
   const [attendances, setAttendances] = useState<any[]>(initialAttendances);
   const [isExpiringAbsentMembers, setIsExpiringAbsentMembers] = useState(false);
-  const [approvingReregistrationId, setApprovingReregistrationId] =
-    useState<string | null>(null);
+  const [approvingReregistrationId, setApprovingReregistrationId] = useState<
+    string | null
+  >(null);
   const [selectedAssemblyId, setSelectedAssemblyId] = useState(
     initialAssemblies[0]?.id || "",
   );
   const [votingRights, setVotingRights] = useState<any[]>(initialVotingRights);
-  const [auditLogs] = useState<any[]>(initialAuditLogs);
   const [rightAssemblyId, setRightAssemblyId] = useState(
     assemblies[0]?.id || "",
   );
@@ -633,7 +636,9 @@ export default function AdminClient({
     userId: string,
     decision: "APPROVE" | "REJECT" | "REVOKE",
   ) => {
-    const label = { APPROVE: "승인", REJECT: "반려", REVOKE: "승인 취소" }[decision];
+    const label = { APPROVE: "승인", REJECT: "반려", REVOKE: "승인 취소" }[
+      decision
+    ];
     if (!confirm(`이 신청을 ${label}하시겠습니까?`)) return;
     try {
       const res = await fetch("/api/admin/users", {
@@ -658,7 +663,9 @@ export default function AdminClient({
   const bonusApplicationText = (bio: unknown) => {
     const t = String(bio || "");
     const i = t.lastIndexOf("[가산점신청]");
-    return i >= 0 ? t.slice(i + "[가산점신청]".length).trim() : "(신청 내용 없음)";
+    return i >= 0
+      ? t.slice(i + "[가산점신청]".length).trim()
+      : "(신청 내용 없음)";
   };
 
   const handleBatchSync = async () => {
@@ -1035,7 +1042,9 @@ export default function AdminClient({
 
   const handleApproveReregistration = async (attendance: any) => {
     const memberName = attendance.grantor_name || "해당 회원";
-    if (!confirm(`${memberName}님의 재등록 신청서를 수리하고 자격을 갱신할까요?`))
+    if (
+      !confirm(`${memberName}님의 재등록 신청서를 수리하고 자격을 갱신할까요?`)
+    )
       return;
     setApprovingReregistrationId(attendance.id);
     try {
@@ -1148,7 +1157,12 @@ export default function AdminClient({
       alert("총회, 위임인, 수임인을 모두 선택해 주세요.");
       return;
     }
-    if (!confirm(`직권 위임 처리하시겠습니까?\n기존 출석/위임 기록은 무효화됩니다.`)) return;
+    if (
+      !confirm(
+        `직권 위임 처리하시겠습니까?\n기존 출석/위임 기록은 무효화됩니다.`,
+      )
+    )
+      return;
     setIsSettingAdminProxy(true);
     try {
       const res = await fetch("/api/assembly/admin", {
@@ -1175,7 +1189,10 @@ export default function AdminClient({
   };
 
   const handleRevokeProxy = async (attendanceId: string) => {
-    if (!confirm("이 위임을 회수하시겠습니까? 수임인의 위임표도 함께 취소됩니다.")) return;
+    if (
+      !confirm("이 위임을 회수하시겠습니까? 수임인의 위임표도 함께 취소됩니다.")
+    )
+      return;
     setRevokingProxyId(attendanceId);
     try {
       const res = await fetch("/api/assembly/admin", {
@@ -1189,7 +1206,11 @@ export default function AdminClient({
       setAttendances((prev) =>
         prev.map((a) =>
           a.id === attendanceId
-            ? { ...a, approval_status: "REJECTED", rejection_reason: "직권 위임 회수" }
+            ? {
+                ...a,
+                approval_status: "REJECTED",
+                rejection_reason: "직권 위임 회수",
+              }
             : a,
         ),
       );
@@ -1737,324 +1758,577 @@ export default function AdminClient({
       {/* ========================================================================= */}
       {/* 탭 2: 법무법인 관리 */}
       {/* ========================================================================= */}
-      {activeTab === "firms" && (permissions.canFirms || permissions.canUsers) && (
-        <div className="space-y-4">
-          {/* 서브탭 */}
-          <div className="flex flex-wrap gap-2 p-1 bg-slate-950 border border-slate-800 rounded-xl">
-            {(["list", "pending", "create"] as const).map((st) => {
-              const labels: Record<string, string> = { list: `등록 법인 (${firms.length}개)`, pending: `승인 대기 (${pendingFirms.length}건)`, create: "직권 개설" };
-              const colors: Record<string, string> = {
-                list: "bg-amber-600 text-white shadow",
-                pending: "bg-red-600 text-white shadow",
-                create: "bg-indigo-600 text-white shadow",
-              };
-              return (
-                <button
-                  key={st}
-                  onClick={() => setFirmSubTab(st)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${firmSubTab === st ? colors[st] : "text-slate-400 hover:text-white"}`}
-                >
-                  {labels[st]}
-                  {st === "pending" && pendingFirms.length > 0 && (
-                    <span className="ml-1.5 px-1.5 bg-red-500 text-white rounded-full text-[10px] animate-pulse">{pendingFirms.length}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+      {activeTab === "firms" &&
+        (permissions.canFirms || permissions.canUsers) && (
+          <div className="space-y-4">
+            {/* 서브탭 */}
+            <div className="flex flex-wrap gap-2 p-1 bg-slate-950 border border-slate-800 rounded-xl">
+              {(["list", "pending", "create"] as const).map((st) => {
+                const labels: Record<string, string> = {
+                  list: `등록 법인 (${firms.length}개)`,
+                  pending: `승인 대기 (${pendingFirms.length}건)`,
+                  create: "직권 개설",
+                };
+                const colors: Record<string, string> = {
+                  list: "bg-amber-600 text-white shadow",
+                  pending: "bg-red-600 text-white shadow",
+                  create: "bg-indigo-600 text-white shadow",
+                };
+                return (
+                  <button
+                    key={st}
+                    onClick={() => setFirmSubTab(st)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${firmSubTab === st ? colors[st] : "text-slate-400 hover:text-white"}`}
+                  >
+                    {labels[st]}
+                    {st === "pending" && pendingFirms.length > 0 && (
+                      <span className="ml-1.5 px-1.5 bg-red-500 text-white rounded-full text-[10px] animate-pulse">
+                        {pendingFirms.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* 서브탭 1: 등록 법인 목록 */}
-          {firmSubTab === "list" && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 bg-slate-900 border border-slate-800 rounded-xl">
-                <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                <input
-                  type="text"
-                  value={firmSearchQuery}
-                  onChange={(e) => setFirmSearchQuery(e.target.value)}
-                  placeholder="법인명 또는 대표 이름 검색..."
-                  className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
-                />
-              </div>
-
-              {firms.filter(f =>
-                f.name?.toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
-                (f.rep_name || "").toLowerCase().includes(firmSearchQuery.toLowerCase())
-              ).length === 0 ? (
-                <div className="p-10 bg-slate-900 border border-slate-800 rounded-2xl text-center text-slate-400 text-sm">
-                  등록된 법무법인이 없습니다.
+            {/* 서브탭 1: 등록 법인 목록 */}
+            {firmSubTab === "list" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 bg-slate-900 border border-slate-800 rounded-xl">
+                  <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={firmSearchQuery}
+                    onChange={(e) => setFirmSearchQuery(e.target.value)}
+                    placeholder="법인명 또는 대표 이름 검색..."
+                    className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+                  />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {firms
-                    .filter(f =>
-                      f.name?.toLowerCase().includes(firmSearchQuery.toLowerCase()) ||
-                      (f.rep_name || "").toLowerCase().includes(firmSearchQuery.toLowerCase())
-                    )
-                    .map((firm) => {
-                      const isExpanded = expandedAdminFirmId === firm.id;
-                      return (
-                        <div key={firm.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                          {/* 법인 헤더 */}
-                          <div className="p-4 flex flex-wrap items-start gap-3 justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded font-semibold">
-                                  {({ INDIVIDUAL: "개인", FIRM: "법무법인", JOINT: "합동", NOTARY_FIRM: "공증인가법무법인", NOTARY_JOINT: "공증인가합동" } as any)[firm.type] || firm.type}
-                                </span>
-                                {firm.is_notary ? <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded font-semibold">공증인가</span> : null}
-                                <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded font-bold">정상 등록</span>
-                              </div>
-                              <h3 className="text-sm font-bold text-white">{firm.name}</h3>
-                              <p className="text-xs text-slate-400 mt-0.5">대표: {firm.rep_name || "미지정"} · {firm.address || "주소 미기재"}</p>
-                              <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
-                                <span>전체 구성원 {firm.member_count || 0}명</span>
-                                <span>파트너 {firm.partner_count || 0}명</span>
-                                <span className="text-amber-400 font-semibold">🗳️ 의결권 {firm.voting_power || 0}표</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                onClick={() => setExpandedAdminFirmId(isExpanded ? null : firm.id)}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 flex items-center gap-1"
-                              >
-                                {isExpanded ? <><ChevronDown className="w-3 h-3" /> 접기</> : <><ChevronRight className="w-3 h-3" /> 관리</>}
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  const reason = window.prompt(`"${firm.name}" 법인을 해산 처리하시겠습니까?\n\n해산 사유 입력 (선택사항):`);
-                                  if (reason === null) return;
-                                  try {
-                                    const res = await fetch("/api/firms", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({ action: "DISSOLVE_FIRM", firmId: firm.id, reason: reason || undefined }),
-                                    });
-                                    const data = await res.json();
-                                    if (!res.ok) throw new Error(data.error);
-                                    alert(`✅ ${data.message}`);
-                                    setFirms(prev => prev.filter(f => f.id !== firm.id));
-                                  } catch (err: any) {
-                                    alert(`오류: ${err.message}`);
-                                  }
-                                }}
-                                className="px-3 py-1.5 bg-red-900/40 hover:bg-red-800/60 text-red-400 text-xs font-bold rounded-lg border border-red-800/40 flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3 h-3" /> 해산
-                              </button>
-                            </div>
-                          </div>
 
-                          {/* 펼침: 구성원 관리 */}
-                          {isExpanded && (
-                            <div className="border-t border-slate-800 bg-slate-950/60 p-4 space-y-3">
-                              {/* 법인 기본 정보 인라인 수정 */}
-                              {adminEditingFirmId === firm.id ? (
-                                <form
-                                  onSubmit={async (e) => {
-                                    e.preventDefault();
+                {firms.filter(
+                  (f) =>
+                    f.name
+                      ?.toLowerCase()
+                      .includes(firmSearchQuery.toLowerCase()) ||
+                    (f.rep_name || "")
+                      .toLowerCase()
+                      .includes(firmSearchQuery.toLowerCase()),
+                ).length === 0 ? (
+                  <div className="p-10 bg-slate-900 border border-slate-800 rounded-2xl text-center text-slate-400 text-sm">
+                    등록된 법무법인이 없습니다.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {firms
+                      .filter(
+                        (f) =>
+                          f.name
+                            ?.toLowerCase()
+                            .includes(firmSearchQuery.toLowerCase()) ||
+                          (f.rep_name || "")
+                            .toLowerCase()
+                            .includes(firmSearchQuery.toLowerCase()),
+                      )
+                      .map((firm) => {
+                        const isExpanded = expandedAdminFirmId === firm.id;
+                        return (
+                          <div
+                            key={firm.id}
+                            className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden"
+                          >
+                            {/* 법인 헤더 */}
+                            <div className="p-4 flex flex-wrap items-start gap-3 justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded font-semibold">
+                                    {(
+                                      {
+                                        INDIVIDUAL: "개인",
+                                        FIRM: "법무법인",
+                                        JOINT: "합동",
+                                        NOTARY_FIRM: "공증인가법무법인",
+                                        NOTARY_JOINT: "공증인가합동",
+                                      } as any
+                                    )[firm.type] || firm.type}
+                                  </span>
+                                  {firm.is_notary ? (
+                                    <span className="text-[10px] px-2 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded font-semibold">
+                                      공증인가
+                                    </span>
+                                  ) : null}
+                                  <span className="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded font-bold">
+                                    정상 등록
+                                  </span>
+                                </div>
+                                <h3 className="text-sm font-bold text-white">
+                                  {firm.name}
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  대표: {firm.rep_name || "미지정"} ·{" "}
+                                  {firm.address || "주소 미기재"}
+                                </p>
+                                <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
+                                  <span>
+                                    전체 구성원 {firm.member_count || 0}명
+                                  </span>
+                                  <span>
+                                    파트너 {firm.partner_count || 0}명
+                                  </span>
+                                  <span className="text-amber-400 font-semibold">
+                                    🗳️ 의결권 {firm.voting_power || 0}표
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() =>
+                                    setExpandedAdminFirmId(
+                                      isExpanded ? null : firm.id,
+                                    )
+                                  }
+                                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 flex items-center gap-1"
+                                >
+                                  {isExpanded ? (
+                                    <>
+                                      <ChevronDown className="w-3 h-3" /> 접기
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ChevronRight className="w-3 h-3" /> 관리
+                                    </>
+                                  )}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    const reason = window.prompt(
+                                      `"${firm.name}" 법인을 해산 처리하시겠습니까?\n\n해산 사유 입력 (선택사항):`,
+                                    );
+                                    if (reason === null) return;
                                     try {
-                                      const body: any = { action: "UPDATE_FIRM", firmId: firm.id, name: adminEditFirmName, type: adminEditFirmType, address: adminEditFirmAddr, contact: adminEditFirmContact };
-                                      if (adminEditFirmRepId.trim()) body.representativeLoginId = adminEditFirmRepId;
                                       const res = await fetch("/api/firms", {
                                         method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify(body),
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          action: "DISSOLVE_FIRM",
+                                          firmId: firm.id,
+                                          reason: reason || undefined,
+                                        }),
                                       });
                                       const data = await res.json();
                                       if (!res.ok) throw new Error(data.error);
-                                      alert("✅ 법인 정보가 수정되었습니다.");
-                                      setAdminEditingFirmId(null);
-                                      window.location.reload();
+                                      alert(`✅ ${data.message}`);
+                                      setFirms((prev) =>
+                                        prev.filter((f) => f.id !== firm.id),
+                                      );
                                     } catch (err: any) {
                                       alert(`오류: ${err.message}`);
                                     }
                                   }}
-                                  className="p-3 bg-slate-900 border border-amber-500/20 rounded-xl space-y-2 text-xs"
+                                  className="px-3 py-1.5 bg-red-900/40 hover:bg-red-800/60 text-red-400 text-xs font-bold rounded-lg border border-red-800/40 flex items-center gap-1"
                                 >
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <label className="block text-slate-400">법인명<input value={adminEditFirmName} onChange={e => setAdminEditFirmName(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none" /></label>
-                                    <label className="block text-slate-400">종류
-                                      <select value={adminEditFirmType} onChange={e => setAdminEditFirmType(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white">
-                                        {[["INDIVIDUAL","개인"],["FIRM","법무법인"],["JOINT","합동"],["NOTARY_FIRM","공증인가법무법인"],["NOTARY_JOINT","공증인가합동"]].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-                                      </select>
-                                    </label>
-                                    <label className="block text-slate-400">주소<input value={adminEditFirmAddr} onChange={e => setAdminEditFirmAddr(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none" /></label>
-                                    <label className="block text-slate-400">연락처<input value={adminEditFirmContact} onChange={e => setAdminEditFirmContact(e.target.value)} className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none" /></label>
-                                    <label className="block text-slate-400 col-span-2">대표변호사 아이디 <span className="text-slate-600 font-normal">(비워두면 유지)</span><input value={adminEditFirmRepId} onChange={e => setAdminEditFirmRepId(e.target.value)} placeholder="login_id" className="mt-1 w-full bg-slate-950 border border-amber-500/40 rounded px-2 py-1.5 text-white font-mono focus:outline-none" /></label>
-                                  </div>
-                                  <div className="flex justify-end gap-2">
-                                    <button type="button" onClick={() => setAdminEditingFirmId(null)} className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded text-xs">취소</button>
-                                    <button type="submit" className="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold rounded text-xs flex items-center gap-1"><Save className="w-3 h-3" />저장</button>
-                                  </div>
-                                </form>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setAdminEditingFirmId(firm.id);
-                                    setAdminEditFirmName(firm.name || "");
-                                    setAdminEditFirmType(firm.type || "FIRM");
-                                    setAdminEditFirmAddr(firm.address || "");
-                                    setAdminEditFirmContact(firm.contact || "");
-                                    setAdminEditFirmRepId("");
-                                  }}
-                                  className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                                >
-                                  <Edit className="w-3 h-3" /> 법인 정보 수정
+                                  <Trash2 className="w-3 h-3" /> 해산
                                 </button>
-                              )}
-
-                              {/* 구성원 목록 */}
-                              <AdminFirmMembers
-                                firmId={firm.id}
-                                firmRepresentativeId={firm.representative_id as string}
-                              />
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* 서브탭 2: 승인 대기 */}
-          {firmSubTab === "pending" && (
-            <div className="space-y-3">
-              {pendingFirms.length === 0 ? (
-                <div className="p-10 bg-slate-900 border border-slate-800 rounded-2xl text-center text-slate-400 text-sm">
-                  승인 대기 중인 법인 신청이 없습니다.
-                </div>
-              ) : (
-                pendingFirms.map((firm) => (
-                  <div key={firm.id} className="p-5 bg-slate-950 border border-amber-500/20 rounded-2xl">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded font-semibold">
-                            {({ INDIVIDUAL: "개인", FIRM: "법무법인", JOINT: "합동", NOTARY_FIRM: "공증인가법무법인", NOTARY_JOINT: "공증인가합동" } as any)[firm.type] || firm.type}
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded animate-pulse font-bold">승인 대기</span>
+                            {/* 펼침: 구성원 관리 */}
+                            {isExpanded && (
+                              <div className="border-t border-slate-800 bg-slate-950/60 p-4 space-y-3">
+                                {/* 법인 기본 정보 인라인 수정 */}
+                                {adminEditingFirmId === firm.id ? (
+                                  <form
+                                    onSubmit={async (e) => {
+                                      e.preventDefault();
+                                      try {
+                                        const body: any = {
+                                          action: "UPDATE_FIRM",
+                                          firmId: firm.id,
+                                          name: adminEditFirmName,
+                                          type: adminEditFirmType,
+                                          address: adminEditFirmAddr,
+                                          contact: adminEditFirmContact,
+                                        };
+                                        if (adminEditFirmRepId.trim())
+                                          body.representativeLoginId =
+                                            adminEditFirmRepId;
+                                        const res = await fetch("/api/firms", {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                          },
+                                          body: JSON.stringify(body),
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok)
+                                          throw new Error(data.error);
+                                        alert("✅ 법인 정보가 수정되었습니다.");
+                                        setAdminEditingFirmId(null);
+                                        window.location.reload();
+                                      } catch (err: any) {
+                                        alert(`오류: ${err.message}`);
+                                      }
+                                    }}
+                                    className="p-3 bg-slate-900 border border-amber-500/20 rounded-xl space-y-2 text-xs"
+                                  >
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <label className="block text-slate-400">
+                                        법인명
+                                        <input
+                                          value={adminEditFirmName}
+                                          onChange={(e) =>
+                                            setAdminEditFirmName(e.target.value)
+                                          }
+                                          className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none"
+                                        />
+                                      </label>
+                                      <label className="block text-slate-400">
+                                        종류
+                                        <select
+                                          value={adminEditFirmType}
+                                          onChange={(e) =>
+                                            setAdminEditFirmType(e.target.value)
+                                          }
+                                          className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white"
+                                        >
+                                          {[
+                                            ["INDIVIDUAL", "개인"],
+                                            ["FIRM", "법무법인"],
+                                            ["JOINT", "합동"],
+                                            ["NOTARY_FIRM", "공증인가법무법인"],
+                                            ["NOTARY_JOINT", "공증인가합동"],
+                                          ].map(([v, l]) => (
+                                            <option key={v} value={v}>
+                                              {l}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                      <label className="block text-slate-400">
+                                        주소
+                                        <input
+                                          value={adminEditFirmAddr}
+                                          onChange={(e) =>
+                                            setAdminEditFirmAddr(e.target.value)
+                                          }
+                                          className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none"
+                                        />
+                                      </label>
+                                      <label className="block text-slate-400">
+                                        연락처
+                                        <input
+                                          value={adminEditFirmContact}
+                                          onChange={(e) =>
+                                            setAdminEditFirmContact(
+                                              e.target.value,
+                                            )
+                                          }
+                                          className="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-white focus:outline-none"
+                                        />
+                                      </label>
+                                      <label className="block text-slate-400 col-span-2">
+                                        대표변호사 아이디{" "}
+                                        <span className="text-slate-600 font-normal">
+                                          (비워두면 유지)
+                                        </span>
+                                        <input
+                                          value={adminEditFirmRepId}
+                                          onChange={(e) =>
+                                            setAdminEditFirmRepId(
+                                              e.target.value,
+                                            )
+                                          }
+                                          placeholder="login_id"
+                                          className="mt-1 w-full bg-slate-950 border border-amber-500/40 rounded px-2 py-1.5 text-white font-mono focus:outline-none"
+                                        />
+                                      </label>
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setAdminEditingFirmId(null)
+                                        }
+                                        className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded text-xs"
+                                      >
+                                        취소
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        className="px-3 py-1.5 bg-amber-500 text-slate-950 font-bold rounded text-xs flex items-center gap-1"
+                                      >
+                                        <Save className="w-3 h-3" />
+                                        저장
+                                      </button>
+                                    </div>
+                                  </form>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setAdminEditingFirmId(firm.id);
+                                      setAdminEditFirmName(firm.name || "");
+                                      setAdminEditFirmType(firm.type || "FIRM");
+                                      setAdminEditFirmAddr(firm.address || "");
+                                      setAdminEditFirmContact(
+                                        firm.contact || "",
+                                      );
+                                      setAdminEditFirmRepId("");
+                                    }}
+                                    className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                                  >
+                                    <Edit className="w-3 h-3" /> 법인 정보 수정
+                                  </button>
+                                )}
+
+                                {/* 구성원 목록 */}
+                                <AdminFirmMembers
+                                  firmId={firm.id}
+                                  firmRepresentativeId={
+                                    firm.representative_id as string
+                                  }
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 서브탭 2: 승인 대기 */}
+            {firmSubTab === "pending" && (
+              <div className="space-y-3">
+                {pendingFirms.length === 0 ? (
+                  <div className="p-10 bg-slate-900 border border-slate-800 rounded-2xl text-center text-slate-400 text-sm">
+                    승인 대기 중인 법인 신청이 없습니다.
+                  </div>
+                ) : (
+                  pendingFirms.map((firm) => (
+                    <div
+                      key={firm.id}
+                      className="p-5 bg-slate-950 border border-amber-500/20 rounded-2xl"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded font-semibold">
+                              {(
+                                {
+                                  INDIVIDUAL: "개인",
+                                  FIRM: "법무법인",
+                                  JOINT: "합동",
+                                  NOTARY_FIRM: "공증인가법무법인",
+                                  NOTARY_JOINT: "공증인가합동",
+                                } as any
+                              )[firm.type] || firm.type}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded animate-pulse font-bold">
+                              승인 대기
+                            </span>
+                          </div>
+                          <h3 className="text-base font-bold text-white">
+                            {firm.name}
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            신청인: {firm.rep_name || "미지정"} ·{" "}
+                            {firm.address || "주소 미기재"}
+                            {firm.contact ? ` · ${firm.contact}` : ""}
+                          </p>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            공증인가: {firm.is_notary ? "예" : "아니오"}
+                          </p>
                         </div>
-                        <h3 className="text-base font-bold text-white">{firm.name}</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">신청인: {firm.rep_name || "미지정"} · {firm.address || "주소 미기재"}{firm.contact ? ` · ${firm.contact}` : ""}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">공증인가: {firm.is_notary ? "예" : "아니오"}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          disabled={isProcessingFirm}
-                          onClick={() => handleApproveFirm(firm.id)}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" /> 승인
-                        </button>
-                        <button
-                          disabled={isProcessingFirm}
-                          onClick={() => handleRejectFirm(firm.id)}
-                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1.5 disabled:opacity-50"
-                        >
-                          <XCircle className="w-3.5 h-3.5" /> 반려
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            disabled={isProcessingFirm}
+                            onClick={() => handleApproveFirm(firm.id)}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> 승인
+                          </button>
+                          <button
+                            disabled={isProcessingFirm}
+                            onClick={() => handleRejectFirm(firm.id)}
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-red-400 text-xs font-semibold rounded-xl border border-slate-700 flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> 반려
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+                  ))
+                )}
+              </div>
+            )}
 
-          {/* 서브탭 3: 직권 개설 */}
-          {firmSubTab === "create" && (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setIsAdminFirmCreating(true);
-                try {
-                  const res = await fetch("/api/firms", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      action: "ADMIN_CREATE_FIRM",
-                      name: adminNewFirmName,
-                      type: adminNewFirmType,
-                      address: adminNewFirmAddr,
-                      contact: adminNewFirmContact,
-                      isNotary: adminNewFirmIsNotary,
-                      representativeLoginId: adminNewFirmRepId || undefined,
-                    }),
-                  });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error || "개설 실패");
-                  alert(`✅ ${data.message}`);
-                  setAdminNewFirmName(""); setAdminNewFirmType("FIRM"); setAdminNewFirmAddr("");
-                  setAdminNewFirmContact(""); setAdminNewFirmRepId(""); setAdminNewFirmIsNotary(false);
-                  window.location.reload();
-                } catch (err: any) {
-                  alert(`오류: ${err.message}`);
-                } finally {
-                  setIsAdminFirmCreating(false);
-                }
-              }}
-              className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5 max-w-xl"
-            >
-              <div className="border-b border-slate-800 pb-3">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Building className="w-5 h-5 text-indigo-400" />
-                  법무법인 직권 개설 (즉시 승인)
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">관리자가 직접 개설하며 신청 절차 없이 즉시 등록됩니다.</p>
-              </div>
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="block text-slate-300 mb-1 font-semibold">법인 종류 *</label>
-                  <select value={adminNewFirmType} onChange={e => setAdminNewFirmType(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white">
-                    {[["INDIVIDUAL","개인 법률사무소"],["FIRM","법무법인"],["JOINT","합동법률사무소"],["NOTARY_FIRM","공증인가법무법인"],["NOTARY_JOINT","공증인가합동법률사무소"]].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
+            {/* 서브탭 3: 직권 개설 */}
+            {firmSubTab === "create" && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setIsAdminFirmCreating(true);
+                  try {
+                    const res = await fetch("/api/firms", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        action: "ADMIN_CREATE_FIRM",
+                        name: adminNewFirmName,
+                        type: adminNewFirmType,
+                        address: adminNewFirmAddr,
+                        contact: adminNewFirmContact,
+                        isNotary: adminNewFirmIsNotary,
+                        representativeLoginId: adminNewFirmRepId || undefined,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "개설 실패");
+                    alert(`✅ ${data.message}`);
+                    setAdminNewFirmName("");
+                    setAdminNewFirmType("FIRM");
+                    setAdminNewFirmAddr("");
+                    setAdminNewFirmContact("");
+                    setAdminNewFirmRepId("");
+                    setAdminNewFirmIsNotary(false);
+                    window.location.reload();
+                  } catch (err: any) {
+                    alert(`오류: ${err.message}`);
+                  } finally {
+                    setIsAdminFirmCreating(false);
+                  }
+                }}
+                className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5 max-w-xl"
+              >
+                <div className="border-b border-slate-800 pb-3">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Building className="w-5 h-5 text-indigo-400" />
+                    법무법인 직권 개설 (즉시 승인)
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">
+                    관리자가 직접 개설하며 신청 절차 없이 즉시 등록됩니다.
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-slate-300 mb-1 font-semibold">법인명 / 사무소명 *</label>
-                  <input required type="text" value={adminNewFirmName} onChange={e => setAdminNewFirmName(e.target.value)} placeholder="예: 법무법인 도스" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500" />
+                <div className="space-y-4 text-xs">
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">
+                      법인 종류 *
+                    </label>
+                    <select
+                      value={adminNewFirmType}
+                      onChange={(e) => setAdminNewFirmType(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white"
+                    >
+                      {[
+                        ["INDIVIDUAL", "개인 법률사무소"],
+                        ["FIRM", "법무법인"],
+                        ["JOINT", "합동법률사무소"],
+                        ["NOTARY_FIRM", "공증인가법무법인"],
+                        ["NOTARY_JOINT", "공증인가합동법률사무소"],
+                      ].map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">
+                      법인명 / 사무소명 *
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      value={adminNewFirmName}
+                      onChange={(e) => setAdminNewFirmName(e.target.value)}
+                      placeholder="예: 법무법인 도스"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">
+                      주소
+                    </label>
+                    <input
+                      type="text"
+                      value={adminNewFirmAddr}
+                      onChange={(e) => setAdminNewFirmAddr(e.target.value)}
+                      placeholder="도스시 법조로 1"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">
+                      연락처
+                    </label>
+                    <input
+                      type="text"
+                      value={adminNewFirmContact}
+                      onChange={(e) => setAdminNewFirmContact(e.target.value)}
+                      placeholder="02-000-0000"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 mb-1 font-semibold">
+                      대표변호사{" "}
+                      <span className="text-slate-500 font-normal">
+                        (로그인 아이디, 선택)
+                      </span>
+                    </label>
+                    <input
+                      type="text"
+                      value={adminNewFirmRepId}
+                      onChange={(e) => setAdminNewFirmRepId(e.target.value)}
+                      placeholder="대표변호사 로그인 아이디"
+                      className="w-full bg-slate-950 border border-amber-500/40 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-amber-500 placeholder:text-slate-600"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      입력 시 해당 변호사가 구성원(파트너)으로 자동 등록됩니다.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={adminNewFirmIsNotary}
+                      onChange={(e) =>
+                        setAdminNewFirmIsNotary(e.target.checked)
+                      }
+                      className="rounded text-blue-500"
+                    />
+                    <span className="text-slate-300">공증인가 법인</span>
+                  </label>
                 </div>
-                <div>
-                  <label className="block text-slate-300 mb-1 font-semibold">주소</label>
-                  <input type="text" value={adminNewFirmAddr} onChange={e => setAdminNewFirmAddr(e.target.value)} placeholder="도스시 법조로 1" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500" />
+                <div className="flex justify-end pt-2 border-t border-slate-800">
+                  <button
+                    type="submit"
+                    disabled={isAdminFirmCreating}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Building className="w-3.5 h-3.5" />
+                    {isAdminFirmCreating
+                      ? "개설중..."
+                      : "직권 개설 (즉시 등록)"}
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-slate-300 mb-1 font-semibold">연락처</label>
-                  <input type="text" value={adminNewFirmContact} onChange={e => setAdminNewFirmContact(e.target.value)} placeholder="02-000-0000" className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500" />
-                </div>
-                <div>
-                  <label className="block text-slate-300 mb-1 font-semibold">대표변호사 <span className="text-slate-500 font-normal">(로그인 아이디, 선택)</span></label>
-                  <input type="text" value={adminNewFirmRepId} onChange={e => setAdminNewFirmRepId(e.target.value)} placeholder="대표변호사 로그인 아이디" className="w-full bg-slate-950 border border-amber-500/40 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-amber-500 placeholder:text-slate-600" />
-                  <p className="text-[11px] text-slate-500 mt-1">입력 시 해당 변호사가 구성원(파트너)으로 자동 등록됩니다.</p>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={adminNewFirmIsNotary} onChange={e => setAdminNewFirmIsNotary(e.target.checked)} className="rounded text-blue-500" />
-                  <span className="text-slate-300">공증인가 법인</span>
-                </label>
-              </div>
-              <div className="flex justify-end pt-2 border-t border-slate-800">
-                <button type="submit" disabled={isAdminFirmCreating} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 disabled:opacity-50">
-                  <Building className="w-3.5 h-3.5" />
-                  {isAdminFirmCreating ? "개설중..." : "직권 개설 (즉시 등록)"}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
+              </form>
+            )}
+          </div>
+        )}
 
       {/* ========================================================================= */}
       {/* 탭 1: 회원 명부 & 직책/권한 관리 */}
       {/* ========================================================================= */}
       {activeTab === "users" && permissions.canUsers && (
-
         <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6">
           {/* 법학과정 가산점(법학과·로스쿨 이수) 신청 심사 */}
           {(() => {
             const pending = users.filter((u) => Number(u.bonus_eligible) === 2);
-            const approved = users.filter((u) => Number(u.bonus_eligible) === 1);
+            const approved = users.filter(
+              (u) => Number(u.bonus_eligible) === 1,
+            );
             if (pending.length === 0 && approved.length === 0) return null;
             return (
               <div className="p-4 bg-indigo-500/5 border border-indigo-500/30 rounded-xl space-y-3">
@@ -2067,10 +2341,15 @@ export default function AdminClient({
                   </span>
                 </div>
                 {pending.length === 0 && (
-                  <p className="text-xs text-slate-500">심사 대기 중인 신청이 없습니다.</p>
+                  <p className="text-xs text-slate-500">
+                    심사 대기 중인 신청이 없습니다.
+                  </p>
                 )}
                 {pending.map((u) => (
-                  <div key={u.id} className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2">
+                  <div
+                    key={u.id}
+                    className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-2"
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="text-xs text-white font-bold">
                         {u.name}{" "}
@@ -2107,10 +2386,15 @@ export default function AdminClient({
                     </summary>
                     <div className="mt-2 space-y-1.5">
                       {approved.map((u) => (
-                        <div key={u.id} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg">
+                        <div
+                          key={u.id}
+                          className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg"
+                        >
                           <span className="text-slate-300">
                             {u.name}{" "}
-                            <span className="text-slate-500 font-mono">({u.login_id})</span>
+                            <span className="text-slate-500 font-mono">
+                              ({u.login_id})
+                            </span>
                           </span>
                           <button
                             type="button"
@@ -3476,7 +3760,9 @@ export default function AdminClient({
                                 <div className="text-[11px] text-slate-500 mb-0.5">
                                   {s.label}
                                 </div>
-                                <div className={`text-2xl font-extrabold font-mono ${s.cls}`}>
+                                <div
+                                  className={`text-2xl font-extrabold font-mono ${s.cls}`}
+                                >
                                   {s.value}
                                 </div>
                                 <div className="text-[10px] text-slate-600 mt-0.5">
@@ -3510,9 +3796,17 @@ export default function AdminClient({
                                   key={s.label}
                                   className="p-3 bg-slate-950 border border-slate-800 rounded-xl"
                                 >
-                                  <div className="text-[11px] text-slate-500 mb-0.5">{s.label}</div>
-                                  <div className={`text-xl font-extrabold font-mono ${s.cls}`}>{s.value}</div>
-                                  <div className="text-[10px] text-slate-600 mt-0.5">{s.sub}</div>
+                                  <div className="text-[11px] text-slate-500 mb-0.5">
+                                    {s.label}
+                                  </div>
+                                  <div
+                                    className={`text-xl font-extrabold font-mono ${s.cls}`}
+                                  >
+                                    {s.value}
+                                  </div>
+                                  <div className="text-[10px] text-slate-600 mt-0.5">
+                                    {s.sub}
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -3906,7 +4200,8 @@ export default function AdminClient({
                           총회 불출석자 자격 만료
                         </div>
                         <p className="text-[11px] text-slate-400">
-                          총회 당시 등록된 회원 중 승인된 출석·위임 및 처리 대기 신청을 제외한 {absentMemberCount}명
+                          총회 당시 등록된 회원 중 승인된 출석·위임 및 처리 대기
+                          신청을 제외한 {absentMemberCount}명
                         </p>
                       </div>
                       <button
@@ -3951,7 +4246,10 @@ export default function AdminClient({
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="flex-1 min-w-[200px]">
                           <UserSearchCombobox
-                            users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
+                            users={users.filter(
+                              (u) =>
+                                u.role === "LAWYER" && u.status === "ACTIVE",
+                            )}
                             value={offlineAttendeeId}
                             onChange={(id) => setOfflineAttendeeId(id)}
                             placeholder="이름 또는 아이디로 검색..."
@@ -3977,22 +4275,35 @@ export default function AdminClient({
                         관리자 직권 위임 처리
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        의장이 특정 회원의 의결권을 다른 변호사에게 강제 위임합니다. 기존 출석/위임 기록은 자동 무효화됩니다.
+                        의장이 특정 회원의 의결권을 다른 변호사에게 강제
+                        위임합니다. 기존 출석/위임 기록은 자동 무효화됩니다.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[11px] text-slate-400 mb-1 block">위임인 (의결권 보유자)</label>
+                          <label className="text-[11px] text-slate-400 mb-1 block">
+                            위임인 (의결권 보유자)
+                          </label>
                           <UserSearchCombobox
-                            users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
+                            users={users.filter(
+                              (u) =>
+                                u.role === "LAWYER" && u.status === "ACTIVE",
+                            )}
                             value={adminProxyGrantorId}
                             onChange={(id) => setAdminProxyGrantorId(id)}
                             placeholder="위임인 검색..."
                           />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-400 mb-1 block">수임인 (의결권 행사자)</label>
+                          <label className="text-[11px] text-slate-400 mb-1 block">
+                            수임인 (의결권 행사자)
+                          </label>
                           <UserSearchCombobox
-                            users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE" && u.id !== adminProxyGrantorId)}
+                            users={users.filter(
+                              (u) =>
+                                u.role === "LAWYER" &&
+                                u.status === "ACTIVE" &&
+                                u.id !== adminProxyGrantorId,
+                            )}
                             value={adminProxyToId}
                             onChange={(id) => setAdminProxyToId(id)}
                             placeholder="수임인 검색..."
@@ -4001,7 +4312,11 @@ export default function AdminClient({
                       </div>
                       <button
                         onClick={handleAdminSetProxy}
-                        disabled={!adminProxyGrantorId || !adminProxyToId || isSettingAdminProxy}
+                        disabled={
+                          !adminProxyGrantorId ||
+                          !adminProxyToId ||
+                          isSettingAdminProxy
+                        }
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5"
                       >
                         <ArrowUp className="w-3.5 h-3.5" />
@@ -4022,7 +4337,9 @@ export default function AdminClient({
                           <input
                             type="text"
                             value={attendanceSearch}
-                            onChange={(e) => setAttendanceSearch(e.target.value)}
+                            onChange={(e) =>
+                              setAttendanceSearch(e.target.value)
+                            }
                             placeholder="이름 검색..."
                             className="pl-7 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-36"
                           />
@@ -4032,7 +4349,12 @@ export default function AdminClient({
                         </span>
                         <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-[10px] font-bold">
                           승인{" "}
-                          {assAttendances.filter((a) => a.approval_status === "APPROVED").length}건
+                          {
+                            assAttendances.filter(
+                              (a) => a.approval_status === "APPROVED",
+                            ).length
+                          }
+                          건
                         </span>
                       </div>
                     </div>
@@ -4043,157 +4365,184 @@ export default function AdminClient({
                     ) : (
                       <div className="space-y-2">
                         {assAttendances
-                          .filter((item) =>
-                            !attendanceSearch.trim() ||
-                            (item.grantor_name && item.grantor_name.toLowerCase().includes(attendanceSearch.toLowerCase())) ||
-                            (item.proxy_name && item.proxy_name.toLowerCase().includes(attendanceSearch.toLowerCase()))
+                          .filter(
+                            (item) =>
+                              !attendanceSearch.trim() ||
+                              (item.grantor_name &&
+                                item.grantor_name
+                                  .toLowerCase()
+                                  .includes(attendanceSearch.toLowerCase())) ||
+                              (item.proxy_name &&
+                                item.proxy_name
+                                  .toLowerCase()
+                                  .includes(attendanceSearch.toLowerCase())),
                           )
-                          .map((item) => (
-                          (() => {
-                            const member = users.find(
-                              (candidate) => candidate.id === item.user_id,
-                            );
-                            const isReregistration =
-                              Number(item.is_proxy) !== 1 &&
-                              Number(item.attended) !== 1 &&
-                              (((item.approval_status === "PENDING" ||
-                                item.approval_status === "REJECTED") &&
-                                ["EXPIRED", "SUSPENDED"].includes(
-                                  String(member?.status),
-                                )) ||
-                                (item.approval_status === "APPROVED" &&
-                                  member?.status === "ACTIVE"));
-                            return (
-                          <div
-                            key={item.id}
-                            className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs transition-colors ${
-                              item.approval_status === "PENDING"
-                                ? "bg-amber-500/5 border-amber-500/20"
-                                : item.approval_status === "REJECTED"
-                                  ? "bg-red-950/20 border-red-800/30 opacity-60"
-                                  : "bg-slate-900 border-slate-800"
-                            }`}
-                          >
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <strong className="text-white">
-                                  {item.grantor_name || "회원"}
-                                </strong>
-                                {item.is_proxy ? (
-                                  <>
-                                    <span className="text-slate-400">
-                                      → {item.proxy_name || "수임인"}
-                                    </span>
-                                    {item.firm_id ? (
-                                      <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold">
-                                        🏢 법인 ({item.voting_power || 1}표)
-                                      </span>
-                                    ) : (
-                                      <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded text-[10px]">
-                                        개인위임
-                                      </span>
-                                    )}
-                                    {item.evidence_url && (
-                                      <a
-                                        href={item.evidence_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-indigo-400 hover:text-indigo-300 underline text-[11px] flex items-center gap-0.5"
+                          .map((item) =>
+                            (() => {
+                              const member = users.find(
+                                (candidate) => candidate.id === item.user_id,
+                              );
+                              const isReregistration =
+                                Number(item.is_proxy) !== 1 &&
+                                Number(item.attended) !== 1 &&
+                                (((item.approval_status === "PENDING" ||
+                                  item.approval_status === "REJECTED") &&
+                                  ["EXPIRED", "SUSPENDED"].includes(
+                                    String(member?.status),
+                                  )) ||
+                                  (item.approval_status === "APPROVED" &&
+                                    member?.status === "ACTIVE"));
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs transition-colors ${
+                                    item.approval_status === "PENDING"
+                                      ? "bg-amber-500/5 border-amber-500/20"
+                                      : item.approval_status === "REJECTED"
+                                        ? "bg-red-950/20 border-red-800/30 opacity-60"
+                                        : "bg-slate-900 border-slate-800"
+                                  }`}
+                                >
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <strong className="text-white">
+                                        {item.grantor_name || "회원"}
+                                      </strong>
+                                      {item.is_proxy ? (
+                                        <>
+                                          <span className="text-slate-400">
+                                            → {item.proxy_name || "수임인"}
+                                          </span>
+                                          {item.firm_id ? (
+                                            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold">
+                                              🏢 법인 ({item.voting_power || 1}
+                                              표)
+                                            </span>
+                                          ) : (
+                                            <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded text-[10px]">
+                                              개인위임
+                                            </span>
+                                          )}
+                                          {item.evidence_url && (
+                                            <a
+                                              href={item.evidence_url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-indigo-400 hover:text-indigo-300 underline text-[11px] flex items-center gap-0.5"
+                                            >
+                                              <ExternalLink className="w-3 h-3" />{" "}
+                                              증빙
+                                            </a>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="text-slate-400">
+                                          {isReregistration
+                                            ? "재등록 신청"
+                                            : "직접 출석"}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div
+                                      className={`text-[10px] font-bold ${
+                                        item.approval_status === "PENDING"
+                                          ? "text-amber-400"
+                                          : item.approval_status === "APPROVED"
+                                            ? "text-emerald-400"
+                                            : "text-red-400"
+                                      }`}
+                                    >
+                                      {item.approval_status === "PENDING"
+                                        ? "⏳ 승인 대기"
+                                        : item.approval_status === "APPROVED"
+                                          ? isReregistration
+                                            ? "✅ 재등록 수리됨"
+                                            : item.attended
+                                              ? "✅ 출석 확인됨"
+                                              : "✅ 위임 승인됨"
+                                          : "❌ 반려됨"}
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-1.5">
+                                    {item.approval_status !== "APPROVED" &&
+                                      (isReregistration ? (
+                                        <button
+                                          onClick={() =>
+                                            handleApproveReregistration(item)
+                                          }
+                                          disabled={
+                                            approvingReregistrationId ===
+                                            item.id
+                                          }
+                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold"
+                                        >
+                                          {approvingReregistrationId === item.id
+                                            ? "수리 중..."
+                                            : "재등록 신청 수리"}
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={() =>
+                                            handleAttendance(
+                                              item.id,
+                                              "APPROVED",
+                                              true,
+                                            )
+                                          }
+                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
+                                        >
+                                          승인·출석
+                                        </button>
+                                      ))}
+                                    {item.approval_status !== "REJECTED" && (
+                                      <button
+                                        onClick={() =>
+                                          handleAttendance(
+                                            item.id,
+                                            "REJECTED",
+                                            false,
+                                          )
+                                        }
+                                        className="px-3 py-1.5 bg-red-900/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-bold"
                                       >
-                                        <ExternalLink className="w-3 h-3" />{" "}
-                                        증빙
-                                      </a>
+                                        반려
+                                      </button>
                                     )}
-                                  </>
-                                ) : (
-                                  <span className="text-slate-400">
-                                    {isReregistration ? "재등록 신청" : "직접 출석"}
-                                  </span>
-                                )}
-                              </div>
-                              <div
-                                className={`text-[10px] font-bold ${
-                                  item.approval_status === "PENDING"
-                                    ? "text-amber-400"
-                                    : item.approval_status === "APPROVED"
-                                      ? "text-emerald-400"
-                                      : "text-red-400"
-                                }`}
-                              >
-                                {item.approval_status === "PENDING"
-                                  ? "⏳ 승인 대기"
-                                  : item.approval_status === "APPROVED"
-                                    ? isReregistration
-                                      ? "✅ 재등록 수리됨"
-                                      : item.attended
-                                      ? "✅ 출석 확인됨"
-                                      : "✅ 위임 승인됨"
-                                    : "❌ 반려됨"}
-                              </div>
-                            </div>
-                            <div className="flex gap-1.5">
-                              {item.approval_status !== "APPROVED" && (
-                                isReregistration ? (
-                                  <button
-                                    onClick={() => handleApproveReregistration(item)}
-                                    disabled={approvingReregistrationId === item.id}
-                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold"
-                                  >
-                                    {approvingReregistrationId === item.id
-                                      ? "수리 중..."
-                                      : "재등록 신청 수리"}
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() =>
-                                      handleAttendance(item.id, "APPROVED", true)
-                                    }
-                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
-                                  >
-                                    승인·출석
-                                  </button>
-                                )
-                              )}
-                              {item.approval_status !== "REJECTED" && (
-                                <button
-                                  onClick={() =>
-                                    handleAttendance(item.id, "REJECTED", false)
-                                  }
-                                  className="px-3 py-1.5 bg-red-900/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-bold"
-                                >
-                                  반려
-                                </button>
-                              )}
-                              {/* 위임 레코드만 회수 버튼 표시 */}
-                              {item.is_proxy === 1 && item.approval_status !== "REJECTED" && (
-                                <button
-                                  onClick={() => handleRevokeProxy(item.id)}
-                                  disabled={revokingProxyId === item.id}
-                                  className="px-3 py-1.5 bg-orange-900/60 hover:bg-orange-900/80 text-orange-300 rounded-lg text-xs font-bold disabled:opacity-50"
-                                >
-                                  {revokingProxyId === item.id ? "처리중..." : "위임 회수"}
-                                </button>
-                              )}
-                              {item.approval_status === "APPROVED" &&
-                                !item.attended && (
-                                  <button
-                                    onClick={() =>
-                                      handleAttendance(
-                                        item.id,
-                                        "APPROVED",
-                                        true,
-                                      )
-                                    }
-                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold"
-                                  >
-                                    출석 체크
-                                  </button>
-                                )}
-                            </div>
-                          </div>
-                            );
-                          })()
-                        ))}
+                                    {/* 위임 레코드만 회수 버튼 표시 */}
+                                    {item.is_proxy === 1 &&
+                                      item.approval_status !== "REJECTED" && (
+                                        <button
+                                          onClick={() =>
+                                            handleRevokeProxy(item.id)
+                                          }
+                                          disabled={revokingProxyId === item.id}
+                                          className="px-3 py-1.5 bg-orange-900/60 hover:bg-orange-900/80 text-orange-300 rounded-lg text-xs font-bold disabled:opacity-50"
+                                        >
+                                          {revokingProxyId === item.id
+                                            ? "처리중..."
+                                            : "위임 회수"}
+                                        </button>
+                                      )}
+                                    {item.approval_status === "APPROVED" &&
+                                      !item.attended && (
+                                        <button
+                                          onClick={() =>
+                                            handleAttendance(
+                                              item.id,
+                                              "APPROVED",
+                                              true,
+                                            )
+                                          }
+                                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold"
+                                        >
+                                          출석 체크
+                                        </button>
+                                      )}
+                                  </div>
+                                </div>
+                              );
+                            })(),
+                          )}
                       </div>
                     )}
                   </div>
@@ -4221,7 +4570,9 @@ export default function AdminClient({
                         ))}
                       </select>
                       <UserSearchCombobox
-                        users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
+                        users={users.filter(
+                          (u) => u.role === "LAWYER" && u.status === "ACTIVE",
+                        )}
                         value={rightUserId}
                         onChange={(id) => setRightUserId(id)}
                         placeholder="회원 검색..."
@@ -4495,7 +4846,9 @@ export default function AdminClient({
                           대상 회원 <span className="text-rose-400">*</span>
                         </label>
                         <UserSearchCombobox
-                          users={users.filter((u) => u.role === "LAWYER" && u.status === "ACTIVE")}
+                          users={users.filter(
+                            (u) => u.role === "LAWYER" && u.status === "ACTIVE",
+                          )}
                           value={linkTargetUserId}
                           onChange={(id) => setLinkTargetUserId(id)}
                           placeholder="이름 또는 아이디로 검색..."
@@ -4579,7 +4932,8 @@ export default function AdminClient({
                       <p>• 링크 유저는 출석 검증이 면제됩니다 (EXEMPT 처리).</p>
                       <p>
                         • 링크 분실 또는 유출 시 만료 전에도 새 링크를 발급하면
-                        이전 링크는 무효화됩니다.
+                        이전 링크도 만료일까지 계속 유효합니다. 짧은 유효 기간을
+                        선택하고 안전한 경로로 전달해 주세요.
                       </p>
                     </div>
 
@@ -5766,8 +6120,10 @@ function AdminFirmMembers({
 
   useEffect(() => {
     fetch(`/api/firms?firmId=${firmId}&members=1`)
-      .then(r => r.json())
-      .then(d => { if (d.members) setMembers(d.members); })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.members) setMembers(d.members);
+      })
       .finally(() => setLoading(false));
   }, [firmId]);
 
@@ -5779,12 +6135,18 @@ function AdminFirmMembers({
       const res = await fetch("/api/firms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ADD_MEMBER", firmId, lawyerLoginId: addLoginId.trim(), isPartner: addIsPartner }),
+        body: JSON.stringify({
+          action: "ADD_MEMBER",
+          firmId,
+          lawyerLoginId: addLoginId.trim(),
+          isPartner: addIsPartner,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "추가 실패");
       alert(`✅ ${data.message}`);
-      setAddLoginId(""); setAddIsPartner(false);
+      setAddLoginId("");
+      setAddIsPartner(false);
       // 목록 갱신
       const r2 = await fetch(`/api/firms?firmId=${firmId}&members=1`);
       const d2 = await r2.json();
@@ -5806,23 +6168,37 @@ function AdminFirmMembers({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setMembers(prev => prev.filter(m => m.id !== lawyerId));
+      setMembers((prev) => prev.filter((m) => m.id !== lawyerId));
     } catch (err: any) {
       alert(`오류: ${err.message}`);
     }
   };
 
-  const handleTogglePartner = async (lawyerId: string, currentIsPartner: boolean) => {
+  const handleTogglePartner = async (
+    lawyerId: string,
+    currentIsPartner: boolean,
+  ) => {
     setTogglingId(lawyerId);
     try {
       const res = await fetch("/api/firms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "TOGGLE_PARTNER", firmId, lawyerId, isPartner: !currentIsPartner }),
+        body: JSON.stringify({
+          action: "TOGGLE_PARTNER",
+          firmId,
+          lawyerId,
+          isPartner: !currentIsPartner,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setMembers(prev => prev.map(m => m.id === lawyerId ? { ...m, is_partner: !currentIsPartner ? 1 : 0 } : m));
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === lawyerId
+            ? { ...m, is_partner: !currentIsPartner ? 1 : 0 }
+            : m,
+        ),
+      );
     } catch (err: any) {
       alert(`오류: ${err.message}`);
     } finally {
@@ -5830,21 +6206,29 @@ function AdminFirmMembers({
     }
   };
 
-  if (loading) return <p className="text-xs text-slate-500 py-2">불러오는 중...</p>;
+  if (loading)
+    return <p className="text-xs text-slate-500 py-2">불러오는 중...</p>;
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-semibold text-slate-300">구성원 변호사 ({members.length}명)</h4>
+      <h4 className="text-xs font-semibold text-slate-300">
+        구성원 변호사 ({members.length}명)
+      </h4>
       {members.length === 0 ? (
         <p className="text-xs text-slate-500">등록된 구성원이 없습니다.</p>
       ) : (
         <div className="space-y-1.5">
           {members.map((m: any) => (
-            <div key={m.id} className="flex items-center gap-2 p-2 bg-slate-900 border border-slate-800 rounded-lg text-xs">
+            <div
+              key={m.id}
+              className="flex items-center gap-2 p-2 bg-slate-900 border border-slate-800 rounded-lg text-xs"
+            >
               <span className="font-bold text-slate-200">{m.name}</span>
               <span className="text-slate-500 font-mono">({m.login_id})</span>
               {firmRepresentativeId === m.id && (
-                <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded text-[10px] font-bold">대표</span>
+                <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded text-[10px] font-bold">
+                  대표
+                </span>
               )}
               <button
                 onClick={() => handleTogglePartner(m.id, !!m.is_partner)}
@@ -5855,14 +6239,30 @@ function AdminFirmMembers({
                     : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700"
                 }`}
               >
-                {togglingId === m.id ? "..." : m.is_partner ? "구성원 변호사" : "소속 변호사"}
+                {togglingId === m.id
+                  ? "..."
+                  : m.is_partner
+                    ? "구성원 변호사"
+                    : "소속 변호사"}
               </button>
               {firmRepresentativeId !== m.id && (
                 <button
                   onClick={() => handleRemove(m.id, m.name)}
                   className="text-red-400 hover:text-red-300 p-0.5"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-3.5 h-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4h6v2" />
+                  </svg>
                 </button>
               )}
             </div>
@@ -5871,19 +6271,31 @@ function AdminFirmMembers({
       )}
 
       {/* 구성원 추가 */}
-      <form onSubmit={handleAdd} className="flex items-center gap-2 pt-2 border-t border-slate-800">
+      <form
+        onSubmit={handleAdd}
+        className="flex items-center gap-2 pt-2 border-t border-slate-800"
+      >
         <input
           type="text"
           value={addLoginId}
-          onChange={e => setAddLoginId(e.target.value)}
+          onChange={(e) => setAddLoginId(e.target.value)}
           placeholder="추가할 변호사 login_id"
           className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
         />
         <label className="flex items-center gap-1 text-[11px] text-slate-400 whitespace-nowrap cursor-pointer">
-          <input type="checkbox" checked={addIsPartner} onChange={e => setAddIsPartner(e.target.checked)} className="rounded text-amber-500 w-3 h-3" />
+          <input
+            type="checkbox"
+            checked={addIsPartner}
+            onChange={(e) => setAddIsPartner(e.target.checked)}
+            className="rounded text-amber-500 w-3 h-3"
+          />
           파트너
         </label>
-        <button type="submit" disabled={isAdding} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={isAdding}
+          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded disabled:opacity-50"
+        >
           {isAdding ? "..." : "추가"}
         </button>
       </form>

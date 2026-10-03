@@ -201,6 +201,7 @@ async function init() {
       voting_closed_at TEXT DEFAULT '',
       quorum_needed INTEGER DEFAULT 0,
       result_status TEXT DEFAULT 'PENDING', -- PASS, REJECT, PENDING
+      result_method TEXT NOT NULL DEFAULT 'VOTE',
       result_confirmed_at TEXT DEFAULT '',
       result_confirmed_by TEXT DEFAULT '',
       voting_method TEXT NOT NULL DEFAULT 'MAJORITY',

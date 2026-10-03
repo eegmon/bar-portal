@@ -21,6 +21,7 @@ try {
   await addColumn("agendas", "result_confirmed_at TEXT DEFAULT ''");
   await addColumn("agendas", "result_confirmed_by TEXT DEFAULT ''");
   await addColumn("agendas", "voting_method TEXT NOT NULL DEFAULT 'MAJORITY'");
+  await addColumn("agendas", "result_method TEXT NOT NULL DEFAULT 'VOTE'");
   await addColumn(
     "assembly_attendances",
     "approval_status TEXT NOT NULL DEFAULT 'APPROVED'",

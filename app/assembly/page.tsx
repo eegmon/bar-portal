@@ -356,7 +356,11 @@ export default async function AssemblyHubPage({
                                     : "bg-red-500/20 text-red-300 border-red-500/30"
                                 }`}
                               >
-                                {ag.result_status === "PASS" ? "가결" : "부결"}
+                                {ag.result_method === "NO_OBJECTION"
+                                  ? "이의 없음 가결"
+                                  : ag.result_status === "PASS"
+                                    ? "가결"
+                                    : "부결"}
                               </span>
                             )}
                           </div>

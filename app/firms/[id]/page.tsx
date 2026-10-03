@@ -78,7 +78,6 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
       <FirmDetailClient
         firm={firm}
         initialMembers={members}
-        currentUser={user}
         isAdmin={!!isAdmin}
         isRepresentative={!!isRepresentative}
       />
