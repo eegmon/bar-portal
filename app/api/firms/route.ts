@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     // 특정 법인의 구성원 목록만 반환
     if (firmId && membersOnly) {
       const res = await db.execute({
-        sql: `SELECT u.id, u.name, u.login_id, u.is_trainee, fm.is_partner
+        sql: `SELECT u.id, u.name, u.login_id, u.is_trainee, u.status, fm.is_partner
               FROM firm_members fm
               JOIN users u ON u.id = fm.lawyer_id
               WHERE fm.firm_id = ?

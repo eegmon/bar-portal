@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import LawyerAvatar from "@/app/lawyers/LawyerAvatar";
 import {
   Building, Plus, CheckCircle2, XCircle, Users, UserPlus,
   Trash2, Search, Edit, Save, ChevronDown, ChevronUp, Crown, ExternalLink,
@@ -447,8 +448,12 @@ export default function FirmsClient({
                         ) : cachedMembers && cachedMembers.length > 0 ? (
                           cachedMembers.map((m: any) => (
                             <div key={m.id} className="flex items-center gap-2 text-xs">
-                              <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-[10px] shrink-0">
-                                {m.name?.[0]}
+                              <span className="w-6 h-6 rounded-full overflow-hidden shrink-0">
+                                <LawyerAvatar
+                                  name={m.name || "변"}
+                                  isActive={m.status === "ACTIVE"}
+                                  size={24}
+                                />
                               </span>
                               <span className="font-semibold text-slate-200">{m.name}</span>
                               {m.is_partner ? (
