@@ -28,13 +28,27 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
   }
 
   const rawFirm = firmRes.rows[0] as any;
+  const isAdmin =
+    user &&
+    (user.role === "ADMIN" ||
+      (user.positions ?? []).some((p) =>
+        ["PRESIDENT", "SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p),
+      ));
+  const isRepresentative = user && user.id === rawFirm.representative_id;
+  const canViewMemberIdentifiers = Boolean(isAdmin || isRepresentative);
 
   // 구성원 목록 및 파트너 수 집계
   const membersRes = await db.execute({
-    sql: `SELECT u.id, u.name, u.login_id, u.is_trainee, u.status, u.specialties, u.bio, fm.is_partner, fm.joined_at
+    sql: canViewMemberIdentifiers
+      ? `SELECT u.id, u.name, u.login_id, u.is_trainee, u.status, u.specialties, u.bio, fm.is_partner, fm.joined_at
           FROM firm_members fm
           JOIN users u ON u.id = fm.lawyer_id
           WHERE fm.firm_id = ?
+          ORDER BY fm.is_partner DESC, u.name ASC`
+      : `SELECT u.id, u.name, 'ACTIVE' AS status, u.specialties, u.bio, fm.is_partner, fm.joined_at
+          FROM firm_members fm
+          JOIN users u ON u.id = fm.lawyer_id
+          WHERE fm.firm_id = ? AND u.status = 'ACTIVE'
           ORDER BY fm.is_partner DESC, u.name ASC`,
     args: [id],
   });
@@ -43,13 +57,6 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
   const partnerCount = members.filter((m) => m.is_partner === 1).length;
   const votingPower = Math.floor(partnerCount / 2);
 
-  const isAdmin =
-    user &&
-    (user.role === "ADMIN" ||
-      (user.positions ?? []).some((p) =>
-        ["PRESIDENT", "SECRETARY_GENERAL", "SECRETARIAT_STAFF"].includes(p),
-      ));
-  const isRepresentative = user && user.id === rawFirm.representative_id;
   const lawyerCandidates =
     isAdmin || isRepresentative
       ? await db.execute({
@@ -72,6 +79,7 @@ export default async function FirmDetailPage({ params }: FirmDetailPageProps) {
     partner_count: partnerCount,
     voting_power: votingPower,
   };
+  if (!canViewMemberIdentifiers) delete firm.rep_login_id;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-6">

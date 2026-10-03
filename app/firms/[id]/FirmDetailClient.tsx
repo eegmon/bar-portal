@@ -284,9 +284,11 @@ export default function FirmDetailClient({
                         <span className="font-bold text-white text-sm">
                           {m.name}
                         </span>
-                        <span className="text-slate-500 font-mono text-xs ml-1">
-                          ({m.login_id})
-                        </span>
+                        {m.login_id && (
+                          <span className="text-slate-500 font-mono text-xs ml-1">
+                            ({m.login_id})
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5">

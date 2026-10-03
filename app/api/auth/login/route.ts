@@ -1,18 +1,31 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { sessionUserFromDatabaseRow, signToken } from "@/lib/auth";
+import { verifyPassword } from "@/lib/password";
+import { parseUserPositions } from "@/lib/user-positions";
 import {
   createAccountSession,
   createMfaChallenge,
   ensureAccountSecuritySchema,
 } from "@/lib/account-security";
+import { checkRequestRateLimit } from "@/lib/request-rate-limit";
 
 const DISCORD_LOGIN_SYNC_TTL_MS = 5 * 60 * 1000;
 const recentDiscordLoginSync = new Map<string, number>();
 
 export async function POST(req: Request) {
   try {
+    const rateLimit = await checkRequestRateLimit(req, "auth-login", 10, 600);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        },
+      );
+    }
+
     const { loginId, password } = await req.json();
 
     if (!loginId || !password) {
@@ -35,7 +48,7 @@ export async function POST(req: Request) {
     }
 
     const user = res.rows[0];
-    const isMatch = await bcrypt.compare(password, user.password as string);
+    const isMatch = await verifyPassword(password, user.password as string);
 
     if (!isMatch) {
       return NextResponse.json(
@@ -44,12 +57,7 @@ export async function POST(req: Request) {
       );
     }
 
-    let positions: string[] = [];
-    try {
-      positions = JSON.parse((user.positions as string) || "[]");
-    } catch {
-      positions = [];
-    }
+    let positions = parseUserPositions(user.positions);
 
     // 로그인 시 디스코드 역할 최신 동기화 시도 (Discord -> Site)
     const targetDiscord =

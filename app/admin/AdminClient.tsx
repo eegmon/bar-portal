@@ -1,7 +1,11 @@
 "use client";
 
-import { formatDbUtcAsKst } from "@/lib/kst";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import AdminFirmMembers from "@/components/admin/AdminFirmMembers";
+import AdminFirmGovernancePanel from "@/components/admin/AdminFirmGovernancePanel";
+import AssemblyAuditPanel from "@/components/admin/AssemblyAuditPanel";
+import AssemblyAttendancePanel from "@/components/admin/AssemblyAttendancePanel";
+import { useFirmApplicationActions } from "@/hooks/useFirmApplicationActions";
 import {
   ShieldCheck,
   Users,
@@ -15,7 +19,6 @@ import {
   Plus,
   ExternalLink,
   Search,
-  Scale,
   Award,
   AlertTriangle,
   AlertOctagon,
@@ -33,7 +36,6 @@ import {
   RefreshCw,
   Copy,
   Clock,
-  Filter,
   ChevronDown,
   ChevronRight,
   Save,
@@ -159,7 +161,20 @@ export default function AdminClient({
   const [firms, setFirms] = useState<any[]>(initialFirms);
   const [pendingFirms, setPendingFirms] = useState<any[]>(initialPendingFirms);
   const [firmSearchQuery, setFirmSearchQuery] = useState("");
-  const [isProcessingFirm, setIsProcessingFirm] = useState(false);
+  const { isProcessingFirm, handleApproveFirm, handleRejectFirm } =
+    useFirmApplicationActions({
+      pendingFirms,
+      approveMessage: "✅ 법인 등록이 공식 승인되었습니다.",
+      rejectMessage: "법인 등록 신청이 반려되었습니다.",
+      onApproved: (approved) => {
+        setPendingFirms((prev) =>
+          prev.filter((firm) => firm.id !== approved.id),
+        );
+        setFirms((prev) => [{ ...approved, status: "APPROVED" }, ...prev]);
+      },
+      onRejected: (firmId) =>
+        setPendingFirms((prev) => prev.filter((firm) => firm.id !== firmId)),
+    });
 
   // firms 탭 서브탭
   const [firmSubTab, setFirmSubTab] = useState<"list" | "pending" | "create">(
@@ -528,52 +543,6 @@ export default function AdminClient({
       alert(`오류: ${err.message}`);
     } finally {
       setIsCreatingUser(false);
-    }
-  };
-
-  // 법인 등록 신청 승인 처리
-  const handleApproveFirm = async (firmId: string) => {
-    if (!confirm("이 법인 등록 신청을 승인하시겠습니까?")) return;
-    setIsProcessingFirm(true);
-    try {
-      const res = await fetch("/api/firms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "APPROVE_FIRM", firmId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      alert("✅ 법인 등록이 공식 승인되었습니다.");
-      const approved = pendingFirms.find((f) => f.id === firmId);
-      if (approved) {
-        setPendingFirms((prev) => prev.filter((f) => f.id !== firmId));
-        setFirms((prev) => [{ ...approved, status: "APPROVED" }, ...prev]);
-      }
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setIsProcessingFirm(false);
-    }
-  };
-
-  // 법인 등록 신청 반려 처리
-  const handleRejectFirm = async (firmId: string) => {
-    if (!confirm("이 법인 등록 신청을 반려하시겠습니까?")) return;
-    setIsProcessingFirm(true);
-    try {
-      const res = await fetch("/api/firms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "REJECT_FIRM", firmId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      alert("법인 등록 신청이 반려되었습니다.");
-      setPendingFirms((prev) => prev.filter((f) => f.id !== firmId));
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setIsProcessingFirm(false);
     }
   };
 
@@ -3208,299 +3177,15 @@ ${agendaMinutes}
       {/* ========================================================================= */}
       {activeTab === "firms" &&
         (permissions.canFirms || permissions.canUsers) && (
-          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Building className="w-5 h-5 text-amber-400" />
-                  법무법인 및 합동법률사무소 관리 (총회 의결권)
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  등록 신청된 법무법인을 심사·승인하고, 회칙에 의거한{" "}
-                  <strong>구성원 변호사 2명당 1표(1명 0표)</strong> 의결권 산정
-                  현황을 총괄 관리합니다.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/firms"
-                  target="_blank"
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  법인 포털 페이지 바로가기
-                </Link>
-              </div>
-            </div>
-
-            {/* 법인 의결권 통계 요약 카드 3종 */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
-                <div className="text-xs font-semibold text-slate-400">
-                  정상 등록 법인
-                </div>
-                <div className="text-2xl font-extrabold text-white mt-1">
-                  {firms.length}개소
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  관리자 정식 승인 완료
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-950 border border-amber-500/20 rounded-xl">
-                <div className="text-xs font-semibold text-amber-400">
-                  법인회원 총 의결권 산출 합계
-                </div>
-                <div className="text-2xl font-extrabold text-amber-300 mt-1">
-                  {firms.reduce((acc, f) => acc + (f.voting_power || 0), 0)}표
-                </div>
-                <div className="text-[11px] text-amber-400/70 mt-0.5">
-                  구성원 변호사 2인당 1표 기준 (1인 0표)
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl">
-                <div className="text-xs font-semibold text-slate-400">
-                  승인 심사 대기
-                </div>
-                <div className="text-2xl font-extrabold text-rose-400 mt-1">
-                  {pendingFirms.length}건
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  신규 등록 신청 접수분
-                </div>
-              </div>
-            </div>
-
-            {/* 승인 심사 대기 법인 섹션 */}
-            {pendingFirms.length > 0 && (
-              <div className="p-5 bg-amber-500/5 border border-amber-500/30 rounded-2xl space-y-3">
-                <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  신규 법무법인 등록 승인 대기 목록 ({pendingFirms.length}건)
-                </h3>
-                <div className="space-y-3">
-                  {pendingFirms.map((pf) => (
-                    <div
-                      key={pf.id}
-                      className="p-4 bg-slate-950 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-4"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded font-bold">
-                            {pf.type}
-                          </span>
-                          {pf.is_notary ? (
-                            <span className="text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded font-bold">
-                              공증인가
-                            </span>
-                          ) : null}
-                          <span className="text-[10px] text-slate-500">
-                            신청일:{" "}
-                            {pf.created_at
-                              ? formatDbUtcAsKst(pf.created_at).slice(0, 10)
-                              : "-"}
-                          </span>
-                        </div>
-                        <h4 className="text-base font-bold text-white">
-                          {pf.name}
-                        </h4>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          대표:{" "}
-                          <strong className="text-slate-200">
-                            {pf.rep_name || "미지정"}
-                          </strong>{" "}
-                          ({pf.rep_login_id || ""}) · 주소:{" "}
-                          {pf.address || "미기재"} · 연락처:{" "}
-                          {pf.contact || "미기재"}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          disabled={isProcessingFirm}
-                          onClick={() => handleApproveFirm(pf.id)}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          승인
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isProcessingFirm}
-                          onClick={() => handleRejectFirm(pf.id)}
-                          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-rose-400 font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
-                        >
-                          <XCircle className="w-4 h-4" />
-                          반려
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 등록된 법무법인 검색 & 목록 */}
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Building className="w-4 h-4 text-amber-400" />
-                  등록 법무법인 명부 및 의결권 현황
-                </h3>
-
-                <div className="flex items-center gap-2 w-full sm:w-64 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white">
-                  <Search className="w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="법인명 또는 주소 검색..."
-                    value={firmSearchQuery}
-                    onChange={(e) => setFirmSearchQuery(e.target.value)}
-                    className="bg-transparent border-none outline-none w-full text-xs placeholder-slate-500"
-                  />
-                </div>
-              </div>
-
-              {firms.filter(
-                (f) =>
-                  f.name
-                    .toLowerCase()
-                    .includes(firmSearchQuery.toLowerCase()) ||
-                  (f.address || "")
-                    .toLowerCase()
-                    .includes(firmSearchQuery.toLowerCase()) ||
-                  (f.rep_name || "")
-                    .toLowerCase()
-                    .includes(firmSearchQuery.toLowerCase()),
-              ).length === 0 ? (
-                <div className="p-8 bg-slate-950 border border-slate-800 rounded-xl text-center text-slate-400 text-xs">
-                  등록된 법무법인이 없습니다.
-                </div>
-              ) : (
-                <div className="overflow-x-auto border border-slate-800 rounded-xl">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-bold">
-                      <tr>
-                        <th className="p-3">법인명 / 구분</th>
-                        <th className="p-3">대표변호사</th>
-                        <th className="p-3">소재지 / 연락처</th>
-                        <th className="p-3 text-center">총 소속인원</th>
-                        <th className="p-3 text-center">구성원(파트너) 수</th>
-                        <th className="p-3 text-center">총회 의결권</th>
-                        <th className="p-3 text-right">상태</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800 bg-slate-900/50">
-                      {firms
-                        .filter(
-                          (f) =>
-                            f.name
-                              .toLowerCase()
-                              .includes(firmSearchQuery.toLowerCase()) ||
-                            (f.address || "")
-                              .toLowerCase()
-                              .includes(firmSearchQuery.toLowerCase()) ||
-                            (f.rep_name || "")
-                              .toLowerCase()
-                              .includes(firmSearchQuery.toLowerCase()),
-                        )
-                        .map((firm) => (
-                          <tr
-                            key={firm.id}
-                            className="hover:bg-slate-800/40 transition-colors"
-                          >
-                            <td className="p-3">
-                              <div className="font-bold text-white flex items-center gap-1.5">
-                                {firm.name}
-                                {firm.is_notary ? (
-                                  <span className="px-1.5 py-0.2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded text-[10px]">
-                                    공증
-                                  </span>
-                                ) : null}
-                              </div>
-                              <div className="text-[11px] text-slate-500">
-                                {firm.type}
-                              </div>
-                            </td>
-                            <td className="p-3">
-                              <span className="font-semibold text-slate-200">
-                                {firm.rep_name || "미지정"}
-                              </span>
-                              {firm.rep_login_id && (
-                                <span className="text-[10px] text-slate-500 block">
-                                  ({firm.rep_login_id})
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              <div className="text-slate-300 truncate max-w-xs">
-                                {firm.address || "미기재"}
-                              </div>
-                              <div className="text-[10px] text-slate-500">
-                                {firm.contact || "-"}
-                              </div>
-                            </td>
-                            <td className="p-3 text-center font-medium">
-                              {firm.member_count || 0}명
-                            </td>
-                            <td className="p-3 text-center font-bold text-amber-300">
-                              {firm.partner_count || 0}명
-                            </td>
-                            <td className="p-3 text-center">
-                              <span
-                                className={`px-2.5 py-1 rounded-full text-xs font-extrabold border ${
-                                  (firm.voting_power || 0) > 0
-                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                    : "bg-slate-800 text-slate-500 border-slate-700"
-                                }`}
-                              >
-                                {firm.voting_power || 0}표
-                              </span>
-                              {(firm.partner_count || 0) === 1 && (
-                                <span className="block text-[10px] text-slate-500 mt-0.5">
-                                  (1인: 0표)
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3 text-right">
-                              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">
-                                정상 등록
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* 안내 규정 */}
-            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-400">
-              <h4 className="font-bold text-amber-400 flex items-center gap-1.5">
-                <Scale className="w-4 h-4" />
-                회칙 제14조 법인회원 의결권 규정 안내
-              </h4>
-              <p>
-                • <strong>의결권 산정:</strong> 등록된{" "}
-                <strong>구성원 변호사(파트너) 2명당 1표</strong>가 부여됩니다.
-                구성원 변호사가 1명인 법인은 의결권이 0표입니다.
-              </p>
-              <p>
-                • <strong>소속 변호사(Associate):</strong> 고용된 소속 변호사는
-                법인 의결권 모수에 포함되지 않으며, 변호사 개인회원으로서의
-                1표를 별도로 행사합니다.
-              </p>
-              <p>
-                • <strong>의결권 행사:</strong> 법인회원의 의결권은{" "}
-                <strong>구성원 회의(만장일치 결의)</strong>를 거쳐 의장에게 서면
-                통지하거나, 개인회원(대표변호사 본인 또는 수임 변호사)에게
-                위임하여 행사합니다.
-              </p>
-            </div>
-          </div>
+          <AdminFirmGovernancePanel
+            firms={firms}
+            pendingFirms={pendingFirms}
+            firmSearchQuery={firmSearchQuery}
+            onFirmSearchChange={setFirmSearchQuery}
+            isProcessingFirm={isProcessingFirm}
+            onApproveFirm={handleApproveFirm}
+            onRejectFirm={handleRejectFirm}
+          />
         )}
 
       {/* ========================================================================= */}
@@ -3554,16 +3239,6 @@ ${agendaMinutes}
                       Number(attendance.is_proxy) === 1))),
             );
           }).length;
-
-          // 감사 로그 액션 종류 (필터용)
-          const uniqueActions = [
-            ...new Set(auditLogs2.map((l) => String(l.action))),
-          ].sort();
-          const filteredAuditLogs = auditLogs2.filter((l) => {
-            const matchAction =
-              !auditFilterAction || l.action === auditFilterAction;
-            return matchAction;
-          });
 
           return (
             <div className="space-y-5">
@@ -4256,638 +3931,67 @@ ${agendaMinutes}
               {/* 서브탭: 출석 관리                                                  */}
               {/* ═══════════════════════════════════════════════════════════════════ */}
               {assemblySubTab === "attendance" && (
-                <div className="space-y-4">
-                  {selectedAssembly && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-red-950/20 border border-red-800/40 rounded-xl">
-                      <div className="space-y-1">
-                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <AlertTriangle className="w-4 h-4 text-red-400" />
-                          총회 불출석자 자격 만료
-                        </div>
-                        <p className="text-[11px] text-slate-400">
-                          총회 당시 등록된 회원 중 승인된 출석·위임 및 처리 대기
-                          신청을 제외한 {absentMemberCount}명
-                        </p>
-                      </div>
-                      <button
-                        onClick={() =>
-                          handleExpireAbsentMembers(
-                            selectedAssembly,
-                            absentMemberCount,
-                          )
-                        }
-                        disabled={
-                          selectedAssembly.status !== "CLOSED" ||
-                          absentMemberCount === 0 ||
-                          isExpiringAbsentMembers
-                        }
-                        title={
-                          selectedAssembly.status !== "CLOSED"
-                            ? "총회 폐회 후 처리할 수 있습니다."
-                            : undefined
-                        }
-                        className="px-3 py-2 bg-red-700 hover:bg-red-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold rounded-lg transition-colors"
-                      >
-                        {isExpiringAbsentMembers
-                          ? "처리 중..."
-                          : selectedAssembly.status !== "CLOSED"
-                            ? "폐회 후 처리 가능"
-                            : `자격 만료 처리 (${absentMemberCount}명)`}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* 현장 출석 수동 등록 */}
-                  {selectedAssemblyId && (
-                    <div className="p-4 bg-slate-950 border border-emerald-800/40 rounded-xl space-y-2">
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <UserCheck className="w-4 h-4 text-emerald-400" />
-                        현장(오프라인) 참석자 수동 출석 등록
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        온라인 신청을 하지 않았지만 현장에 나온 회원을 의장이
-                        직접 출석 처리합니다.
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex-1 min-w-[200px]">
-                          <UserSearchCombobox
-                            users={users.filter(
-                              (u) =>
-                                u.role === "LAWYER" && u.status === "ACTIVE",
-                            )}
-                            value={offlineAttendeeId}
-                            onChange={(id) => setOfflineAttendeeId(id)}
-                            placeholder="이름 또는 아이디로 검색..."
-                          />
-                        </div>
-                        <button
-                          onClick={handleAddOfflineAttendance}
-                          disabled={!offlineAttendeeId || isAddingAttendance}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          {isAddingAttendance ? "등록 중..." : "현장 출석 등록"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 직권 위임 */}
-                  {selectedAssemblyId && (
-                    <div className="p-4 bg-slate-950 border border-blue-800/40 rounded-xl space-y-2">
-                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <Link2 className="w-4 h-4 text-blue-400" />
-                        관리자 직권 위임 처리
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        의장이 특정 회원의 의결권을 다른 변호사에게 강제
-                        위임합니다. 기존 출석/위임 기록은 자동 무효화됩니다.
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[11px] text-slate-400 mb-1 block">
-                            위임인 (의결권 보유자)
-                          </label>
-                          <UserSearchCombobox
-                            users={users.filter(
-                              (u) =>
-                                u.role === "LAWYER" && u.status === "ACTIVE",
-                            )}
-                            value={adminProxyGrantorId}
-                            onChange={(id) => setAdminProxyGrantorId(id)}
-                            placeholder="위임인 검색..."
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-slate-400 mb-1 block">
-                            수임인 (의결권 행사자)
-                          </label>
-                          <UserSearchCombobox
-                            users={users.filter(
-                              (u) =>
-                                u.role === "LAWYER" &&
-                                u.status === "ACTIVE" &&
-                                u.id !== adminProxyGrantorId,
-                            )}
-                            value={adminProxyToId}
-                            onChange={(id) => setAdminProxyToId(id)}
-                            placeholder="수임인 검색..."
-                          />
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleAdminSetProxy}
-                        disabled={
-                          !adminProxyGrantorId ||
-                          !adminProxyToId ||
-                          isSettingAdminProxy
-                        }
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg shadow flex items-center gap-1.5"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                        {isSettingAdminProxy ? "처리 중..." : "직권 위임 처리"}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* 출석 목록 */}
-                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-300">
-                      <span>
-                        출석·위임 신청 현황 ({assAttendances.length}건)
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <div className="relative">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
-                          <input
-                            type="text"
-                            value={attendanceSearch}
-                            onChange={(e) =>
-                              setAttendanceSearch(e.target.value)
-                            }
-                            placeholder="이름 검색..."
-                            className="pl-7 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-36"
-                          />
-                        </div>
-                        <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold">
-                          대기 {pendingAttendances.length}건
-                        </span>
-                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded text-[10px] font-bold">
-                          승인{" "}
-                          {
-                            assAttendances.filter(
-                              (a) => a.approval_status === "APPROVED",
-                            ).length
-                          }
-                          건
-                        </span>
-                      </div>
-                    </div>
-                    {assAttendances.length === 0 ? (
-                      <p className="text-xs text-slate-500 text-center py-6">
-                        접수된 출석 또는 위임 신청이 없습니다.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {assAttendances
-                          .filter(
-                            (item) =>
-                              !attendanceSearch.trim() ||
-                              (item.grantor_name &&
-                                item.grantor_name
-                                  .toLowerCase()
-                                  .includes(attendanceSearch.toLowerCase())) ||
-                              (item.proxy_name &&
-                                item.proxy_name
-                                  .toLowerCase()
-                                  .includes(attendanceSearch.toLowerCase())),
-                          )
-                          .map((item) =>
-                            (() => {
-                              const member = users.find(
-                                (candidate) => candidate.id === item.user_id,
-                              );
-                              const isReregistration =
-                                Number(item.is_proxy) !== 1 &&
-                                Number(item.attended) !== 1 &&
-                                (((item.approval_status === "PENDING" ||
-                                  item.approval_status === "REJECTED") &&
-                                  ["EXPIRED", "SUSPENDED"].includes(
-                                    String(member?.status),
-                                  )) ||
-                                  (item.approval_status === "APPROVED" &&
-                                    member?.status === "ACTIVE"));
-                              return (
-                                <div
-                                  key={item.id}
-                                  className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs transition-colors ${
-                                    item.approval_status === "PENDING"
-                                      ? "bg-amber-500/5 border-amber-500/20"
-                                      : item.approval_status === "REJECTED"
-                                        ? "bg-red-950/20 border-red-800/30 opacity-60"
-                                        : "bg-slate-900 border-slate-800"
-                                  }`}
-                                >
-                                  <div className="space-y-0.5">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <strong className="text-white">
-                                        {item.grantor_name || "회원"}
-                                      </strong>
-                                      {item.is_proxy ? (
-                                        <>
-                                          <span className="text-slate-400">
-                                            → {item.proxy_name || "수임인"}
-                                          </span>
-                                          {item.firm_id ? (
-                                            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[10px] font-bold">
-                                              🏢 법인 ({item.voting_power || 1}
-                                              표)
-                                            </span>
-                                          ) : (
-                                            <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded text-[10px]">
-                                              개인위임
-                                            </span>
-                                          )}
-                                          {item.evidence_url && (
-                                            <a
-                                              href={item.evidence_url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="text-indigo-400 hover:text-indigo-300 underline text-[11px] flex items-center gap-0.5"
-                                            >
-                                              <ExternalLink className="w-3 h-3" />{" "}
-                                              증빙
-                                            </a>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <span className="text-slate-400">
-                                          {isReregistration
-                                            ? "재등록 신청"
-                                            : "직접 출석"}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div
-                                      className={`text-[10px] font-bold ${
-                                        item.approval_status === "PENDING"
-                                          ? "text-amber-400"
-                                          : item.approval_status === "APPROVED"
-                                            ? "text-emerald-400"
-                                            : "text-red-400"
-                                      }`}
-                                    >
-                                      {item.approval_status === "PENDING"
-                                        ? "⏳ 승인 대기"
-                                        : item.approval_status === "APPROVED"
-                                          ? isReregistration
-                                            ? "✅ 재등록 수리됨"
-                                            : item.attended
-                                              ? "✅ 출석 확인됨"
-                                              : "✅ 위임 승인됨"
-                                          : "❌ 반려됨"}
-                                    </div>
-                                  </div>
-                                  <div className="flex gap-1.5">
-                                    {item.approval_status !== "APPROVED" &&
-                                      (isReregistration ? (
-                                        <button
-                                          onClick={() =>
-                                            handleApproveReregistration(item)
-                                          }
-                                          disabled={
-                                            approvingReregistrationId ===
-                                            item.id
-                                          }
-                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold"
-                                        >
-                                          {approvingReregistrationId === item.id
-                                            ? "수리 중..."
-                                            : "재등록 신청 수리"}
-                                        </button>
-                                      ) : (
-                                        <button
-                                          onClick={() =>
-                                            handleAttendance(
-                                              item.id,
-                                              "APPROVED",
-                                              item.is_proxy !== 1,
-                                            )
-                                          }
-                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
-                                        >
-                                          {item.is_proxy === 1
-                                            ? "위임 승인"
-                                            : "승인·출석"}
-                                        </button>
-                                      ))}
-                                    {item.approval_status !== "REJECTED" && (
-                                      <button
-                                        onClick={() =>
-                                          handleAttendance(
-                                            item.id,
-                                            "REJECTED",
-                                            false,
-                                          )
-                                        }
-                                        className="px-3 py-1.5 bg-red-900/60 hover:bg-red-900/80 text-red-300 rounded-lg text-xs font-bold"
-                                      >
-                                        반려
-                                      </button>
-                                    )}
-                                    {/* 위임 레코드만 회수 버튼 표시 */}
-                                    {item.is_proxy === 1 &&
-                                      item.approval_status !== "REJECTED" && (
-                                        <button
-                                          onClick={() =>
-                                            handleRevokeProxy(item.id)
-                                          }
-                                          disabled={revokingProxyId === item.id}
-                                          className="px-3 py-1.5 bg-orange-900/60 hover:bg-orange-900/80 text-orange-300 rounded-lg text-xs font-bold disabled:opacity-50"
-                                        >
-                                          {revokingProxyId === item.id
-                                            ? "처리중..."
-                                            : "위임 회수"}
-                                        </button>
-                                      )}
-                                    {item.approval_status === "APPROVED" &&
-                                      item.is_proxy !== 1 &&
-                                      !item.attended && (
-                                        <button
-                                          onClick={() =>
-                                            handleAttendance(
-                                              item.id,
-                                              "APPROVED",
-                                              true,
-                                            )
-                                          }
-                                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold"
-                                        >
-                                          출석 체크
-                                        </button>
-                                      )}
-                                  </div>
-                                </div>
-                              );
-                            })(),
-                          )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 의결권 수동 설정 */}
-                  <div className="p-4 bg-slate-950 border border-amber-500/20 rounded-xl space-y-3">
-                    <div className="text-xs font-bold text-white">
-                      총회별 수동 의결권 설정
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      설정하지 않은 회원은 기본 1표입니다. 승인된 위임표는
-                      별도로 추가됩니다.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                      <select
-                        value={rightAssemblyId}
-                        onChange={(e) => setRightAssemblyId(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
-                      >
-                        <option value="">총회 선택</option>
-                        {assemblies.map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.title}
-                          </option>
-                        ))}
-                      </select>
-                      <UserSearchCombobox
-                        users={users.filter(
-                          (u) => u.role === "LAWYER" && u.status === "ACTIVE",
-                        )}
-                        value={rightUserId}
-                        onChange={(id) => setRightUserId(id)}
-                        placeholder="회원 검색..."
-                        className="bg-slate-900"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={rightPower}
-                        onChange={(e) => setRightPower(Number(e.target.value))}
-                        placeholder="의결권 수"
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
-                      />
-                      <input
-                        type="text"
-                        value={rightReason}
-                        onChange={(e) => setRightReason(e.target.value)}
-                        placeholder="설정 사유"
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white"
-                      />
-                    </div>
-                    <button
-                      onClick={handleSetVotingRight}
-                      className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold"
-                    >
-                      의결권 저장
-                    </button>
-                    {votingRights.filter(
-                      (r) =>
-                        !rightAssemblyId || r.assembly_id === rightAssemblyId,
-                    ).length > 0 && (
-                      <div className="space-y-1 border-t border-slate-800 pt-2">
-                        {votingRights
-                          .filter(
-                            (r) =>
-                              !rightAssemblyId ||
-                              r.assembly_id === rightAssemblyId,
-                          )
-                          .map((right) => (
-                            <div
-                              key={`${right.assembly_id}-${right.user_id}`}
-                              className="flex justify-between items-center text-xs text-slate-300 p-2 bg-slate-900 rounded-lg"
-                            >
-                              <span>
-                                <span className="text-slate-500 text-[10px] mr-1">
-                                  {assemblies.find(
-                                    (a) => a.id === right.assembly_id,
-                                  )?.title || right.assembly_id}
-                                </span>
-                                {right.user_name || right.user_id}
-                              </span>
-                              <span className="flex items-center gap-2">
-                                <strong className="text-amber-400 font-mono">
-                                  {right.voting_power}표
-                                </strong>
-                                <span className="text-slate-500 text-[10px]">
-                                  {right.reason}
-                                </span>
-                                <button
-                                  onClick={() =>
-                                    handleRemoveVotingRight(
-                                      right.assembly_id,
-                                      right.user_id,
-                                    )
-                                  }
-                                  className="text-red-400 hover:text-red-300 text-[10px]"
-                                >
-                                  삭제
-                                </button>
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <AssemblyAttendancePanel
+                  selectedAssembly={selectedAssembly}
+                  selectedAssemblyId={selectedAssemblyId}
+                  absentMemberCount={absentMemberCount}
+                  isExpiringAbsentMembers={isExpiringAbsentMembers}
+                  onExpireAbsentMembers={handleExpireAbsentMembers}
+                  users={users}
+                  assemblies={assemblies}
+                  attendances={assAttendances}
+                  attendanceSearch={attendanceSearch}
+                  onAttendanceSearchChange={setAttendanceSearch}
+                  offlineAttendeeId={offlineAttendeeId}
+                  onOfflineAttendeeChange={setOfflineAttendeeId}
+                  isAddingAttendance={isAddingAttendance}
+                  onAddOfflineAttendance={handleAddOfflineAttendance}
+                  adminProxyGrantorId={adminProxyGrantorId}
+                  onAdminProxyGrantorChange={setAdminProxyGrantorId}
+                  adminProxyToId={adminProxyToId}
+                  onAdminProxyToChange={setAdminProxyToId}
+                  isSettingAdminProxy={isSettingAdminProxy}
+                  onSetAdminProxy={handleAdminSetProxy}
+                  approvingReregistrationId={approvingReregistrationId}
+                  onApproveReregistration={handleApproveReregistration}
+                  onAttendanceDecision={handleAttendance}
+                  revokingProxyId={revokingProxyId}
+                  onRevokeProxy={handleRevokeProxy}
+                  rightAssemblyId={rightAssemblyId}
+                  onRightAssemblyChange={setRightAssemblyId}
+                  rightUserId={rightUserId}
+                  onRightUserChange={setRightUserId}
+                  rightPower={rightPower}
+                  onRightPowerChange={setRightPower}
+                  rightReason={rightReason}
+                  onRightReasonChange={setRightReason}
+                  onSaveVotingRight={handleSetVotingRight}
+                  votingRights={votingRights}
+                  onRemoveVotingRight={handleRemoveVotingRight}
+                />
               )}
 
               {/* ═══════════════════════════════════════════════════════════════════ */}
               {/* 서브탭: 감사 로그 대시보드                                          */}
               {/* ═══════════════════════════════════════════════════════════════════ */}
               {assemblySubTab === "audit" && (
-                <div className="space-y-4">
-                  {/* 필터 바 */}
-                  <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                    <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <select
-                      value={auditFilterAssembly}
-                      onChange={(e) => setAuditFilterAssembly(e.target.value)}
-                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white min-w-[160px]"
-                    >
-                      <option value="">전체 총회</option>
-                      {assemblies.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.title}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={auditFilterAction}
-                      onChange={(e) => setAuditFilterAction(e.target.value)}
-                      className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white min-w-[140px]"
-                    >
-                      <option value="">전체 액션</option>
-                      {uniqueActions.map((a) => (
-                        <option key={a} value={a}>
-                          {a}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={loadAuditLogs}
-                      disabled={isLoadingAudit}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg font-bold disabled:opacity-50"
-                    >
-                      <RefreshCw
-                        className={`w-3.5 h-3.5 ${isLoadingAudit ? "animate-spin" : ""}`}
-                      />
-                      {isLoadingAudit ? "로딩 중..." : "새로고침"}
-                    </button>
-                    <a
-                      href={`/api/assembly/audit?format=csv${auditFilterAssembly ? `&assemblyId=${auditFilterAssembly}` : ""}`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg font-bold ml-auto"
-                    >
-                      <FileText className="w-3.5 h-3.5" /> CSV
-                    </a>
-                  </div>
-
-                  {/* 로그 통계 */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      {
-                        label: "전체 로그",
-                        value: filteredAuditLogs.length,
-                        cls: "text-white",
-                      },
-                      {
-                        label: "이번 총회",
-                        value: filteredAuditLogs.filter(
-                          (l) => l.assembly_id === selectedAssemblyId,
-                        ).length,
-                        cls: "text-emerald-400",
-                      },
-                      {
-                        label: "오늘",
-                        value: filteredAuditLogs.filter((l) =>
-                          String(l.created_at).startsWith(
-                            new Date().toISOString().slice(0, 10),
-                          ),
-                        ).length,
-                        cls: "text-blue-400",
-                      },
-                    ].map((s) => (
-                      <div
-                        key={s.label}
-                        className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center"
-                      >
-                        <div className="text-[11px] text-slate-500 mb-0.5">
-                          {s.label}
-                        </div>
-                        <div
-                          className={`text-xl font-extrabold font-mono ${s.cls}`}
-                        >
-                          {s.value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 로그 목록 */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] text-[10px] font-bold text-slate-400 bg-slate-900 px-4 py-2 border-b border-slate-800">
-                      <span className="w-20">시각</span>
-                      <span>총회</span>
-                      <span>안건</span>
-                      <span>액션</span>
-                      <span className="w-24 text-right">처리자</span>
-                    </div>
-                    <div className="divide-y divide-slate-800/50 max-h-[480px] overflow-y-auto">
-                      {filteredAuditLogs.length === 0 ? (
-                        <div className="py-8 text-center text-slate-500 text-xs">
-                          조건에 맞는 로그가 없습니다.
-                        </div>
-                      ) : (
-                        filteredAuditLogs.map((log) => (
-                          <div key={log.id}>
-                            <button
-                              onClick={() =>
-                                setExpandedAuditId(
-                                  expandedAuditId === log.id ? null : log.id,
-                                )
-                              }
-                              className="w-full grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-4 py-2.5 text-xs hover:bg-slate-900/60 transition-colors text-left"
-                            >
-                              <span className="w-20 text-slate-500 font-mono text-[10px] truncate">
-                                {formatDbUtcAsKst(log.created_at)}
-                              </span>
-                              <span className="text-slate-400 truncate">
-                                {String(
-                                  log.assembly_title || log.assembly_id || "-",
-                                )}
-                              </span>
-                              <span className="text-slate-400 truncate">
-                                {String(log.agenda_title || "-")}
-                              </span>
-                              <span
-                                className={`font-bold truncate ${
-                                  String(log.action).includes("START") ||
-                                  String(log.action).includes("OPEN")
-                                    ? "text-emerald-400"
-                                    : String(log.action).includes("CLOSE") ||
-                                        String(log.action).includes("DELETE")
-                                      ? "text-red-400"
-                                      : String(log.action).includes("CONFIRM")
-                                        ? "text-blue-400"
-                                        : "text-amber-300"
-                                }`}
-                              >
-                                {String(log.action)}
-                              </span>
-                              <span className="w-24 text-right text-slate-500 text-[10px] truncate">
-                                {String(log.actor_id || "-")}
-                              </span>
-                            </button>
-                            {expandedAuditId === log.id && log.details && (
-                              <div className="px-4 pb-3 bg-slate-900/40">
-                                <pre className="text-[11px] text-slate-300 font-mono bg-slate-950 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-                                  {(() => {
-                                    try {
-                                      return JSON.stringify(
-                                        JSON.parse(String(log.details)),
-                                        null,
-                                        2,
-                                      );
-                                    } catch {
-                                      return String(log.details);
-                                    }
-                                  })()}
-                                </pre>
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <AssemblyAuditPanel
+                  assemblies={assemblies}
+                  selectedAssemblyId={selectedAssemblyId}
+                  auditLogs={auditLogs2}
+                  isLoading={isLoadingAudit}
+                  loadAuditLogs={loadAuditLogs}
+                  auditFilterAssembly={auditFilterAssembly}
+                  onAuditFilterAssemblyChange={setAuditFilterAssembly}
+                  auditFilterAction={auditFilterAction}
+                  onAuditFilterActionChange={setAuditFilterAction}
+                  expandedAuditId={expandedAuditId}
+                  onToggleExpandedAudit={(logId) =>
+                    setExpandedAuditId((currentId) =>
+                      currentId === logId ? null : logId,
+                    )
+                  }
+                />
               )}
 
               {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -6167,206 +5271,6 @@ ${agendaMinutes}
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── 법인 구성원 관리 서브 컴포넌트 ────────────────────────────────────────────
-function AdminFirmMembers({
-  firmId,
-  firmRepresentativeId,
-}: {
-  firmId: string;
-  firmRepresentativeId: string;
-}) {
-  const [members, setMembers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [addLoginId, setAddLoginId] = useState("");
-  const [addIsPartner, setAddIsPartner] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(`/api/firms?firmId=${firmId}&members=1`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.members) setMembers(d.members);
-      })
-      .finally(() => setLoading(false));
-  }, [firmId]);
-
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addLoginId.trim()) return;
-    setIsAdding(true);
-    try {
-      const res = await fetch("/api/firms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "ADD_MEMBER",
-          firmId,
-          lawyerLoginId: addLoginId.trim(),
-          isPartner: addIsPartner,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "추가 실패");
-      alert(`✅ ${data.message}`);
-      setAddLoginId("");
-      setAddIsPartner(false);
-      // 목록 갱신
-      const r2 = await fetch(`/api/firms?firmId=${firmId}&members=1`);
-      const d2 = await r2.json();
-      if (d2.members) setMembers(d2.members);
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
-  const handleRemove = async (lawyerId: string, name: string) => {
-    if (!confirm(`${name} 변호사를 구성원에서 제거하시겠습니까?`)) return;
-    try {
-      const res = await fetch("/api/firms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "REMOVE_MEMBER", firmId, lawyerId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMembers((prev) => prev.filter((m) => m.id !== lawyerId));
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    }
-  };
-
-  const handleTogglePartner = async (
-    lawyerId: string,
-    currentIsPartner: boolean,
-  ) => {
-    setTogglingId(lawyerId);
-    try {
-      const res = await fetch("/api/firms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "TOGGLE_PARTNER",
-          firmId,
-          lawyerId,
-          isPartner: !currentIsPartner,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.id === lawyerId
-            ? { ...m, is_partner: !currentIsPartner ? 1 : 0 }
-            : m,
-        ),
-      );
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  if (loading)
-    return <p className="text-xs text-slate-500 py-2">불러오는 중...</p>;
-
-  return (
-    <div className="space-y-2">
-      <h4 className="text-xs font-semibold text-slate-300">
-        구성원 변호사 ({members.length}명)
-      </h4>
-      {members.length === 0 ? (
-        <p className="text-xs text-slate-500">등록된 구성원이 없습니다.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {members.map((m: any) => (
-            <div
-              key={m.id}
-              className="flex items-center gap-2 p-2 bg-slate-900 border border-slate-800 rounded-lg text-xs"
-            >
-              <span className="font-bold text-slate-200">{m.name}</span>
-              <span className="text-slate-500 font-mono">({m.login_id})</span>
-              {firmRepresentativeId === m.id && (
-                <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded text-[10px] font-bold">
-                  대표
-                </span>
-              )}
-              <button
-                onClick={() => handleTogglePartner(m.id, !!m.is_partner)}
-                disabled={togglingId === m.id}
-                className={`ml-auto px-2 py-0.5 rounded text-[10px] font-bold border transition-colors disabled:opacity-50 ${
-                  m.is_partner
-                    ? "bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20"
-                    : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700"
-                }`}
-              >
-                {togglingId === m.id
-                  ? "..."
-                  : m.is_partner
-                    ? "구성원 변호사"
-                    : "소속 변호사"}
-              </button>
-              {firmRepresentativeId !== m.id && (
-                <button
-                  onClick={() => handleRemove(m.id, m.name)}
-                  className="text-red-400 hover:text-red-300 p-0.5"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-3.5 h-3.5"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14H6L5 6" />
-                    <path d="M10 11v6M14 11v6" />
-                    <path d="M9 6V4h6v2" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 구성원 추가 */}
-      <form
-        onSubmit={handleAdd}
-        className="flex items-center gap-2 pt-2 border-t border-slate-800"
-      >
-        <input
-          type="text"
-          value={addLoginId}
-          onChange={(e) => setAddLoginId(e.target.value)}
-          placeholder="추가할 변호사 login_id"
-          className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-        />
-        <label className="flex items-center gap-1 text-[11px] text-slate-400 whitespace-nowrap cursor-pointer">
-          <input
-            type="checkbox"
-            checked={addIsPartner}
-            onChange={(e) => setAddIsPartner(e.target.checked)}
-            className="rounded text-amber-500 w-3 h-3"
-          />
-          파트너
-        </label>
-        <button
-          type="submit"
-          disabled={isAdding}
-          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded disabled:opacity-50"
-        >
-          {isAdding ? "..." : "추가"}
-        </button>
-      </form>
     </div>
   );
 }

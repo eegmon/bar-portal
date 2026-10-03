@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { signToken, SessionUser } from "@/lib/auth";
 import { createAccountSession } from "@/lib/account-security";
 import { sendDiscordWebhook, syncUserDiscordRoles } from "@/lib/discord";
+import { hashPassword } from "@/lib/password";
 
 export async function POST(req: Request) {
   try {
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password);
     const userId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const role = isLawyerApplicant ? "LAWYER" : "CITIZEN";
     const status = isLawyerApplicant ? "PENDING" : "ACTIVE"; // 변호사 신청 시 관리자 승인 대기

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSessionUser, canManageAssembly } from "@/lib/auth";
 import { sendDiscordWebhook, syncUserDiscordRoles } from "@/lib/discord";
+import { parseUserPositions } from "@/lib/user-positions";
 import {
   countRankedVotes,
   parseRankedBallots,
@@ -646,12 +647,7 @@ export async function POST(req: Request) {
           sql: "UPDATE users SET status = 'EXPIRED' WHERE id = ? AND status = 'ACTIVE'",
           args: [member.id],
         });
-        let positions: string[] = [];
-        try {
-          positions = JSON.parse(String(member.positions || "[]"));
-        } catch {
-          positions = [];
-        }
+        const positions = parseUserPositions(member.positions);
         await syncUserDiscordRoles({
           discordUserId: String(member.discord_id || ""),
           role: "LAWYER",
@@ -715,12 +711,7 @@ export async function POST(req: Request) {
         sql: "UPDATE users SET status = 'ACTIVE', last_renewed_at = datetime('now') WHERE id = ? AND role = 'LAWYER'",
         args: [application.user_id],
       });
-      let positions: string[] = [];
-      try {
-        positions = JSON.parse(String(application.positions || "[]"));
-      } catch {
-        positions = [];
-      }
+      const positions = parseUserPositions(application.positions);
       await syncUserDiscordRoles({
         discordUserId: String(application.discord_id || ""),
         role: "LAWYER",

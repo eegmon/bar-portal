@@ -1,15 +1,14 @@
 import jwt from "jsonwebtoken";
 import db from "./db";
+import { getSecuritySecret } from "./security-secret";
 import { SessionUser } from "./types";
 
-const JWT_SECRET =
-  process.env.JWT_SECRET || "dos-bar-association-super-secret-key-2026";
 const VOTE_ACCESS_PURPOSE = "ASSEMBLY_VOTE_ACCESS";
 
 interface VoteAccessTokenPayload extends jwt.JwtPayload {
   purpose: typeof VOTE_ACCESS_PURPOSE;
   userId: string;
-  assemblyId?: string;
+  assemblyId: string;
   agendaId?: string;
 }
 
@@ -27,7 +26,7 @@ function parsePositions(raw: unknown): string[] {
 
 export function signVoteAccessToken(input: {
   userId: string;
-  assemblyId?: string;
+  assemblyId: string;
   agendaId?: string;
   expiresIn?: string;
 }): string {
@@ -38,7 +37,7 @@ export function signVoteAccessToken(input: {
       assemblyId: input.assemblyId,
       agendaId: input.agendaId,
     },
-    JWT_SECRET,
+    getSecuritySecret(),
     { expiresIn: (input.expiresIn ?? "30d") as jwt.SignOptions["expiresIn"] },
   );
 }
@@ -47,8 +46,16 @@ export function verifyVoteAccessToken(
   token: string,
 ): VoteAccessTokenPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as VoteAccessTokenPayload;
-    if (decoded.purpose !== VOTE_ACCESS_PURPOSE || !decoded.userId) return null;
+    const decoded = jwt.verify(
+      token,
+      getSecuritySecret(),
+    ) as VoteAccessTokenPayload;
+    if (
+      decoded.purpose !== VOTE_ACCESS_PURPOSE ||
+      !decoded.userId ||
+      !decoded.assemblyId
+    )
+      return null;
     return decoded;
   } catch {
     return null;
@@ -63,31 +70,31 @@ export async function getVoteAccessUser(
   const payload = verifyVoteAccessToken(token);
   if (!payload) return null;
 
-  if (
-    payload.assemblyId &&
-    constraints?.assemblyId &&
-    payload.assemblyId !== constraints.assemblyId
-  ) return null;
+  if (!constraints?.assemblyId || payload.assemblyId !== constraints.assemblyId)
+    return null;
 
-  if (
-    payload.agendaId &&
-    constraints?.agendaId &&
-    payload.agendaId !== constraints.agendaId
-  ) return null;
+  if (payload.agendaId && payload.agendaId !== constraints.agendaId)
+    return null;
 
   const userRes = await db.execute({
     sql: "SELECT id, login_id, name, role, status, is_trainee, positions FROM users WHERE id = ? LIMIT 1",
     args: [payload.userId],
   });
   if (userRes.rows.length === 0) return null;
-  const u = userRes.rows[0];
+  const user = userRes.rows[0];
+  if (
+    user.status !== "ACTIVE" ||
+    (user.role !== "LAWYER" && user.role !== "ADMIN")
+  )
+    return null;
+
   return {
-    id:        String(u.id),
-    loginId:   String(u.login_id || ""),
-    name:      String(u.name || ""),
-    role:      u.role as SessionUser["role"],
-    status:    u.status as SessionUser["status"],
-    isTrainee: Number(u.is_trainee || 0),
-    positions: parsePositions(u.positions),
+    id: String(user.id),
+    loginId: String(user.login_id || ""),
+    name: String(user.name || ""),
+    role: user.role as SessionUser["role"],
+    status: user.status as SessionUser["status"],
+    isTrainee: Number(user.is_trainee || 0),
+    positions: parsePositions(user.positions),
   };
 }

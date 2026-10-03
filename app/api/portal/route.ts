@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSessionContext } from "@/lib/auth";
 import { ensureAccountSecuritySchema } from "@/lib/account-security";
-import bcrypt from "bcryptjs";
+import { hashPassword, verifyPassword } from "@/lib/password";
 
 export async function POST(req: Request) {
   try {
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
           { status: 404 },
         );
 
-      const isMatch = await bcrypt.compare(
+      const isMatch = await verifyPassword(
         currentPassword,
         res.rows[0].password as string,
       );
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
           { status: 400 },
         );
 
-      const hashed = await bcrypt.hash(newPassword, 10);
+      const hashed = await hashPassword(newPassword);
       await db.execute({
         sql: "UPDATE users SET password = ? WHERE id = ?",
         args: [hashed, user.id],

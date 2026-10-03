@@ -67,11 +67,21 @@ export async function getSessionContext(): Promise<AuthContext | null> {
 
   await ensureAccountSecuritySchema();
   const session = await db.execute({
-    sql: `SELECT id FROM account_sessions
-          WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?`,
+    sql: `SELECT s.id AS session_id, u.id, u.login_id, u.name, u.role,
+                 u.status, u.is_trainee, u.positions
+          FROM account_sessions s
+          JOIN users u ON u.id = s.user_id
+          WHERE s.id = ? AND s.user_id = ?
+            AND s.revoked_at IS NULL AND s.expires_at > ?`,
     args: [context.sessionId, context.user.id, Math.floor(Date.now() / 1000)],
   });
-  return session.rows.length ? context : null;
+  const row = session.rows[0];
+  if (!row) return null;
+
+  return {
+    user: sessionUserFromDatabaseRow(row),
+    sessionId: String(row.session_id),
+  };
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {

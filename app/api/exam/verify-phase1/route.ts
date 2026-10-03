@@ -2,9 +2,26 @@ import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { ensurePublishColumns, isPhase1Published } from "@/lib/exam-publish";
 import { isExamPhaseOpen } from "@/lib/exam-timing";
+import { checkRequestRateLimit } from "@/lib/request-rate-limit";
 
 export async function POST(req: Request) {
   try {
+    const rateLimit = await checkRequestRateLimit(
+      req,
+      "exam-phase2-verify",
+      10,
+      60,
+    );
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "조회 요청이 많습니다. 잠시 후 다시 시도해 주세요." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+        },
+      );
+    }
+
     const { securityCode } = await req.json();
 
     if (!securityCode) {
@@ -14,7 +31,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const code = securityCode.trim().toUpperCase();
+    const code = String(securityCode).trim().toUpperCase();
 
     // 1차 시험 응시 및 합격 여부 조회
     const res = await db.execute({
@@ -45,7 +62,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           eligible: false,
-          error: "1차 성적 발표 전입니다. 발표 후 2차 시험에 응시할 수 있습니다.",
+          error:
+            "1차 성적 발표 전입니다. 발표 후 2차 시험에 응시할 수 있습니다.",
         },
         { status: 403 },
       );

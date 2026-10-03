@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import db from "@/lib/db";
 import { getSessionContext } from "@/lib/auth";
 import { ensureAccountSecuritySchema } from "@/lib/account-security";
+import { verifyPassword } from "@/lib/password";
 import {
   consumeRecoveryCode,
   createRecoveryCodes,
@@ -21,7 +21,7 @@ async function verifyCurrentPassword(userId: string, password: string) {
   });
   return (
     result.rows.length > 0 &&
-    bcrypt.compare(password, String(result.rows[0].password))
+    verifyPassword(password, String(result.rows[0].password))
   );
 }
 

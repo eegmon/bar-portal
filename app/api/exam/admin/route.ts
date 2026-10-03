@@ -15,7 +15,10 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const examId = searchParams.get("examId");
     if (!examId) {
-      return NextResponse.json({ error: "examId가 필요합니다." }, { status: 400 });
+      return NextResponse.json(
+        { error: "examId가 필요합니다." },
+        { status: 400 },
+      );
     }
 
     // auto-migrate
@@ -24,7 +27,11 @@ export async function GET(req: Request) {
       "ALTER TABLE exam_submissions ADD COLUMN claimed_user_id TEXT DEFAULT NULL",
       "ALTER TABLE exams ADD COLUMN bonus_multiplier REAL DEFAULT 0.1",
     ]) {
-      try { await db.execute(sql); } catch { /* 이미 존재 */ }
+      try {
+        await db.execute(sql);
+      } catch {
+        /* 이미 존재 */
+      }
     }
 
     const res = await db.execute({
@@ -45,9 +52,16 @@ export async function GET(req: Request) {
     });
     const bonusMultiplier = Number(examRes.rows[0]?.bonus_multiplier ?? 0.1);
 
-    return NextResponse.json({ success: true, submissions: res.rows, bonusMultiplier });
+    return NextResponse.json({
+      success: true,
+      submissions: res.rows,
+      bonusMultiplier,
+    });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "서버 오류" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "서버 오류" },
+      { status: 500 },
+    );
   }
 }
 
@@ -72,7 +86,34 @@ export async function POST(req: Request) {
       "ALTER TABLE exam_submissions ADD COLUMN bonus_approved INTEGER DEFAULT 0",
       "ALTER TABLE exam_submissions ADD COLUMN claimed_user_id TEXT DEFAULT NULL",
     ]) {
-      try { await db.execute(sql); } catch { /* 이미 존재 */ }
+      try {
+        await db.execute(sql);
+      } catch {
+        /* 이미 존재 */
+      }
+    }
+
+    if (action === "UPDATE_EXAM_BONUS_MULTIPLIER") {
+      const { examId, bonusMultiplier } = body;
+      const multiplier = Number(bonusMultiplier);
+      if (!examId) {
+        return NextResponse.json(
+          { error: "examId가 필요합니다." },
+          { status: 400 },
+        );
+      }
+      if (!Number.isFinite(multiplier) || multiplier < 0 || multiplier > 1) {
+        return NextResponse.json(
+          { error: "가산점 배율은 0~1 사이여야 합니다." },
+          { status: 400 },
+        );
+      }
+
+      await db.execute({
+        sql: "UPDATE exams SET bonus_multiplier = ? WHERE id = ?",
+        args: [multiplier, examId],
+      });
+      return NextResponse.json({ success: true, bonusMultiplier: multiplier });
     }
 
     // [신규] 0-1. 신규 변호사시험 회차 개설
@@ -317,14 +358,22 @@ export async function POST(req: Request) {
           phase2Doc1PdfUrl !== undefined ? phase2Doc1PdfUrl : null,
           phase2Doc2PdfUrl !== undefined ? phase2Doc2PdfUrl : null,
           phase1MaxScore !== undefined ? Number(phase1MaxScore) : null,
-          phase2Question1MaxScore !== undefined ? Number(phase2Question1MaxScore) : null,
-          phase2Question2MaxScore !== undefined ? Number(phase2Question2MaxScore) : null,
+          phase2Question1MaxScore !== undefined
+            ? Number(phase2Question1MaxScore)
+            : null,
+          phase2Question2MaxScore !== undefined
+            ? Number(phase2Question2MaxScore)
+            : null,
           finalPassingScore !== undefined ? Number(finalPassingScore) : null,
-          phase1PassScore !== undefined && phase1PassScore !== "" ? Number(phase1PassScore) : null,
+          phase1PassScore !== undefined && phase1PassScore !== ""
+            ? Number(phase1PassScore)
+            : null,
           phase1Rules !== undefined ? String(phase1Rules) : null,
           phase1OperationMode !== undefined ? phase1OperationMode : null,
           phase2OperationMode !== undefined ? phase2OperationMode : null,
-          bonusMultiplier !== undefined && bonusMultiplier !== "" ? Number(bonusMultiplier) : null,
+          bonusMultiplier !== undefined && bonusMultiplier !== ""
+            ? Number(bonusMultiplier)
+            : null,
           examId,
         ],
       });
@@ -370,7 +419,7 @@ export async function POST(req: Request) {
 
       const issuedCodes: string[] = [];
       for (let index = 0; index < issueCount; index += 1) {
-        const code = `DOS-${randomBytes(5).toString("hex").toUpperCase()}`;
+        const code = `DOS-${randomBytes(16).toString("hex").toUpperCase()}`;
         const submissionId = `sub-${Date.now()}-${index}-${randomBytes(3).toString("hex")}`;
         await db.execute({
           sql: `INSERT INTO exam_submissions
@@ -578,7 +627,9 @@ export async function POST(req: Request) {
           sql: "SELECT bonus_multiplier FROM exams WHERE id = ?",
           args: [sub.exam_id],
         });
-        const multiplier = Number(examBonusRes.rows[0]?.bonus_multiplier ?? 0.1);
+        const multiplier = Number(
+          examBonusRes.rows[0]?.bonus_multiplier ?? 0.1,
+        );
         const userRes = await db.execute({
           sql: "SELECT bonus_eligible FROM users WHERE id = ?",
           args: [sub.claimed_user_id],
@@ -607,14 +658,22 @@ export async function POST(req: Request) {
         ],
       });
 
-      return NextResponse.json({ success: true, totalScore, bonusScore, passed: false });
+      return NextResponse.json({
+        success: true,
+        totalScore,
+        bonusScore,
+        passed: false,
+      });
     }
 
     // 3-1. 수험번호별 가산점 승인/취소
     if (action === "SET_BONUS_APPROVAL") {
       const { submissionId, approved } = body;
       if (!submissionId) {
-        return NextResponse.json({ error: "submissionId가 필요합니다." }, { status: 400 });
+        return NextResponse.json(
+          { error: "submissionId가 필요합니다." },
+          { status: 400 },
+        );
       }
 
       const subRes = await db.execute({
@@ -625,15 +684,24 @@ export async function POST(req: Request) {
         args: [submissionId],
       });
       if (subRes.rows.length === 0) {
-        return NextResponse.json({ error: "수험 기록을 찾을 수 없습니다." }, { status: 404 });
+        return NextResponse.json(
+          { error: "수험 기록을 찾을 수 없습니다." },
+          { status: 404 },
+        );
       }
       const sub = subRes.rows[0];
 
       if (!sub.claimed_user_id) {
-        return NextResponse.json({ error: "클레임된 수험번호가 아닙니다." }, { status: 400 });
+        return NextResponse.json(
+          { error: "클레임된 수험번호가 아닙니다." },
+          { status: 400 },
+        );
       }
       if (Number(sub.bonus_eligible) !== 1) {
-        return NextResponse.json({ error: "해당 응시자는 가산점 자격이 없습니다." }, { status: 400 });
+        return NextResponse.json(
+          { error: "해당 응시자는 가산점 자격이 없습니다." },
+          { status: 400 },
+        );
       }
 
       await db.execute({

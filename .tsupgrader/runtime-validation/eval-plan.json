@@ -1,0 +1,35 @@
+{
+  "projectType": "webapp",
+  "assertions": [
+    {
+      "name": "tsc-no-emit",
+      "kind": "process",
+      "command": "npx",
+      "args": ["tsc", "--noEmit"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 180
+    },
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": ["test"],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "local-login-route-responds",
+      "kind": "process",
+      "command": "node",
+      "args": [
+        "-e",
+        "fetch('http://localhost:3000/login').then((response) => process.exit(response.status === 200 ? 0 : 1)).catch(() => process.exit(1))"
+      ],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 30
+    }
+  ]
+}

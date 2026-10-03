@@ -1,0 +1,97 @@
+{
+  "planHash": "087abeb61334c8e852db2e6faeae22004f1007d504036523a2fc99ddac2d041a",
+  "phase": "baseline",
+  "recordedAtUtc": "2026-10-03T16:35:46.5316967Z",
+  "retryCount": 0,
+  "resetBaseline": true,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 0,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "tsc-no-emit",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "",
+        "durationMs": 3683
+      },
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\r\n\u003E bar-portal@0.1.0 test\r\n\u003E vitest run\r\n\r\n\r\n\u001B[1m\u001B[30m\u001B[46m RUN \u001B[49m\u001B[39m\u001B[22m \u001B[36mv4.1.11 \u001B[39m\u001B[90mC:/Users/eegmon/Documents/antigravity/bar-portal\u001B[39m\r\n\r\n \u001B[32m\u2713\u001B[39m lib/user-positions.test.ts \u001B[2m(\u001B[22m\u001B[2m2 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 5\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m lib/ranked-vote.test.ts \u001B[2m(\u001B[22m\u001B[2m3 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 7\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m lib/firm-applications.test.ts \u001B[2m(\u001B[22m\u001B[2m2 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 8\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m lib/totp.test.ts \u001B[2m(\u001B[22m\u001B[2m3 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 8\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m lib/password.test.ts \u001B[2m(\u001B[22m\u001B[2m1 test\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 184\u001B[2mms\u001B[22m\u001B[39m\r\n \u001B[32m\u2713\u001B[39m lib/vote-access.test.ts \u001B[2m(\u001B[22m\u001B[2m2 tests\u001B[22m\u001B[2m)\u001B[22m\u001B[32m 9\u001B[2mms\u001B[22m\u001B[39m\r\n\r\n\u001B[2m Test Files \u001B[22m \u001B[1m\u001B[32m6 passed\u001B[39m\u001B[22m\u001B[90m (6)\u001B[39m\r\n\u001B[2m      Tests \u001B[22m \u001B[1m\u001B[32m13 passed\u001B[39m\u001B[22m\u001B[90m (13)\u001B[39m\r\n\u001B[2m   Start at \u001B[22m 01:35:40\r\n\u001B[2m   Duration \u001B[22m 3.09s\u001B[2m (transform 1.02s, setup 0ms, import 2.61s, tests 220ms, environment 1ms)\u001B[22m\r\n\r\n",
+        "durationMs": 4428,
+        "testResults": {
+          "testFramework": "vitest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 13,
+          "testsPassed": 13,
+          "testsFailed": 0,
+          "testsSkipped": 0,
+          "parseFailed": false
+        }
+      },
+      {
+        "name": "local-login-route-responds",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "",
+        "durationMs": 2574
+      }
+    ],
+    "executions": [
+      {
+        "source": "tsc-no-emit",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npx.CMD",
+        "args": [
+          "tsc",
+          "--noEmit"
+        ],
+        "cwd": "C:\\Users\\eegmon\\Documents\\antigravity\\bar-portal",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "args": [
+          "test"
+        ],
+        "cwd": "C:\\Users\\eegmon\\Documents\\antigravity\\bar-portal",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      },
+      {
+        "source": "local-login-route-responds",
+        "resolvedExecutable": "C:\\Program Files\\nodejs\\node.EXE",
+        "args": [
+          "-e",
+          "fetch(\u0027http://localhost:3000/login\u0027).then((response) =\u003E process.exit(response.status === 200 ? 0 : 1)).catch(() =\u003E process.exit(1))"
+        ],
+        "cwd": "C:\\Users\\eegmon\\Documents\\antigravity\\bar-portal",
+        "env": {},
+        "prependPath": [],
+        "platform": "win32"
+      }
+    ]
+  }
+}

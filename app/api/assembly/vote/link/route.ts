@@ -19,6 +19,13 @@ export async function GET(req: Request) {
     const agendaId = url.searchParams.get("agendaId") || undefined;
     const expiresInDays = Number(url.searchParams.get("expiresInDays") || 30);
 
+    if (!assemblyId) {
+      return NextResponse.json(
+        { error: "투표 링크에 총회 ID가 필요합니다." },
+        { status: 400 },
+      );
+    }
+
     if (targetUserId !== user.id && !canManageAssembly(user)) {
       return NextResponse.json(
         { error: "다른 회원의 투표 링크는 총회 관리자만 발급할 수 있습니다." },
@@ -29,10 +36,10 @@ export async function GET(req: Request) {
     if (
       !Number.isInteger(expiresInDays) ||
       expiresInDays < 1 ||
-      expiresInDays > 365
+      expiresInDays > 30
     ) {
       return NextResponse.json(
-        { error: "링크 만료일은 1~365일 범위에서 지정해 주세요." },
+        { error: "링크 만료일은 1~30일 범위에서 지정해 주세요." },
         { status: 400 },
       );
     }

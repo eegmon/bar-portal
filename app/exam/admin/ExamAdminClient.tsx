@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ExamBonusPanel from "./ExamBonusPanel";
 import {
   AlertTriangle,
   Send,
@@ -21,7 +22,6 @@ import {
   XCircle,
   ChevronRight,
   Loader2,
-  RefreshCw,
 } from "lucide-react";
 
 interface QuestionData {
@@ -76,15 +76,31 @@ function KstDateTimeInput({
         onChange={(e) => update(e.target.value, hh, mm)}
         className={`${cls} flex-1 min-w-0`}
       />
-      <select value={hh || "00"} onChange={(e) => update(date, e.target.value, mm)} className={cls}>
-        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
-          <option key={h} value={h}>{h}시</option>
-        ))}
+      <select
+        value={hh || "00"}
+        onChange={(e) => update(date, e.target.value, mm)}
+        className={cls}
+      >
+        {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map(
+          (h) => (
+            <option key={h} value={h}>
+              {h}시
+            </option>
+          ),
+        )}
       </select>
-      <select value={mm || "00"} onChange={(e) => update(date, hh, e.target.value)} className={cls}>
-        {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((m) => (
-          <option key={m} value={m}>{m}분</option>
-        ))}
+      <select
+        value={mm || "00"}
+        onChange={(e) => update(date, hh, e.target.value)}
+        className={cls}
+      >
+        {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map(
+          (m) => (
+            <option key={m} value={m}>
+              {m}분
+            </option>
+          ),
+        )}
       </select>
       <span className="text-[10px] text-slate-500 shrink-0">KST</span>
     </div>
@@ -113,7 +129,10 @@ function PdfUrlField({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/exam/admin-upload", { method: "POST", body: fd });
+      const res = await fetch("/api/exam/admin-upload", {
+        method: "POST",
+        body: fd,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "업로드 실패");
       onChange(data.fileUrl);
@@ -159,7 +178,6 @@ function PdfUrlField({
     </div>
   );
 }
-
 
 export default function ExamAdminClient({
   allExams = [],
@@ -307,7 +325,9 @@ export default function ExamAdminClient({
           phase2Doc2PdfUrl: exam.phase2_doc2_pdf_url || "",
           phase1MaxScore: Number(exam.phase1_max_score || 100),
           phase1PassScore:
-            exam.phase1_pass_score != null ? Number(exam.phase1_pass_score) : null,
+            exam.phase1_pass_score != null
+              ? Number(exam.phase1_pass_score)
+              : null,
           phase2Question1MaxScore: Number(
             exam.phase2_question1_max_score || 50,
           ),
@@ -347,10 +367,12 @@ export default function ExamAdminClient({
     Math.round(Number(exam?.phase1_max_score || 100) / 10),
   );
   const initialQuestions: QuestionData[] = exam
-    ? JSON.parse(exam.phase1_questions || "[]").map((question: QuestionData) => ({
-        ...question,
-        score: Number(question.score || defaultQuestionScore),
-      }))
+    ? JSON.parse(exam.phase1_questions || "[]").map(
+        (question: QuestionData) => ({
+          ...question,
+          score: Number(question.score || defaultQuestionScore),
+        }),
+      )
     : [];
   const [questions, setQuestions] = useState<QuestionData[]>(
     initialQuestions.length > 0
@@ -382,88 +404,6 @@ export default function ExamAdminClient({
   );
   const [isPublishingP1, setIsPublishingP1] = useState(false);
   const [isDeletingExam, setIsDeletingExam] = useState(false);
-
-  // 4. 가산점 승인 관련 상태
-  const [bonusSubmissions, setBonusSubmissions] = useState<any[]>([]);
-  const [bonusMultiplierEdit, setBonusMultiplierEdit] = useState<string>(
-    exam?.bonus_multiplier != null ? String(Number(exam.bonus_multiplier) * 100) : "10"
-  );
-  const [isLoadingBonus, setIsLoadingBonus] = useState(false);
-  const [isSavingBonusMultiplier, setIsSavingBonusMultiplier] = useState(false);
-  const [isTogglingBonus, setIsTogglingBonus] = useState<string | null>(null);
-
-  const loadBonusSubmissions = async () => {
-    if (!exam?.id) return;
-    setIsLoadingBonus(true);
-    try {
-      const res = await fetch(`/api/exam/admin?examId=${exam.id}`);
-      const data = await res.json();
-      if (data.success) {
-        setBonusSubmissions(data.submissions || []);
-        // 배율은 서버값 우선
-        if (data.bonusMultiplier != null) {
-          setBonusMultiplierEdit(String(Math.round(data.bonusMultiplier * 100)));
-        }
-      }
-    } catch (err: any) {
-      alert(`가산점 목록 로드 실패: ${err.message}`);
-    } finally {
-      setIsLoadingBonus(false);
-    }
-  };
-
-  const handleSaveBonusMultiplier = async () => {
-    if (!exam?.id) return;
-    const multiplier = Number(bonusMultiplierEdit) / 100;
-    if (isNaN(multiplier) || multiplier < 0 || multiplier > 1) {
-      alert("가산점 배율은 0~100% 사이로 입력해 주세요.");
-      return;
-    }
-    setIsSavingBonusMultiplier(true);
-    try {
-      const res = await fetch("/api/exam/admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "UPDATE_EXAM_SCHEDULE",
-          examId: exam.id,
-          bonusMultiplier: multiplier,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "저장 실패");
-      alert(`✅ 가산점 배율이 ${bonusMultiplierEdit}%로 저장되었습니다.`);
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setIsSavingBonusMultiplier(false);
-    }
-  };
-
-  const handleToggleBonusApproval = async (subId: string, currentApproved: number) => {
-    setIsTogglingBonus(subId);
-    try {
-      const res = await fetch("/api/exam/admin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "SET_BONUS_APPROVAL",
-          submissionId: subId,
-          approved: !currentApproved,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "처리 실패");
-      alert(data.message);
-      setBonusSubmissions((prev) =>
-        prev.map((s) => s.id === subId ? { ...s, bonus_approved: currentApproved ? 0 : 1 } : s)
-      );
-    } catch (err: any) {
-      alert(`오류: ${err.message}`);
-    } finally {
-      setIsTogglingBonus(null);
-    }
-  };
 
   const handleDeleteExam = async () => {
     if (!exam?.id) return;
@@ -535,7 +475,8 @@ export default function ExamAdminClient({
           phase2Doc1PdfUrl: newPhase2Doc1Pdf,
           phase2Doc2PdfUrl: newPhase2Doc2Pdf,
           phase1MaxScore: newPhase1MaxScore,
-          phase1PassScore: newPhase1PassScore !== "" ? Number(newPhase1PassScore) : null,
+          phase1PassScore:
+            newPhase1PassScore !== "" ? Number(newPhase1PassScore) : null,
           phase1Rules: newPhase1Rules,
           phase2Question1MaxScore: newPhase2Question1MaxScore,
           phase2Question2MaxScore: newPhase2Question2MaxScore,
@@ -579,7 +520,8 @@ export default function ExamAdminClient({
           phase2Doc1PdfUrl: editPhase2Doc1Pdf,
           phase2Doc2PdfUrl: editPhase2Doc2Pdf,
           phase1MaxScore: editPhase1MaxScore,
-          phase1PassScore: editPhase1PassScore !== "" ? Number(editPhase1PassScore) : null,
+          phase1PassScore:
+            editPhase1PassScore !== "" ? Number(editPhase1PassScore) : null,
           phase1Rules: editPhase1Rules,
           phase2Question1MaxScore: editPhase2Question1MaxScore,
           phase2Question2MaxScore: editPhase2Question2MaxScore,
@@ -1043,11 +985,16 @@ export default function ExamAdminClient({
                 "bg-emerald-600/80 border-emerald-500/60 text-white hover:bg-emerald-500",
             };
             const currentColors: Record<string, string> = {
-              SCHEDULED: "bg-slate-600 border-slate-400 text-white ring-2 ring-slate-400/50",
-              PHASE1: "bg-blue-500 border-blue-300 text-white ring-2 ring-blue-400/50",
-              PHASE2: "bg-purple-500 border-purple-300 text-white ring-2 ring-purple-400/50",
-              GRADING: "bg-amber-500 border-amber-300 text-slate-950 ring-2 ring-amber-400/50",
-              FINISHED: "bg-emerald-500 border-emerald-300 text-white ring-2 ring-emerald-400/50",
+              SCHEDULED:
+                "bg-slate-600 border-slate-400 text-white ring-2 ring-slate-400/50",
+              PHASE1:
+                "bg-blue-500 border-blue-300 text-white ring-2 ring-blue-400/50",
+              PHASE2:
+                "bg-purple-500 border-purple-300 text-white ring-2 ring-purple-400/50",
+              GRADING:
+                "bg-amber-500 border-amber-300 text-slate-950 ring-2 ring-amber-400/50",
+              FINISHED:
+                "bg-emerald-500 border-emerald-300 text-white ring-2 ring-emerald-400/50",
             };
             return (
               <div key={phase} className="flex items-center gap-1">
@@ -1061,8 +1008,7 @@ export default function ExamAdminClient({
                   className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
                     isCurrent
                       ? currentColors[phase]
-                      : colors[phase] +
-                        " disabled:opacity-40"
+                      : colors[phase] + " disabled:opacity-40"
                   }`}
                 >
                   {isChangingPhase && !isCurrent ? (
@@ -1143,7 +1089,7 @@ export default function ExamAdminClient({
             </button>
             <button
               type="button"
-              onClick={() => { setActiveTab("bonus"); loadBonusSubmissions(); }}
+              onClick={() => setActiveTab("bonus")}
               className={`py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${
                 activeTab === "bonus"
                   ? "bg-indigo-600 text-white shadow-md"
@@ -1368,7 +1314,11 @@ export default function ExamAdminClient({
                             min={1}
                             value={q.score}
                             onChange={(e) =>
-                              handleQuestionChange(qIdx, "score", Number(e.target.value))
+                              handleQuestionChange(
+                                qIdx,
+                                "score",
+                                Number(e.target.value),
+                              )
                             }
                             className="w-16 bg-slate-900 border border-emerald-500/40 rounded px-2 py-1 text-xs text-white font-mono"
                           />
@@ -1520,9 +1470,9 @@ export default function ExamAdminClient({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  비공개일 때는 수험생이 제출 후에도 점수·합격 여부를 볼 수 없고,
-                  2차 시험 입장도 막힙니다. 공개하면 즉시 확인 및 2차 응시가
-                  가능합니다.
+                  비공개일 때는 수험생이 제출 후에도 점수·합격 여부를 볼 수
+                  없고, 2차 시험 입장도 막힙니다. 공개하면 즉시 확인 및 2차
+                  응시가 가능합니다.
                 </p>
               </div>
               <button
@@ -1829,131 +1779,11 @@ export default function ExamAdminClient({
           {/* ========================================================================= */}
           {/* 탭 4: 법학과정 가산점 승인 */}
           {/* ========================================================================= */}
-          {activeTab === "bonus" && (
-            <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <Award className="w-5 h-5 text-indigo-400" />
-                    법학과정 가산점 승인 관리
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    수험번호를 클레임한 응시자 중 <strong className="text-indigo-300">가산점 자격(bonus_eligible=1)</strong>이 있는 계정을 확인하고 회차별 가산점을 승인합니다.
-                    가산점은 <strong className="text-amber-300">GRADE_PHASE2(2차 채점)</strong> 시 자동 반영됩니다.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={loadBonusSubmissions}
-                  disabled={isLoadingBonus}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-700 flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingBonus ? "animate-spin" : ""}`} />
-                  {isLoadingBonus ? "로딩중..." : "목록 새로고침"}
-                </button>
-              </div>
-
-              {/* 가산점 배율 설정 */}
-              <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-3">
-                <h3 className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                  <Award className="w-4 h-4" />
-                  이 회차 가산점 배율 설정
-                </h3>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={bonusMultiplierEdit}
-                      onChange={(e) => setBonusMultiplierEdit(e.target.value)}
-                      className="w-16 bg-transparent text-white text-sm font-mono focus:outline-none"
-                    />
-                    <span className="text-slate-400 text-xs">%</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveBonusMultiplier}
-                    disabled={isSavingBonusMultiplier}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors"
-                  >
-                    {isSavingBonusMultiplier ? "저장중..." : "배율 저장"}
-                  </button>
-                  <span className="text-[11px] text-slate-500">
-                    1차 득점 × {bonusMultiplierEdit}% = 가산점 (소수점 반올림)
-                  </span>
-                </div>
-              </div>
-
-              {/* 클레임된 수험번호 목록 */}
-              {bonusSubmissions.length === 0 ? (
-                <div className="py-12 text-center text-slate-500 text-sm">
-                  {isLoadingBonus
-                    ? "불러오는 중..."
-                    : "클레임된 수험번호가 없습니다. 목록 새로고침을 눌러주세요."}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-[11px] text-slate-500">
-                    총 {bonusSubmissions.length}명이 수험번호를 클레임했습니다.
-                    가산점 자격이 있는 응시자만 승인 버튼이 활성화됩니다.
-                  </p>
-                  <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden">
-                    {bonusSubmissions.map((sub) => {
-                      const hasEligibility = Number(sub.bonus_eligible) === 1;
-                      const isApproved = Number(sub.bonus_approved) === 1;
-                      return (
-                        <div key={sub.id} className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs ${hasEligibility ? "bg-slate-900" : "bg-slate-950/60"}`}>
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-slate-400">#{sub.security_code}</span>
-                            <div>
-                              <p className="font-bold text-white">
-                                {sub.claimed_name || "이름 없음"}
-                                <span className="ml-1.5 text-slate-500 font-normal">({sub.claimed_login_id})</span>
-                              </p>
-                              <p className="text-slate-500 mt-0.5">
-                                1차: {sub.phase1_score ?? "-"}점
-                                {hasEligibility && (
-                                  <span className="ml-2 text-indigo-300">
-                                    → 예상 가산: +{Math.round(Number(sub.phase1_score || 0) * (Number(bonusMultiplierEdit) / 100))}점
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {hasEligibility ? (
-                              <>
-                                <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${isApproved ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40" : "bg-slate-800 text-slate-500 border-slate-700"}`}>
-                                  {isApproved ? "✅ 가산점 승인됨" : "⏸ 미승인"}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={isTogglingBonus === sub.id}
-                                  onClick={() => handleToggleBonusApproval(sub.id, sub.bonus_approved)}
-                                  className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-colors ${
-                                    isApproved
-                                      ? "bg-red-600/30 hover:bg-red-600/50 text-red-300 border border-red-600/40"
-                                      : "bg-indigo-600 hover:bg-indigo-500 text-white"
-                                  }`}
-                                >
-                                  {isTogglingBonus === sub.id ? "처리중..." : isApproved ? "승인 취소" : "가산점 승인"}
-                                </button>
-                              </>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded border text-[10px] text-slate-600 border-slate-800">
-                                가산점 자격 없음
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+          {activeTab === "bonus" && exam?.id && (
+            <ExamBonusPanel
+              examId={String(exam.id)}
+              initialMultiplier={exam.bonus_multiplier}
+            />
           )}
         </>
       )}
@@ -2115,7 +1945,9 @@ export default function ExamAdminClient({
                     placeholder={`예:\n• 시험 시간: 120분 · 만점 100점 (10문 객관식)\n• 답안 제출은 단 1회만 허용됩니다.\n• 이의제기는 디스코드 채널을 이용해 주십시오.`}
                     className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-blue-500"
                   />
-                  <p className="text-[10px] text-slate-500 mt-0.5">비워두면 기본 안내 텍스트가 자동 표시됩니다.</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    비워두면 기본 안내 텍스트가 자동 표시됩니다.
+                  </p>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="text-[11px] text-slate-400">
@@ -2161,13 +1993,21 @@ export default function ExamAdminClient({
                     <label className="block text-[11px] text-slate-400 mb-1">
                       1차 시작 일시
                     </label>
-                    <KstDateTimeInput value={newPhase1Start} onChange={setNewPhase1Start} required />
+                    <KstDateTimeInput
+                      value={newPhase1Start}
+                      onChange={setNewPhase1Start}
+                      required
+                    />
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">
                       1차 마감 일시 (120분)
                     </label>
-                    <KstDateTimeInput value={newPhase1End} onChange={setNewPhase1End} required />
+                    <KstDateTimeInput
+                      value={newPhase1End}
+                      onChange={setNewPhase1End}
+                      required
+                    />
                   </div>
                 </div>
               </div>
@@ -2182,13 +2022,21 @@ export default function ExamAdminClient({
                     <label className="block text-[11px] text-slate-400 mb-1">
                       2차 시작 일시
                     </label>
-                    <KstDateTimeInput value={newPhase2Start} onChange={setNewPhase2Start} required />
+                    <KstDateTimeInput
+                      value={newPhase2Start}
+                      onChange={setNewPhase2Start}
+                      required
+                    />
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">
                       2차 마감 일시 (24시간)
                     </label>
-                    <KstDateTimeInput value={newPhase2End} onChange={setNewPhase2End} required />
+                    <KstDateTimeInput
+                      value={newPhase2End}
+                      onChange={setNewPhase2End}
+                      required
+                    />
                   </div>
                 </div>
               </div>
@@ -2201,19 +2049,36 @@ export default function ExamAdminClient({
                 <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-[11px] text-slate-400 leading-relaxed">
                   <p>
                     <span className="text-blue-400 font-bold">1차 PDF:</span>{" "}
-                    1차 CBT 입장 화면에서 수험생에게 문제지 다운로드 버튼으로 제공됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개 URL을 입력하세요.
+                    1차 CBT 입장 화면에서 수험생에게 문제지 다운로드 버튼으로
+                    제공됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개
+                    URL을 입력하세요.
                   </p>
                   <p>
-                    <span className="text-purple-400 font-bold">2차 제1문 / 제2문 PDF:</span>{" "}
+                    <span className="text-purple-400 font-bold">
+                      2차 제1문 / 제2문 PDF:
+                    </span>{" "}
                     2차 서술형 제출실(
                     <span className="font-mono">/exam/session-2</span>)에서
-                    수험생에게 문제지 다운로드 버튼으로 제공됩니다. 파일을 직접 업로드하거나 Google
-                    Drive 공유 링크 등 외부 공개 URL을 입력하세요.
+                    수험생에게 문제지 다운로드 버튼으로 제공됩니다. 파일을 직접
+                    업로드하거나 Google Drive 공유 링크 등 외부 공개 URL을
+                    입력하세요.
                   </p>
                 </div>
-                <PdfUrlField placeholder="1차 필기 문제지 PDF 링크 (선택 · 현재 비노출)" value={newPhase1Pdf} onChange={setNewPhase1Pdf} />
-                <PdfUrlField placeholder="2차 제1문 논술 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨" value={newPhase2Doc1Pdf} onChange={setNewPhase2Doc1Pdf} />
-                <PdfUrlField placeholder="2차 제2문 실무기록 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨" value={newPhase2Doc2Pdf} onChange={setNewPhase2Doc2Pdf} />
+                <PdfUrlField
+                  placeholder="1차 필기 문제지 PDF 링크 (선택 · 현재 비노출)"
+                  value={newPhase1Pdf}
+                  onChange={setNewPhase1Pdf}
+                />
+                <PdfUrlField
+                  placeholder="2차 제1문 논술 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨"
+                  value={newPhase2Doc1Pdf}
+                  onChange={setNewPhase2Doc1Pdf}
+                />
+                <PdfUrlField
+                  placeholder="2차 제2문 실무기록 문제지 PDF 링크 → 2차 제출실 다운로드 버튼에 연결됨"
+                  value={newPhase2Doc2Pdf}
+                  onChange={setNewPhase2Doc2Pdf}
+                />
               </div>
 
               {/* 디스코드 방송 체크박스 */}
@@ -2377,7 +2242,9 @@ export default function ExamAdminClient({
                     placeholder={`예:\n• 시험 시간: 120분 · 만점 100점 (10문 객관식)\n• 답안 제출은 단 1회만 허용됩니다.\n• 이의제기는 디스코드 채널을 이용해 주십시오.`}
                     className="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 resize-none focus:outline-none focus:border-blue-500"
                   />
-                  <p className="text-[10px] text-slate-500 mt-0.5">비워두면 기본 안내 텍스트가 자동 표시됩니다.</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    비워두면 기본 안내 텍스트가 자동 표시됩니다.
+                  </p>
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="text-[11px] text-slate-400">
@@ -2418,13 +2285,19 @@ export default function ExamAdminClient({
                   <label className="block text-[11px] text-slate-400 mb-1">
                     1차 시작 일시
                   </label>
-                  <KstDateTimeInput value={editPhase1Start} onChange={setEditPhase1Start} />
+                  <KstDateTimeInput
+                    value={editPhase1Start}
+                    onChange={setEditPhase1Start}
+                  />
                 </div>
                 <div>
                   <label className="block text-[11px] text-slate-400 mb-1">
                     1차 마감 일시
                   </label>
-                  <KstDateTimeInput value={editPhase1End} onChange={setEditPhase1End} />
+                  <KstDateTimeInput
+                    value={editPhase1End}
+                    onChange={setEditPhase1End}
+                  />
                 </div>
               </div>
 
@@ -2433,13 +2306,19 @@ export default function ExamAdminClient({
                   <label className="block text-[11px] text-slate-400 mb-1">
                     2차 시작 일시
                   </label>
-                  <KstDateTimeInput value={editPhase2Start} onChange={setEditPhase2Start} />
+                  <KstDateTimeInput
+                    value={editPhase2Start}
+                    onChange={setEditPhase2Start}
+                  />
                 </div>
                 <div>
                   <label className="block text-[11px] text-slate-400 mb-1">
                     2차 마감 일시
                   </label>
-                  <KstDateTimeInput value={editPhase2End} onChange={setEditPhase2End} />
+                  <KstDateTimeInput
+                    value={editPhase2End}
+                    onChange={setEditPhase2End}
+                  />
                 </div>
               </div>
 
@@ -2449,15 +2328,34 @@ export default function ExamAdminClient({
                 </label>
                 <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-[11px] text-slate-400 leading-relaxed space-y-1">
                   <p>
-                    <span className="text-blue-400 font-bold">1차:</span> 1차 CBT 입장 화면에서 수험생 다운로드 버튼에 연결됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개 URL을 입력하세요.
+                    <span className="text-blue-400 font-bold">1차:</span> 1차
+                    CBT 입장 화면에서 수험생 다운로드 버튼에 연결됩니다. 파일을
+                    직접 업로드하거나 Google Drive 등 공개 URL을 입력하세요.
                   </p>
                   <p>
-                    <span className="text-purple-400 font-bold">2차 제1문 / 제2문:</span> 2차 서술형 제출실에서 수험생 다운로드 버튼에 직접 연결됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개 URL을 입력하세요.
+                    <span className="text-purple-400 font-bold">
+                      2차 제1문 / 제2문:
+                    </span>{" "}
+                    2차 서술형 제출실에서 수험생 다운로드 버튼에 직접
+                    연결됩니다. 파일을 직접 업로드하거나 Google Drive 등 공개
+                    URL을 입력하세요.
                   </p>
                 </div>
-                <PdfUrlField placeholder="1차 필기 PDF URL (현재 비노출)" value={editPhase1Pdf} onChange={setEditPhase1Pdf} />
-                <PdfUrlField placeholder="2차 제1문 논술 PDF URL → 2차 제출실 다운로드 버튼" value={editPhase2Doc1Pdf} onChange={setEditPhase2Doc1Pdf} />
-                <PdfUrlField placeholder="2차 제2문 실무기록 PDF URL → 2차 제출실 다운로드 버튼" value={editPhase2Doc2Pdf} onChange={setEditPhase2Doc2Pdf} />
+                <PdfUrlField
+                  placeholder="1차 필기 PDF URL (현재 비노출)"
+                  value={editPhase1Pdf}
+                  onChange={setEditPhase1Pdf}
+                />
+                <PdfUrlField
+                  placeholder="2차 제1문 논술 PDF URL → 2차 제출실 다운로드 버튼"
+                  value={editPhase2Doc1Pdf}
+                  onChange={setEditPhase2Doc1Pdf}
+                />
+                <PdfUrlField
+                  placeholder="2차 제2문 실무기록 PDF URL → 2차 제출실 다운로드 버튼"
+                  value={editPhase2Doc2Pdf}
+                  onChange={setEditPhase2Doc2Pdf}
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">

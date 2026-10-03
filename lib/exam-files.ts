@@ -23,7 +23,9 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 
 // 확장자 우선 판정 (브라우저가 HWP를 octet-stream 으로 보내는 경우 대응)
-export function resolveFileType(file: File): { ext: string; mime: string } | null {
+export function resolveFileType(
+  file: File,
+): { ext: string; mime: string } | null {
   const m = /\.[a-z0-9]+$/i.exec(file.name || "");
   const byName = m ? m[0].toLowerCase() : "";
   if (MIME_BY_EXT[byName]) return { ext: byName, mime: MIME_BY_EXT[byName] };
@@ -81,6 +83,13 @@ export async function saveExamFile(opts: {
       new Uint8Array(await opts.file.arrayBuffer()),
     ],
   });
+  if (opts.kind === "answer" && opts.examId && opts.securityCode) {
+    await db.execute({
+      sql: `DELETE FROM exam_files
+            WHERE kind = 'answer' AND exam_id = ? AND security_code = ? AND id <> ?`,
+      args: [opts.examId, opts.securityCode, id],
+    });
+  }
   return id;
 }
 
