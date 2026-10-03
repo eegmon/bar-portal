@@ -776,7 +776,10 @@ export async function POST(req: Request) {
           { status: 403 },
         );
       }
-      const attendedValue = status === "APPROVED" && attended ? 1 : 0;
+      const attendedValue =
+        status === "APPROVED" && attended && Number(attendance.is_proxy) !== 1
+          ? 1
+          : 0;
       await db.execute({
         sql: "UPDATE assembly_attendances SET approval_status = ?, attended = ?, attended_at = CASE WHEN ? = 1 THEN datetime('now') ELSE attended_at END WHERE id = ?",
         args: [status, attendedValue, attendedValue, attendanceId],

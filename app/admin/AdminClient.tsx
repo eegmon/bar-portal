@@ -4551,12 +4551,14 @@ ${agendaMinutes}
                                             handleAttendance(
                                               item.id,
                                               "APPROVED",
-                                              true,
+                                              item.is_proxy !== 1,
                                             )
                                           }
                                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold"
                                         >
-                                          승인·출석
+                                          {item.is_proxy === 1
+                                            ? "위임 승인"
+                                            : "승인·출석"}
                                         </button>
                                       ))}
                                     {item.approval_status !== "REJECTED" && (
@@ -4589,6 +4591,7 @@ ${agendaMinutes}
                                         </button>
                                       )}
                                     {item.approval_status === "APPROVED" &&
+                                      item.is_proxy !== 1 &&
                                       !item.attended && (
                                         <button
                                           onClick={() =>
