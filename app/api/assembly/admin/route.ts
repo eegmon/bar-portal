@@ -627,7 +627,7 @@ export async function POST(req: Request) {
         );
       }
       const assemblyRes = await db.execute({
-        sql: "SELECT id, title, status FROM assemblies WHERE id = ?",
+        sql: "SELECT id, title, status, held_at FROM assemblies WHERE id = ?",
         args: [assemblyId],
       });
       const assembly = assemblyRes.rows[0];
