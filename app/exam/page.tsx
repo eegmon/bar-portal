@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { FileText, Clock, AlertCircle, CheckCircle, ShieldAlert, Award, ArrowRight } from "lucide-react";
+import {
+  FileText,
+  Clock,
+  AlertCircle,
+  CheckCircle,
+  ShieldAlert,
+  Award,
+  ArrowRight,
+} from "lucide-react";
 import db from "@/lib/db";
 import { ensurePublishColumns } from "@/lib/exam-publish";
 import { getSessionUser } from "@/lib/auth";
@@ -15,7 +23,9 @@ export default async function ExamHubPage() {
 
   try {
     await ensurePublishColumns();
-    const examRes = await db.execute("SELECT * FROM exams ORDER BY round_number DESC LIMIT 1");
+    const examRes = await db.execute(
+      "SELECT * FROM exams ORDER BY round_number DESC LIMIT 1",
+    );
     if (examRes.rows.length > 0) {
       exam = examRes.rows[0];
     }
@@ -41,9 +51,12 @@ export default async function ExamHubPage() {
           <FileText className="w-4 h-4" />
           변호사법 제6장 · 도스변호사협회 변호사시험관리위원회
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">변호사시험 센터 (CBT)</h1>
+        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+          변호사시험 센터 (CBT)
+        </h1>
         <p className="text-slate-400 text-sm mt-1">
-          매월 1회 정기 시행되는 도스온라인 변호사시험의 원서 접수, 1차 CBT 객관식 응시, 2차 서술형 답안 제출 및 성적을 조회합니다.
+          매월 1회 정기 시행되는 도스온라인 변호사시험의 원서 접수, 1차 CBT
+          객관식 응시, 2차 서술형 답안 제출 및 성적을 조회합니다.
         </p>
       </div>
 
@@ -56,7 +69,13 @@ export default async function ExamHubPage() {
 
               <div className="flex items-center justify-between gap-4 mb-4">
                 <span className="px-3 py-1 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full text-xs font-semibold">
-                  제{exam.round_number}회 정기시험 진행중
+                  {userSubmission
+                    ? `제${exam.round_number}회 CBT 응시완료`
+                    : exam.status === "FINISHED"
+                      ? `제${exam.round_number}회 시험 종료`
+                      : exam.status === "SCHEDULED"
+                        ? `제${exam.round_number}회 시험 대기중`
+                        : `제${exam.round_number}회 정기시험 진행중`}
                 </span>
                 <span className="text-xs text-slate-400">
                   응시 상태:{" "}
@@ -72,7 +91,9 @@ export default async function ExamHubPage() {
                 </span>
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-3">{exam.title}</h2>
+              <h2 className="text-2xl font-bold text-white mb-3">
+                {exam.title}
+              </h2>
 
               {/* 일정 타임라인 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6">
@@ -113,7 +134,8 @@ export default async function ExamHubPage() {
                       href="/exam/session-2"
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs rounded-lg border border-slate-700 transition-all"
                     >
-                      2차 과제 제출실 입장 <ArrowRight className="w-3.5 h-3.5" />
+                      2차 과제 제출실 입장{" "}
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>
                 </div>
@@ -123,10 +145,21 @@ export default async function ExamHubPage() {
               <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-200/90 leading-relaxed space-y-1">
-                  <p className="font-semibold text-amber-300">시험 응시 유의사항</p>
-                  <p>• 1차 CBT는 단 1회만 제출 가능하며, 제출 후 답안 수정이 불가합니다.</p>
-                  <p>• 2차 시험은 조기 채점 서약 제출 시 즉시 채점이 시작되나 철회가 불가합니다.</p>
-                  <p>• 응시 중 문제 질의 및 이의제기는 디스코드 [⚠️┃이의제기] 채널에서 진행됩니다.</p>
+                  <p className="font-semibold text-amber-300">
+                    시험 응시 유의사항
+                  </p>
+                  <p>
+                    • 1차 CBT는 단 1회만 제출 가능하며, 제출 후 답안 수정이
+                    불가합니다.
+                  </p>
+                  <p>
+                    • 2차 시험은 조기 채점 서약 제출 시 즉시 채점이 시작되나
+                    철회가 불가합니다.
+                  </p>
+                  <p>
+                    • 응시 중 문제 질의 및 이의제기는 디스코드 [⚠️┃이의제기]
+                    채널에서 진행됩니다.
+                  </p>
                 </div>
               </div>
             </div>
@@ -145,7 +178,9 @@ export default async function ExamHubPage() {
                     <div className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
                       본인 성적 및 석차 조회
                     </div>
-                    <div className="text-[11px] text-slate-400">합격 공고일로부터 2개월간 열람 가능</div>
+                    <div className="text-[11px] text-slate-400">
+                      합격 공고일로부터 2개월간 열람 가능
+                    </div>
                   </div>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
@@ -163,7 +198,9 @@ export default async function ExamHubPage() {
                     <div className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">
                       시험관리위원회 패널
                     </div>
-                    <div className="text-[11px] text-slate-400">출제, 실시간 정정 방송, 2차 채점표 입력</div>
+                    <div className="text-[11px] text-slate-400">
+                      출제, 실시간 정정 방송, 2차 채점표 입력
+                    </div>
                   </div>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-500 group-hover:translate-x-1 transition-transform" />
@@ -181,23 +218,31 @@ export default async function ExamHubPage() {
 
               <div className="space-y-3 text-xs text-slate-300">
                 <div className="pb-2 border-b border-slate-800">
-                  <div className="font-semibold text-slate-200">시험 과목 (변호사법 제71조)</div>
+                  <div className="font-semibold text-slate-200">
+                    시험 과목 (변호사법 제71조)
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
                     공법, 민사법, 형사법, 소송법, 법조윤리
                   </div>
                 </div>
 
                 <div className="pb-2 border-b border-slate-800">
-                  <div className="font-semibold text-slate-200">가산점 제도 (변호사법 제72조제2항)</div>
+                  <div className="font-semibold text-slate-200">
+                    가산점 제도 (변호사법 제72조제2항)
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    도스대학교 등 법학과정 수료 인증자에게 필기시험 총점의 10% 범위 내 가산점 부여
+                    도스대학교 등 법학과정 수료 인증자에게 필기시험 총점의 10%
+                    범위 내 가산점 부여
                   </div>
                 </div>
 
                 <div>
-                  <div className="font-semibold text-slate-200">응시 결격사유 (변호사법 제69조)</div>
+                  <div className="font-semibold text-slate-200">
+                    응시 결격사유 (변호사법 제69조)
+                  </div>
                   <div className="text-[11px] text-slate-400 mt-0.5">
-                    인게임 밴 처분을 받은 자 또는 변호사 결격사유 해당자는 응시 불가
+                    인게임 밴 처분을 받은 자 또는 변호사 결격사유 해당자는 응시
+                    불가
                   </div>
                 </div>
               </div>

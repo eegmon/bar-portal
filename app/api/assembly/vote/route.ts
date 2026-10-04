@@ -10,6 +10,7 @@ import {
   type RankedVoteRound,
 } from "@/lib/ranked-vote";
 import { countPluralityVotes } from "@/lib/plurality-vote";
+import { splitVotesIntoAnonymousBallots } from "@/lib/anonymous-ballots";
 
 const DEFAULT_CHOICES = ["찬성", "반대", "기권"];
 const ASSEMBLY_OFFICER_POSITIONS = [
@@ -515,50 +516,38 @@ export async function POST(req: Request) {
         args: [agendaId, user.id],
       },
     ];
-    if (agenda.voting_method === "RANKED") {
+    const appendBallotRecord = (choice: string, votesCount: number) => {
+      const ballotId = `ballot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       voteStatements.push({
         sql: isSecret
           ? "INSERT INTO ballot_box (id, agenda_id, choice, votes_count) VALUES (?, ?, ?, ?)"
           : "INSERT INTO ballot_box (id, agenda_id, choice, votes_count, user_id) VALUES (?, ?, ?, ?, ?)",
         args: isSecret
-          ? [
-              `ballot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-              agendaId,
-              `__RANKING__:${JSON.stringify(ranking)}`,
-              calculatedVotingPower,
-            ]
-          : [
-              `ballot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-              agendaId,
-              `__RANKING__:${JSON.stringify(ranking)}`,
-              calculatedVotingPower,
-              user.id,
-            ],
+          ? [ballotId, agendaId, choice, votesCount]
+          : [ballotId, agendaId, choice, votesCount, user.id],
       });
+    };
+
+    if (agenda.voting_method === "RANKED") {
+      const choice = `__RANKING__:${JSON.stringify(ranking)}`;
+      const ballots = isSecret
+        ? splitVotesIntoAnonymousBallots(choice, calculatedVotingPower)
+        : [{ choice, votesCount: calculatedVotingPower }];
+      for (const ballot of ballots) {
+        appendBallotRecord(ballot.choice, ballot.votesCount);
+      }
     } else {
       for (const [choice, count] of Object.entries(
         allocations as Record<string, unknown>,
       )) {
-        if (Number(count) > 0) {
-          voteStatements.push({
-            sql: isSecret
-              ? "INSERT INTO ballot_box (id, agenda_id, choice, votes_count) VALUES (?, ?, ?, ?)"
-              : "INSERT INTO ballot_box (id, agenda_id, choice, votes_count, user_id) VALUES (?, ?, ?, ?, ?)",
-            args: isSecret
-              ? [
-                  `ballot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                  agendaId,
-                  choice,
-                  Number(count),
-                ]
-              : [
-                  `ballot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                  agendaId,
-                  choice,
-                  Number(count),
-                  user.id,
-                ],
-          });
+        const votesCount = Number(count);
+        if (votesCount > 0) {
+          const ballots = isSecret
+            ? splitVotesIntoAnonymousBallots(choice, votesCount)
+            : [{ choice, votesCount }];
+          for (const ballot of ballots) {
+            appendBallotRecord(ballot.choice, ballot.votesCount);
+          }
         }
       }
     }
