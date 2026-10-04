@@ -29,10 +29,10 @@ export default function AttendButton({
 
     setIsLoading(true);
     try {
-      const res  = await fetch("/api/assembly/attend", {
-        method:  "POST",
+      const res = await fetch("/api/assembly/attend", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ assemblyId }),
+        body: JSON.stringify({ assemblyId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "출석 확인 실패");
@@ -81,8 +81,8 @@ export default function AttendButton({
       disabled={isLoading}
       className={`px-4 py-2 font-bold text-xs rounded-lg shadow transition-colors flex items-center gap-1.5 disabled:opacity-60 ${
         hasVotingAgenda
-          ? "bg-amber-500 hover:bg-amber-400 text-slate-950"   // 표결 중 → 주의색
-          : "bg-emerald-600 hover:bg-emerald-500 text-white"   // 일반 출석 → 초록
+          ? "bg-amber-500 hover:bg-amber-400 text-slate-950" // 표결 중 → 주의색
+          : "bg-emerald-600 hover:bg-emerald-500 text-white" // 일반 출석 → 초록
       }`}
     >
       {isLoading ? (

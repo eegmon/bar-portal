@@ -109,6 +109,9 @@ export default function ProxyPage() {
 
   // 선택된 법인 정보
   const currentFirm = myFirms.find((f) => f.id === selectedFirmId);
+  const selectedAssembly = assemblies.find(
+    (assembly) => assembly.id === selectedAssemblyId,
+  );
 
   // 재등록 신청서 제출
   const handleReregisterSubmit = async (e: React.FormEvent) => {
@@ -500,6 +503,16 @@ export default function ProxyPage() {
             <Vote className="w-4 h-4" />
             정기총회 의결권 위임장
           </div>
+
+          {selectedAssembly?.status === "IN_SESSION" && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>
+                총회 개회 중에도 위임 신청할 수 있습니다. 위임은 의장 승인 후
+                적용되며, 승인 전에는 의결권에 반영되지 않습니다.
+              </p>
+            </div>
+          )}
 
           {/* 위임 구분: 개인회원 위임 vs 법인회원 위임 */}
           <div className="space-y-2">

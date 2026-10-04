@@ -47,20 +47,30 @@ export async function GET() {
             partner_count: partnerCount,
             voting_power: votingPower,
           };
-        })
+        }),
       );
     }
 
     return NextResponse.json({
       success: true,
-      user: sessionUser ? { id: sessionUser.id, name: sessionUser.name, role: sessionUser.role, status: sessionUser.status } : null,
+      user: sessionUser
+        ? {
+            id: sessionUser.id,
+            name: sessionUser.name,
+            role: sessionUser.role,
+            status: sessionUser.status,
+          }
+        : null,
       assemblies: assembliesRes.rows,
       lawyers: lawyersRes.rows,
       myFirms,
     });
   } catch (err: any) {
     console.error("Proxy GET API error:", err);
-    return NextResponse.json({ error: err.message || "서버 오류" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "서버 오류" },
+      { status: 500 },
+    );
   }
 }
 
@@ -110,7 +120,10 @@ export async function POST(req: Request) {
       !["ACTIVE", "SUSPENDED", "EXPIRED"].includes(String(currentUser.status))
     ) {
       return NextResponse.json(
-        { error: "등록된 변호사만 총회 재등록 또는 위임 신청을 제출할 수 있습니다." },
+        {
+          error:
+            "등록된 변호사만 총회 재등록 또는 위임 신청을 제출할 수 있습니다.",
+        },
         { status: 403 },
       );
     }
@@ -124,7 +137,11 @@ export async function POST(req: Request) {
         { error: "총회를 찾을 수 없습니다." },
         { status: 404 },
       );
-    if (assemblyRes.rows[0].status === "IN_SESSION") {
+    const isProxyApplication =
+      type === "PROXY" ||
+      type === "FIRM_PROXY" ||
+      (!type && Boolean(proxyLawyerId || firmId));
+    if (assemblyRes.rows[0].status === "IN_SESSION" && !isProxyApplication) {
       return NextResponse.json(
         { error: "총회 개회 후 명부 변경은 의장 허가가 필요합니다." },
         { status: 403 },
@@ -156,7 +173,10 @@ export async function POST(req: Request) {
     if (type === "REREGISTER") {
       if (currentUser.status === "ACTIVE") {
         return NextResponse.json(
-          { error: "현재 이미 활성 상태인 변호사는 재등록 신청을 할 수 없습니다." },
+          {
+            error:
+              "현재 이미 활성 상태인 변호사는 재등록 신청을 할 수 없습니다.",
+          },
           { status: 400 },
         );
       }
@@ -181,7 +201,8 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message: "정기총회 불참 자격 재등록 신청서가 접수되었습니다. 관리자 수리 후 자격이 갱신됩니다.",
+        message:
+          "정기총회 불참 자격 재등록 신청서가 접수되었습니다. 관리자 수리 후 자격이 갱신됩니다.",
       });
     }
 
@@ -201,7 +222,10 @@ export async function POST(req: Request) {
       }
       if (!evidenceUrl || !evidenceUrl.trim()) {
         return NextResponse.json(
-          { error: "회칙 제3항 및 제5항에 의거하여 구성원 회의(만장일치 결의) 증빙 자료(URL 또는 서면 링크)를 필수로 입력해야 합니다." },
+          {
+            error:
+              "회칙 제3항 및 제5항에 의거하여 구성원 회의(만장일치 결의) 증빙 자료(URL 또는 서면 링크)를 필수로 입력해야 합니다.",
+          },
           { status: 400 },
         );
       }
@@ -225,7 +249,10 @@ export async function POST(req: Request) {
       const firm = firmCheck.rows[0];
       if (!firm.is_partner && firm.representative_id !== userId) {
         return NextResponse.json(
-          { error: "법인 의결권은 법인의 대표변호사 또는 구성원 변호사만 위임할 수 있습니다." },
+          {
+            error:
+              "법인 의결권은 법인의 대표변호사 또는 구성원 변호사만 위임할 수 있습니다.",
+          },
           { status: 403 },
         );
       }
@@ -240,7 +267,9 @@ export async function POST(req: Request) {
 
       if (votingPower < 1) {
         return NextResponse.json(
-          { error: `해당 법인의 등록 구성원 변호사는 ${partnerCount}명으로, 의결권이 0표이므로 위임할 수 없습니다. (2인당 1표)` },
+          {
+            error: `해당 법인의 등록 구성원 변호사는 ${partnerCount}명으로, 의결권이 0표이므로 위임할 수 없습니다. (2인당 1표)`,
+          },
           { status: 400 },
         );
       }
@@ -269,7 +298,10 @@ export async function POST(req: Request) {
       });
       if (dupRes.rows.length > 0) {
         return NextResponse.json(
-          { error: "해당 법인의 의결권 위임 신고서가 본 총회에 이미 제출되어 있습니다." },
+          {
+            error:
+              "해당 법인의 의결권 위임 신고서가 본 총회에 이미 제출되어 있습니다.",
+          },
           { status: 409 },
         );
       }

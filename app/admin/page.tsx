@@ -15,6 +15,7 @@ import {
   parseRankedBallots,
   RANKED_BALLOT_PREFIX,
 } from "@/lib/ranked-vote";
+import { countPluralityVotes } from "@/lib/plurality-vote";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,15 @@ export default async function AdminDashboardPage() {
               rankedChoices,
             )
           : null;
+      const pluralityOutcome =
+        agenda.voting_method === "PLURALITY"
+          ? countPluralityVotes(
+              agendaBallots.map((row) => ({
+                choice: String(row.choice),
+                total: Number(row.total || 0),
+              })),
+            )
+          : null;
       return {
         ...agenda,
         ballot_tally: agendaBallots
@@ -170,6 +180,8 @@ export default async function AdminDashboardPage() {
         voter_count: voterCounts.get(String(agenda.id)) || 0,
         ranked_rounds: rankedOutcome?.rounds || [],
         ranked_winner: rankedOutcome?.winner || null,
+        plurality_winner: pluralityOutcome?.winner || null,
+        plurality_tied_choices: pluralityOutcome?.tiedChoices || [],
       };
     });
     const attRes = await db.execute(`

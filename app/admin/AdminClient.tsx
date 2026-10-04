@@ -1560,9 +1560,17 @@ export default function AdminClient({
           .map((agenda, index) => {
             const result =
               agenda.result_status && agenda.result_status !== "PENDING"
-                ? agenda.result_status === "PASS"
-                  ? "가결"
-                  : "부결"
+                ? agenda.result_method === "NO_OBJECTION"
+                  ? "이의 없음으로 가결"
+                  : agenda.voting_method === "PLURALITY"
+                    ? agenda.result_status === "PASS" && agenda.plurality_winner
+                      ? `당선: ${agenda.plurality_winner}`
+                      : agenda.plurality_tied_choices?.length
+                        ? `최다득표 동률: ${agenda.plurality_tied_choices.join(", ")}`
+                        : "당선자 없음"
+                    : agenda.result_status === "PASS"
+                      ? "가결"
+                      : "부결"
                 : "의결 결과 미확정";
             const methodResult =
               agenda.result_method === "NO_OBJECTION"
@@ -1578,11 +1586,17 @@ export default function AdminClient({
                         })
                         .join("; ") || "유효 투표 없음"
                     }${agenda.ranked_winner ? `; 당선: ${agenda.ranked_winner}` : ""}`
-                  : `표결 결과: ${
-                      (agenda.ballot_tally || [])
-                        .map((row: any) => `${row.choice} ${row.total}표`)
-                        .join(", ") || "투표 내역 없음"
-                    }`;
+                  : agenda.voting_method === "PLURALITY"
+                    ? `최다득표 집계: ${
+                        (agenda.ballot_tally || [])
+                          .map((row: any) => `${row.choice} ${row.total}표`)
+                          .join(", ") || "투표 내역 없음"
+                      }`
+                    : `표결 결과: ${
+                        (agenda.ballot_tally || [])
+                          .map((row: any) => `${row.choice} ${row.total}표`)
+                          .join(", ") || "투표 내역 없음"
+                      }`;
             const progress =
               agenda.status === "VOTING"
                 ? "표결 진행 중"

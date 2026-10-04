@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import db from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { countPluralityVotes } from "@/lib/plurality-vote";
 import AttendButton from "./AttendButton";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,38 @@ export default async function AssemblyHubPage({
         args: [assembly.id],
       });
       agendas = agRes.rows;
+      const ballotRes = await db.execute({
+        sql: `SELECT b.agenda_id, b.choice, SUM(b.votes_count) AS total
+              FROM ballot_box b
+              JOIN agendas a ON a.id = b.agenda_id
+              WHERE a.assembly_id = ?
+              GROUP BY b.agenda_id, b.choice`,
+        args: [assembly.id],
+      });
+      const ballotTallies = new Map<
+        string,
+        { choice: string; total: number }[]
+      >();
+      for (const row of ballotRes.rows) {
+        const agendaKey = String(row.agenda_id);
+        const tally = ballotTallies.get(agendaKey) ?? [];
+        tally.push({
+          choice: String(row.choice),
+          total: Number(row.total || 0),
+        });
+        ballotTallies.set(agendaKey, tally);
+      }
+      agendas = agendas.map((agenda) => {
+        const outcome =
+          agenda.voting_method === "PLURALITY"
+            ? countPluralityVotes(ballotTallies.get(String(agenda.id)) ?? [])
+            : null;
+        return {
+          ...agenda,
+          plurality_winner: outcome?.winner ?? null,
+          plurality_tied_choices: outcome?.tiedChoices ?? [],
+        };
+      });
 
       if (user) {
         const attRes = await db.execute({
@@ -364,16 +397,26 @@ export default async function AssemblyHubPage({
                               ag.result_status !== "PENDING" && (
                                 <span
                                   className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
-                                    ag.result_status === "PASS"
-                                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                                      : "bg-red-500/20 text-red-300 border-red-500/30"
+                                    ag.voting_method === "PLURALITY" &&
+                                    ag.plurality_tied_choices.length > 0
+                                      ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                      : ag.result_status === "PASS"
+                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                        : "bg-red-500/20 text-red-300 border-red-500/30"
                                   }`}
                                 >
                                   {ag.result_method === "NO_OBJECTION"
                                     ? "이의 없음 가결"
-                                    : ag.result_status === "PASS"
-                                      ? "가결"
-                                      : "부결"}
+                                    : ag.voting_method === "PLURALITY"
+                                      ? ag.plurality_winner &&
+                                        ag.result_status === "PASS"
+                                        ? `당선: ${ag.plurality_winner}`
+                                        : ag.plurality_tied_choices.length > 0
+                                          ? `최다득표 동률: ${ag.plurality_tied_choices.join(", ")}`
+                                          : "당선자 없음"
+                                      : ag.result_status === "PASS"
+                                        ? "가결"
+                                        : "부결"}
                                 </span>
                               )}
                           </div>

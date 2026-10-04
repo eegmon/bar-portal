@@ -8,6 +8,7 @@ import {
   parseRankedBallots,
   RANKED_BALLOT_PREFIX,
 } from "@/lib/ranked-vote";
+import { countPluralityVotes } from "@/lib/plurality-vote";
 
 function getChoiceLabels(rawConfig: unknown): string[] {
   try {
@@ -1200,6 +1201,10 @@ export async function POST(req: Request) {
               choice: String(row.choice),
               total: Number(row.total || 0),
             }));
+      const pluralityOutcome =
+        agenda.voting_method === "PLURALITY"
+          ? countPluralityVotes(resultTally)
+          : null;
       const approval = Number(
         resultTally.find((row) =>
           ["찬성", "FOR", "YES"].includes(String(row.choice)),
@@ -1212,10 +1217,6 @@ export async function POST(req: Request) {
       );
       const quorumMet = presentRights >= quorumNeeded;
       const totalDecisive = approval + opposition;
-      const maxVotes = Math.max(
-        ...resultTally.map((row) => Number(row.total || 0)),
-        0,
-      );
       const resultStatus =
         quorumMet &&
         (agenda.voting_method === "RANKED"
@@ -1223,10 +1224,17 @@ export async function POST(req: Request) {
           : agenda.voting_method === "TWO_THIRDS"
             ? totalDecisive > 0 && approval / totalDecisive >= 2 / 3
             : agenda.voting_method === "PLURALITY"
-              ? maxVotes > 0 && resultTally[0]?.total === maxVotes
+              ? Boolean(pluralityOutcome?.winner)
               : approval > opposition)
           ? "PASS"
           : "REJECT";
+      const pluralityResultLabel = !quorumMet
+        ? "정족수 미충족"
+        : pluralityOutcome?.winner
+          ? `당선: ${pluralityOutcome.winner}`
+          : pluralityOutcome?.tiedChoices.length
+            ? `최다득표 동률: ${pluralityOutcome.tiedChoices.join(", ")}`
+            : "당선자 없음";
 
       const closeRes = await db.execute({
         sql: "UPDATE agendas SET status = 'CLOSED', voting_closed_at = datetime('now'), result_status = ?, result_method = 'VOTE' WHERE id = ? AND status = 'VOTING'",
@@ -1256,8 +1264,16 @@ export async function POST(req: Request) {
                 return `• ${round.round}라운드 (${tally}) - ${outcome}`;
               })
               .join("\n") || "유효한 순위표 없음"
-          : tallyText;
-      const minutesSection = `\n\n[안건 표결 자동 집계] ${agenda.title}\n- 표결 종료: ${new Date().toISOString()}\n- 출석 의결권: ${presentRights}표 / 전체 의결권 ${totalRights}표\n- 의결권 정족수: ${quorumNeeded}표 기준, ${quorumMet ? "충족" : "미충족"}\n- 투표 참여 인원: ${voterCount}명\n${resultText}\n- 의결 결과: ${resultStatus === "PASS" ? "가결" : "부결"}`;
+          : agenda.voting_method === "PLURALITY"
+            ? `${tallyText}\n• ${pluralityResultLabel}`
+            : tallyText;
+      const resultLabel =
+        agenda.voting_method === "PLURALITY"
+          ? pluralityResultLabel
+          : resultStatus === "PASS"
+            ? "가결"
+            : "부결";
+      const minutesSection = `\n\n[안건 표결 자동 집계] ${agenda.title}\n- 표결 종료: ${new Date().toISOString()}\n- 출석 의결권: ${presentRights}표 / 전체 의결권 ${totalRights}표\n- 의결권 정족수: ${quorumNeeded}표 기준, ${quorumMet ? "충족" : "미충족"}\n- 투표 참여 인원: ${voterCount}명\n${resultText}\n- 의결 결과: ${resultLabel}`;
       await db.execute({
         sql: "UPDATE assemblies SET minutes_text = ? WHERE id = ?",
         args: [`${currentMinutes}${minutesSection}`, agenda.assembly_id],
@@ -1276,7 +1292,7 @@ export async function POST(req: Request) {
         embeds: [
           {
             title: `📊 표결 집계 결과 선포: ${agenda.title}`,
-            description: `**[투표 참여 인원: ${voterCount}명 / 출석 의결권: ${presentRights}표]**\n정족수: **${quorumMet ? "충족" : "미충족"}**\n\n${resultText}\n\n결과: **${resultStatus === "PASS" ? "가결" : "부결"}**`,
+            description: `**[투표 참여 인원: ${voterCount}명 / 출석 의결권: ${presentRights}표]**\n정족수: **${quorumMet ? "충족" : "미충족"}**\n\n${resultText}\n\n결과: **${resultLabel}**`,
             color: 0x3b82f6,
             timestamp: new Date().toISOString(),
           },
@@ -1287,6 +1303,9 @@ export async function POST(req: Request) {
         success: true,
         status: "CLOSED",
         resultStatus,
+        resultLabel,
+        pluralityWinner: pluralityOutcome?.winner ?? null,
+        pluralityTiedChoices: pluralityOutcome?.tiedChoices ?? [],
         quorumMet,
         tally: tallyRes.rows,
         rankedRounds,

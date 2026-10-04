@@ -48,6 +48,8 @@ interface LiveStats {
   quorumNeeded: number;
   quorumMet: boolean;
   tally: { choice: string; total: number }[];
+  pluralityWinner?: string | null;
+  pluralityTiedChoices?: string[];
   rankedRounds?: {
     round: number;
     tally: { choice: string; total: number }[];
@@ -201,6 +203,7 @@ export default function VoteClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [votedOk, setVotedOk] = useState(false);
   const [isActing, setIsActing] = useState(false);
+  const [chairParticipationEnabled, setChairParticipationEnabled] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -216,6 +219,18 @@ export default function VoteClient({
   const isVoted = votedAgendas.includes(selectedId);
   const choices = parseChoices(current);
   const isRanked = current?.voting_method === "RANKED";
+  const pluralityResultLabel =
+    current?.voting_method !== "PLURALITY"
+      ? null
+      : !liveStats
+        ? "최다득표 결과 확인 중"
+        : !liveStats.quorumMet
+          ? "정족수 미충족"
+          : liveStats.pluralityWinner
+            ? `당선: ${liveStats.pluralityWinner}`
+            : liveStats.pluralityTiedChoices?.length
+              ? `최다득표 동률: ${liveStats.pluralityTiedChoices.join(", ")}`
+              : "당선자 없음";
   const deadlineKey =
     current?.status === "VOTING" && current.voting_deadline
       ? `${current.id}:${current.voting_deadline}`
@@ -384,7 +399,7 @@ export default function VoteClient({
                 ...(action === "RECORD_NO_OBJECTION"
                   ? { result_status: "PASS", result_method: "NO_OBJECTION" }
                   : action === "CLOSE_VOTING"
-                    ? { result_method: "VOTE" }
+                    ? { result_status: data.resultStatus, result_method: "VOTE" }
                     : {}),
               }
             : a,
@@ -397,7 +412,7 @@ export default function VoteClient({
             ? "표결 개시가 공식 선포되었습니다."
             : action === "RECORD_NO_OBJECTION"
               ? "이의 없음 가결로 의안 결과를 기록했습니다."
-              : `표결 종료 및 결과 집계가 완료되었습니다. 결과: ${data.resultStatus === "PASS" ? "가결" : "부결"}`,
+              : `표결 종료 및 결과 집계가 완료되었습니다. 결과: ${data.resultLabel ?? (data.resultStatus === "PASS" ? "가결" : "부결")}`,
       });
       await fetchStats();
     } catch (e: any) {
@@ -411,14 +426,15 @@ export default function VoteClient({
   };
 
   const rateWidth = liveStats
-    ? Math.min(
-        100,
-        Math.round((liveStats.casted / (liveStats.totalRights || 1)) * 100),
-      )
+    ? Math.min(100, Math.max(0, liveStats.attendanceVotingRate))
     : 0;
 
   // ── 출석 미승인 차단 화면 ────────────────────────────────────────────────────
-  if (attendanceStatus !== "APPROVED" && attendanceStatus !== "EXEMPT") {
+  if (
+    attendanceStatus !== "APPROVED" &&
+    attendanceStatus !== "EXEMPT" &&
+    !(chair && chairParticipationEnabled)
+  ) {
     return (
       <div className="p-8 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl space-y-5">
         <div
@@ -511,6 +527,16 @@ export default function VoteClient({
             >
               <RefreshCw className="w-3.5 h-3.5" />
               새로고침
+            </button>
+          )}
+          {chair && (
+            <button
+              type="button"
+              onClick={() => setChairParticipationEnabled(true)}
+              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow transition-colors flex items-center gap-1.5"
+            >
+              <Vote className="w-3.5 h-3.5" />
+              의장단 투표 참여
             </button>
           )}
         </div>
@@ -731,8 +757,8 @@ export default function VoteClient({
           {/* 투표율 프로그레스 */}
           <div className="space-y-1">
             <div className="flex justify-between text-[11px] text-slate-500">
-              <span>전체 의결권 대비 진행률</span>
-              <span>{rateWidth}%</span>
+              <span>출석 의결권 대비 진행률</span>
+              <span>{liveStats.attendanceVotingRate}%</span>
             </div>
             <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
               <div
@@ -942,13 +968,22 @@ export default function VoteClient({
           {current.result_status && current.result_status !== "PENDING" && (
             <span
               className={`inline-block px-4 py-1 rounded-full text-sm font-extrabold ${
-                current.result_status === "PASS"
+                current.voting_method === "PLURALITY" &&
+                liveStats?.quorumMet &&
+                !liveStats.pluralityWinner &&
+                liveStats.pluralityTiedChoices?.length
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                  : current.result_status === "PASS" &&
+                      (current.voting_method !== "PLURALITY" ||
+                        Boolean(liveStats?.pluralityWinner))
                   ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                   : "bg-red-500/20 text-red-300 border border-red-500/40"
               }`}
             >
               {current.result_method === "NO_OBJECTION"
                 ? "✅ 이의 없음으로 가결"
+                : current.voting_method === "PLURALITY"
+                  ? pluralityResultLabel
                 : current.result_status === "PASS"
                   ? "✅ 가결"
                   : "❌ 부결"}

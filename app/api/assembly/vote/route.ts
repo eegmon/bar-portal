@@ -9,8 +9,24 @@ import {
   RANKED_BALLOT_PREFIX,
   type RankedVoteRound,
 } from "@/lib/ranked-vote";
+import { countPluralityVotes } from "@/lib/plurality-vote";
 
 const DEFAULT_CHOICES = ["찬성", "반대", "기권"];
+const ASSEMBLY_OFFICER_POSITIONS = [
+  "PRESIDENT",
+  "ASSEMBLY_SPEAKER",
+  "ASSEMBLY_VICE_SPEAKER",
+  "SECRETARY_GENERAL",
+];
+
+function isAssemblyOfficer(user: { role: string; positions?: string[] }) {
+  return (
+    user.role === "ADMIN" ||
+    (user.positions ?? []).some((position) =>
+      ASSEMBLY_OFFICER_POSITIONS.includes(position),
+    )
+  );
+}
 
 function getChoices(rawConfig: unknown): string[] {
   try {
@@ -172,6 +188,17 @@ export async function GET(req: Request) {
     const totalRights = personalRights + firmRights;
     const presentRights = Number(presentRes.rows[0]?.present_rights || 0);
     const casted = Number(castRes.rows[0]?.casted || 0);
+    const tally =
+      agenda.voting_method === "RANKED"
+        ? []
+        : tallyRes.rows.map((row) => ({
+            choice: String(row.choice),
+            total: Number(row.total || 0),
+          }));
+    const pluralityOutcome =
+      agenda.voting_method === "PLURALITY" && (isAdminView || isFinished)
+        ? countPluralityVotes(tally)
+        : null;
 
     const stats: {
       totalRights: number;
@@ -185,6 +212,8 @@ export async function GET(req: Request) {
       quorumNeeded: number;
       quorumMet: boolean;
       tally: { choice: string; total: number }[];
+      pluralityWinner: string | null;
+      pluralityTiedChoices: string[];
       rankedRounds: RankedVoteRound[];
       namedVotes?: {
         userName: string;
@@ -209,13 +238,9 @@ export async function GET(req: Request) {
       quorumMet:
         presentRights >=
         Number(agenda.quorum_needed || Math.ceil(totalRights / 3)),
-      tally:
-        agenda.voting_method === "RANKED"
-          ? []
-          : tallyRes.rows.map((row) => ({
-              choice: String(row.choice),
-              total: Number(row.total || 0),
-            })),
+      tally,
+      pluralityWinner: pluralityOutcome?.winner ?? null,
+      pluralityTiedChoices: pluralityOutcome?.tiedChoices ?? [],
       rankedRounds:
         agenda.voting_method === "RANKED" && (isAdminView || isFinished)
           ? rankedRounds
@@ -318,7 +343,7 @@ export async function POST(req: Request) {
 
     // 3. 출석 자격 검증 — ADMIN과 총회 범위가 일치하는 개인 링크는 면제
     //    - 직접 출석(is_proxy=0, attended=1) 또는 위임 출석(is_proxy=1) 모두 인정
-    if (user.role !== "ADMIN") {
+    if (!isAssemblyOfficer(user)) {
       const attRes = await db.execute({
         sql: `SELECT approval_status, attended, is_proxy
               FROM assembly_attendances
