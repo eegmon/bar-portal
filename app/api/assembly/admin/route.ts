@@ -500,7 +500,7 @@ export async function POST(req: Request) {
       }
 
       const agendaRes = await db.execute({
-        sql: "SELECT id, status FROM agendas WHERE assembly_id = ?",
+        sql: "SELECT id, status FROM agendas WHERE assembly_id = ? ORDER BY agenda_order ASC",
         args: [assemblyId],
       });
       const currentIds = agendaRes.rows.map((row) => row.id as string);
@@ -515,15 +515,23 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+      const fixedAgendaIds = new Set(
+        agendaRes.rows
+          .filter((row) => row.status !== "READY")
+          .map((row) => String(row.id)),
+      );
+      const currentIndexById = new Map(
+        currentIds.map((id, index) => [String(id), index]),
+      );
       if (
-        agendaRes.rows.some((row) =>
-          ["VOTING", "CLOSED"].includes(row.status as string),
+        requestedIds.some(
+          (id: string, index: number) =>
+            fixedAgendaIds.has(id) && currentIndexById.get(id) !== index,
         )
       ) {
         return NextResponse.json(
           {
-            error:
-              "표결 중이거나 종료된 안건이 있어 순서를 변경할 수 없습니다.",
+            error: "표결 대기 중인 안건만 순서를 변경할 수 있습니다.",
           },
           { status: 400 },
         );

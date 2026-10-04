@@ -3818,19 +3818,31 @@ ${agendaMinutes}
                           {/* 액션 버튼 그룹 */}
                           <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                             {selectedAssembly?.status === "IN_SESSION" &&
-                              ![
-                                "VOTING",
-                                "CLOSED",
-                                "RESULT_CONFIRMED",
-                              ].includes(ag.status) && (
+                              ag.status === "READY" && (
                                 <div className="flex gap-1">
                                   <button
-                                    disabled={agIdx === 0}
+                                    disabled={
+                                      !assAgendas
+                                        .slice(0, agIdx)
+                                        .some(
+                                          (agenda) => agenda.status === "READY",
+                                        )
+                                    }
                                     onClick={() => {
                                       const n = [...assAgendas];
-                                      [n[agIdx - 1], n[agIdx]] = [
+                                      const targetIdx = n
+                                        .map((agenda, index) =>
+                                          agenda.status === "READY" &&
+                                          index < agIdx
+                                            ? index
+                                            : -1,
+                                        )
+                                        .filter((index) => index >= 0)
+                                        .pop();
+                                      if (targetIdx === undefined) return;
+                                      [n[targetIdx], n[agIdx]] = [
                                         n[agIdx],
-                                        n[agIdx - 1],
+                                        n[targetIdx],
                                       ];
                                       handleReorderAgendas(
                                         selectedAssemblyId,
@@ -3842,11 +3854,23 @@ ${agendaMinutes}
                                     <ArrowUp className="w-3.5 h-3.5" />
                                   </button>
                                   <button
-                                    disabled={agIdx === assAgendas.length - 1}
+                                    disabled={
+                                      !assAgendas
+                                        .slice(agIdx + 1)
+                                        .some(
+                                          (agenda) => agenda.status === "READY",
+                                        )
+                                    }
                                     onClick={() => {
                                       const n = [...assAgendas];
-                                      [n[agIdx], n[agIdx + 1]] = [
-                                        n[agIdx + 1],
+                                      const targetIdx = n.findIndex(
+                                        (agenda, index) =>
+                                          index > agIdx &&
+                                          agenda.status === "READY",
+                                      );
+                                      if (targetIdx < 0) return;
+                                      [n[agIdx], n[targetIdx]] = [
+                                        n[targetIdx],
                                         n[agIdx],
                                       ];
                                       handleReorderAgendas(
