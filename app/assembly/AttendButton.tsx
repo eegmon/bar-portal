@@ -22,7 +22,7 @@ export default function AttendButton({
 
   const handleAttend = async () => {
     const confirmMsg = hasVotingAgenda
-      ? `[출석 확인 — 표결 진행 중]\n\n현재 안건 표결이 진행 중입니다.\n출석 확인을 요청하면 의장의 승인 후 정족수에 반영됩니다.\n\n• 자격 연장은 즉시 처리됩니다.\n• 투표는 승인 여부와 무관하게 참여 가능합니다.\n\n출석 확인을 요청하시겠습니까?`
+      ? `[출석 확인 — 표결 진행 중]\n\n현재 안건 표결이 진행 중입니다.\n출석 확인을 요청하면 의장 승인 전까지 출석 및 정족수에 반영되지 않습니다.\n일반 로그인 투표도 승인 후 참여할 수 있습니다. (개별 투표 링크 사용자는 예외)\n\n• 자격 연장은 승인 여부와 무관하게 즉시 처리됩니다.\n\n출석 확인을 요청하시겠습니까?`
       : `[출석 확인]\n\n${assemblyTitle}에 직접 참석하여 출석을 확인하시겠습니까?\n\n✅ 확인 시 당월 자격이 1개월 연장됩니다.`;
 
     if (!confirm(confirmMsg)) return;
@@ -40,7 +40,7 @@ export default function AttendButton({
       if (data.pending) {
         setResult("pending");
         alert(
-          `⏳ 출석 확인이 접수되었습니다.\n\n표결 진행 중 출석이므로 정족수 반영을 위해 의장의 승인이 필요합니다.\n자격은 즉시 연장되었습니다.`,
+          `⏳ 출석 확인이 접수되었습니다.\n\n의장 승인 전까지 출석은 정족수에 반영되지 않으며, 일반 로그인으로는 투표할 수 없습니다. (개별 투표 링크 사용자는 예외)\n자격은 즉시 연장되었습니다.`,
         );
       } else {
         setResult("done");
