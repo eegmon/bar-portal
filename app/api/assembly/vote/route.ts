@@ -118,65 +118,90 @@ export async function GET(req: Request) {
         { status: 404 },
       );
 
-    const totalRightsRes = await db.execute({
-      sql: "SELECT COALESCE(SUM(COALESCE(v.voting_power, 1)), 0) as total FROM users u LEFT JOIN assembly_voting_rights v ON v.user_id = u.id AND v.assembly_id = ? WHERE u.role = 'LAWYER' AND u.status = 'ACTIVE'",
-      args: [agenda.assembly_id],
-    });
-    const firmRightsRes = await db.execute({
-      sql: `SELECT COALESCE(SUM(partner_cnt / 2), 0) as firm_total
-            FROM (
-              SELECT f.id, COUNT(fm.lawyer_id) as partner_cnt
-              FROM law_firms f
-              JOIN firm_members fm ON fm.firm_id = f.id AND fm.is_partner = 1
-              WHERE f.status = 'APPROVED'
-              GROUP BY f.id
-            )`,
-      args: [],
-    });
-    const presentRes = await db.execute({
-      sql: `SELECT COALESCE(SUM(
-              CASE
-                -- 직접 출석: attended=1이면 반영
-                WHEN aa.is_proxy = 0 AND aa.attended = 1
-                  THEN COALESCE(aa.voting_power, 1)
-                -- 위임: 수임인(proxy_to_user_id)이 실제 출석(attended=1)한 경우에만 반영
-                WHEN aa.is_proxy = 1 AND EXISTS (
-                  SELECT 1 FROM assembly_attendances proxy_att
-                  WHERE proxy_att.assembly_id = aa.assembly_id
-                    AND proxy_att.user_id     = aa.proxy_to_user_id
-                    AND proxy_att.is_proxy    = 0
-                    AND proxy_att.attended    = 1
-                    AND proxy_att.approval_status = 'APPROVED'
-                ) THEN COALESCE(aa.voting_power, 1)
-                ELSE 0
-              END
-            ), 0) as present_rights
-            FROM assembly_attendances aa
-            WHERE aa.assembly_id = ? AND aa.approval_status = 'APPROVED'`,
-      args: [agenda.assembly_id],
-    });
-    const castRes = await db.execute({
-      sql: "SELECT COALESCE(SUM(votes_count), 0) as casted FROM ballot_box WHERE agenda_id = ?",
-      args: [agendaId],
-    });
-    const voterRes = await db.execute({
-      sql: "SELECT COUNT(*) as voters FROM voter_logs WHERE agenda_id = ?",
-      args: [agendaId],
-    });
-    const tallyRes = await db.execute({
-      sql: "SELECT choice, SUM(votes_count) as total FROM ballot_box WHERE agenda_id = ? GROUP BY choice",
-      args: [agendaId],
-    });
     const isAdminView = canManageAssembly(user);
     const isFinished = ["CLOSED", "RESULT_CONFIRMED"].includes(
       String(agenda.status),
     );
+    const namedVotesQuery =
+      !agenda.is_secret && isAdminView && isFinished
+        ? db
+            .execute({
+              sql: `SELECT b.user_id, u.name AS user_name, b.choice, b.votes_count
+                    FROM ballot_box b
+                    LEFT JOIN users u ON u.id = b.user_id
+                    WHERE b.agenda_id = ?
+                      AND b.user_id IS NOT NULL
+                      AND b.choice NOT LIKE '__RANKING__%'
+                    ORDER BY u.name ASC`,
+              args: [agendaId],
+            })
+            .catch(() => null)
+        : Promise.resolve(null);
+    const [
+      totalRightsRes,
+      firmRightsRes,
+      presentRes,
+      voterRes,
+      tallyRes,
+      rankedRes,
+      namedVotesRes,
+    ] = await Promise.all([
+      db.execute({
+        sql: "SELECT COALESCE(SUM(COALESCE(v.voting_power, 1)), 0) as total FROM users u LEFT JOIN assembly_voting_rights v ON v.user_id = u.id AND v.assembly_id = ? WHERE u.role = 'LAWYER' AND u.status = 'ACTIVE'",
+        args: [agenda.assembly_id],
+      }),
+      db.execute({
+        sql: `SELECT COALESCE(SUM(partner_cnt / 2), 0) as firm_total
+                FROM (
+                  SELECT f.id, COUNT(fm.lawyer_id) as partner_cnt
+                  FROM law_firms f
+                  JOIN firm_members fm ON fm.firm_id = f.id AND fm.is_partner = 1
+                  WHERE f.status = 'APPROVED'
+                  GROUP BY f.id
+                )`,
+        args: [],
+      }),
+      db.execute({
+        sql: `SELECT COALESCE(SUM(
+                  CASE
+                    -- 직접 출석: attended=1이면 반영
+                    WHEN aa.is_proxy = 0 AND aa.attended = 1
+                      THEN COALESCE(aa.voting_power, 1)
+                    -- 위임: 수임인(proxy_to_user_id)이 실제 출석(attended=1)한 경우에만 반영
+                    WHEN aa.is_proxy = 1 AND EXISTS (
+                      SELECT 1 FROM assembly_attendances proxy_att
+                      WHERE proxy_att.assembly_id = aa.assembly_id
+                        AND proxy_att.user_id     = aa.proxy_to_user_id
+                        AND proxy_att.is_proxy    = 0
+                        AND proxy_att.attended    = 1
+                        AND proxy_att.approval_status = 'APPROVED'
+                    ) THEN COALESCE(aa.voting_power, 1)
+                    ELSE 0
+                  END
+                ), 0) as present_rights
+                FROM assembly_attendances aa
+                WHERE aa.assembly_id = ? AND aa.approval_status = 'APPROVED'`,
+        args: [agenda.assembly_id],
+      }),
+      db.execute({
+        sql: "SELECT COUNT(*) as voters FROM voter_logs WHERE agenda_id = ?",
+        args: [agendaId],
+      }),
+      db.execute({
+        sql: "SELECT choice, SUM(votes_count) as total FROM ballot_box WHERE agenda_id = ? GROUP BY choice",
+        args: [agendaId],
+      }),
+      agenda.voting_method === "RANKED"
+        ? db.execute({
+            sql: "SELECT choice, votes_count FROM ballot_box WHERE agenda_id = ? AND substr(choice, 1, ?) = ?",
+            args: [agendaId, RANKED_BALLOT_PREFIX.length, RANKED_BALLOT_PREFIX],
+          })
+        : Promise.resolve(null),
+      namedVotesQuery,
+    ]);
+
     let rankedRounds: RankedVoteRound[] = [];
-    if (agenda.voting_method === "RANKED") {
-      const rankedRes = await db.execute({
-        sql: "SELECT choice, votes_count FROM ballot_box WHERE agenda_id = ? AND substr(choice, 1, ?) = ?",
-        args: [agendaId, RANKED_BALLOT_PREFIX.length, RANKED_BALLOT_PREFIX],
-      });
+    if (rankedRes) {
       rankedRounds = countRankedVotes(
         parseRankedBallots(rankedRes.rows, getChoices(agenda.choice_config)),
         getChoices(agenda.choice_config),
@@ -187,7 +212,10 @@ export async function GET(req: Request) {
     const firmRights = Number(firmRightsRes.rows[0]?.firm_total || 0);
     const totalRights = personalRights + firmRights;
     const presentRights = Number(presentRes.rows[0]?.present_rights || 0);
-    const casted = Number(castRes.rows[0]?.casted || 0);
+    const casted = tallyRes.rows.reduce(
+      (sum, row) => sum + Number(row.total || 0),
+      0,
+    );
     const tally =
       agenda.voting_method === "RANKED"
         ? []
@@ -252,28 +280,13 @@ export async function GET(req: Request) {
       stats.rankedRounds = [];
     }
 
-    // 기명투표 + 관리자 + 종료 후 → 이름별 선택 명단 추가
-    if (!agenda.is_secret && isAdminView && isFinished) {
-      try {
-        const namedRes = await db.execute({
-          sql: `SELECT b.user_id, u.name AS user_name, b.choice, b.votes_count
-                FROM ballot_box b
-                LEFT JOIN users u ON u.id = b.user_id
-                WHERE b.agenda_id = ?
-                  AND b.user_id IS NOT NULL
-                  AND b.choice NOT LIKE '__RANKING__%'
-                ORDER BY u.name ASC`,
-          args: [agendaId],
-        });
-        stats.namedVotes = namedRes.rows.map((r) => ({
-          userId: String(r.user_id ?? ""),
-          userName: String(r.user_name ?? "알 수 없음"),
-          choice: String(r.choice),
-          votes_count: Number(r.votes_count),
-        }));
-      } catch {
-        // user_id 컬럼이 아직 없는 경우 무시 (마이그레이션 전)
-      }
+    if (namedVotesRes) {
+      stats.namedVotes = namedVotesRes.rows.map((r) => ({
+        userId: String(r.user_id ?? ""),
+        userName: String(r.user_name ?? "알 수 없음"),
+        choice: String(r.choice),
+        votes_count: Number(r.votes_count),
+      }));
     }
 
     return NextResponse.json({
