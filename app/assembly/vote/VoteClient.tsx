@@ -203,7 +203,8 @@ export default function VoteClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [votedOk, setVotedOk] = useState(false);
   const [isActing, setIsActing] = useState(false);
-  const [chairParticipationEnabled, setChairParticipationEnabled] = useState(false);
+  const [chairParticipationEnabled, setChairParticipationEnabled] =
+    useState(false);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
@@ -271,6 +272,15 @@ export default function VoteClient({
       const data = await res.json();
       if (res.ok) {
         setLiveStats(data.stats);
+        if (data.agenda) {
+          setAgendaList((previous) =>
+            previous.map((agenda) =>
+              agenda.id === data.agenda.id
+                ? { ...agenda, ...data.agenda }
+                : agenda,
+            ),
+          );
+        }
         setLastRefresh(new Date());
       }
     } catch {
@@ -285,6 +295,24 @@ export default function VoteClient({
       if (statsTimer.current) clearInterval(statsTimer.current);
     };
   }, [fetchStats]);
+
+  useEffect(() => {
+    const events = new EventSource(
+      `/api/assembly/events?assemblyId=${encodeURIComponent(assemblyId)}`,
+    );
+    events.onmessage = (event) => {
+      const snapshot = JSON.parse(event.data) as {
+        agendas: Agenda[];
+      };
+      setAgendaList((previous) =>
+        snapshot.agendas.map((agenda) => {
+          const currentAgenda = previous.find((item) => item.id === agenda.id);
+          return currentAgenda ? { ...currentAgenda, ...agenda } : agenda;
+        }),
+      );
+    };
+    return () => events.close();
+  }, [assemblyId]);
 
   // 투표 링크 복사
   const copyLink = async () => {
@@ -399,7 +427,10 @@ export default function VoteClient({
                 ...(action === "RECORD_NO_OBJECTION"
                   ? { result_status: "PASS", result_method: "NO_OBJECTION" }
                   : action === "CLOSE_VOTING"
-                    ? { result_status: data.resultStatus, result_method: "VOTE" }
+                    ? {
+                        result_status: data.resultStatus,
+                        result_method: "VOTE",
+                      }
                     : {}),
               }
             : a,
@@ -976,17 +1007,17 @@ export default function VoteClient({
                   : current.result_status === "PASS" &&
                       (current.voting_method !== "PLURALITY" ||
                         Boolean(liveStats?.pluralityWinner))
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                  : "bg-red-500/20 text-red-300 border border-red-500/40"
+                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                    : "bg-red-500/20 text-red-300 border border-red-500/40"
               }`}
             >
               {current.result_method === "NO_OBJECTION"
                 ? "✅ 이의 없음으로 가결"
                 : current.voting_method === "PLURALITY"
                   ? pluralityResultLabel
-                : current.result_status === "PASS"
-                  ? "✅ 가결"
-                  : "❌ 부결"}
+                  : current.result_status === "PASS"
+                    ? "✅ 가결"
+                    : "❌ 부결"}
             </span>
           )}
           <p className="text-xs text-slate-400">

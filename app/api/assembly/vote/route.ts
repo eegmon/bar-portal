@@ -276,7 +276,17 @@ export async function GET(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, stats });
+    return NextResponse.json({
+      success: true,
+      stats,
+      agenda: {
+        id: String(agenda.id),
+        status: String(agenda.status),
+        voting_deadline: agenda.voting_deadline ?? null,
+        result_status: agenda.result_status ?? null,
+        result_method: agenda.result_method ?? null,
+      },
+    });
   } catch (err: unknown) {
     console.error("투표 현황 조회 에러:", err);
     return NextResponse.json(

@@ -16,6 +16,7 @@ import db from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { countPluralityVotes } from "@/lib/plurality-vote";
 import AttendButton from "./AttendButton";
+import AssemblyLiveRefresh from "./AssemblyLiveRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,10 @@ export default async function AssemblyHubPage({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
+      <AssemblyLiveRefresh
+        enabled={isInSession}
+        assemblyId={String(assembly?.id ?? "")}
+      />
       {/* 헤더 */}
       <div className="border-b border-slate-800 pb-6">
         <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold mb-1">
