@@ -1138,10 +1138,6 @@ export async function POST(req: Request) {
       });
 
       const voterCount = totalVotersRes.rows[0]?.count || 0;
-      const tallyText =
-        tallyRes.rows
-          .map((r) => `• **${r.choice}**: ${r.total}표`)
-          .join("\n") || "투표 내역 없음";
       let rankedRounds: ReturnType<typeof countRankedVotes>["rounds"] = [];
       let rankedWinner: string | null = null;
       if (agenda.voting_method === "RANKED") {
@@ -1199,6 +1195,11 @@ export async function POST(req: Request) {
         Number(totalRightsRes.rows[0]?.total || 0) +
         Number(firmRightsRes.rows[0]?.firm_total || 0);
       const presentRights = Number(presentRes.rows[0]?.present_rights || 0);
+      const castedRights = tallyRes.rows.reduce(
+        (total, row) => total + Number(row.total || 0),
+        0,
+      );
+      const abstentionVotes = Math.max(0, presentRights - castedRights);
       const quorumNeeded = Number(
         agenda.quorum_needed || Math.ceil(totalRights / 3),
       );
@@ -1254,6 +1255,30 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
+      const finalTally = tallyRes.rows.map((row) => ({
+        choice: String(row.choice),
+        total: Number(row.total || 0),
+      }));
+      if (abstentionVotes > 0) {
+        await db.execute({
+          sql: "INSERT INTO ballot_box (id, agenda_id, choice, votes_count) VALUES (?, ?, '기권', ?)",
+          args: [
+            `abstention-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            agendaId,
+            abstentionVotes,
+          ],
+        });
+        const abstentionTally = finalTally.find((row) => row.choice === "기권");
+        if (abstentionTally) {
+          abstentionTally.total += abstentionVotes;
+        } else {
+          finalTally.push({ choice: "기권", total: abstentionVotes });
+        }
+      }
+      const tallyText =
+        finalTally
+          .map((row) => `• **${row.choice}**: ${row.total}표`)
+          .join("\n") || "투표 내역 없음";
       const assemblyRes = await db.execute({
         sql: "SELECT minutes_text FROM assemblies WHERE id = ?",
         args: [agenda.assembly_id],
@@ -1275,13 +1300,17 @@ export async function POST(req: Request) {
           : agenda.voting_method === "PLURALITY"
             ? `${tallyText}\n• ${pluralityResultLabel}`
             : tallyText;
+      const finalResultText =
+        agenda.voting_method === "RANKED" && abstentionVotes > 0
+          ? `${resultText}\n• 기권: ${abstentionVotes}표`
+          : resultText;
       const resultLabel =
         agenda.voting_method === "PLURALITY"
           ? pluralityResultLabel
           : resultStatus === "PASS"
             ? "가결"
             : "부결";
-      const minutesSection = `\n\n[안건 표결 자동 집계] ${agenda.title}\n- 표결 종료: ${new Date().toISOString()}\n- 출석 의결권: ${presentRights}표 / 전체 의결권 ${totalRights}표\n- 의결권 정족수: ${quorumNeeded}표 기준, ${quorumMet ? "충족" : "미충족"}\n- 투표 참여 인원: ${voterCount}명\n${resultText}\n- 의결 결과: ${resultLabel}`;
+      const minutesSection = `\n\n[안건 표결 자동 집계] ${agenda.title}\n- 표결 종료: ${new Date().toISOString()}\n- 출석 의결권: ${presentRights}표 / 전체 의결권 ${totalRights}표\n- 의결권 정족수: ${quorumNeeded}표 기준, ${quorumMet ? "충족" : "미충족"}\n- 투표 참여 인원: ${voterCount}명\n${finalResultText}\n- 의결 결과: ${resultLabel}`;
       await db.execute({
         sql: "UPDATE assemblies SET minutes_text = ? WHERE id = ?",
         args: [`${currentMinutes}${minutesSection}`, agenda.assembly_id],
@@ -1300,7 +1329,7 @@ export async function POST(req: Request) {
         embeds: [
           {
             title: `📊 표결 집계 결과 선포: ${agenda.title}`,
-            description: `**[투표 참여 인원: ${voterCount}명 / 출석 의결권: ${presentRights}표]**\n정족수: **${quorumMet ? "충족" : "미충족"}**\n\n${resultText}\n\n결과: **${resultLabel}**`,
+            description: `**[투표 참여 인원: ${voterCount}명 / 출석 의결권: ${presentRights}표]**\n정족수: **${quorumMet ? "충족" : "미충족"}**\n\n${finalResultText}\n\n결과: **${resultLabel}**`,
             color: 0x3b82f6,
             timestamp: new Date().toISOString(),
           },
@@ -1315,7 +1344,7 @@ export async function POST(req: Request) {
         pluralityWinner: pluralityOutcome?.winner ?? null,
         pluralityTiedChoices: pluralityOutcome?.tiedChoices ?? [],
         quorumMet,
-        tally: tallyRes.rows,
+        tally: finalTally,
         rankedRounds,
       });
     }
