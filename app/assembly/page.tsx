@@ -85,6 +85,28 @@ export default async function AssemblyHubPage({
           plurality_tied_choices: outcome?.tiedChoices ?? [],
         };
       });
+      const namedVotersRes = await db.execute({
+        sql: `SELECT DISTINCT vl.agenda_id, vl.user_id, u.name AS user_name
+              FROM voter_logs vl
+              JOIN agendas a ON a.id = vl.agenda_id
+              JOIN users u ON u.id = vl.user_id
+              WHERE a.assembly_id = ?
+                AND a.is_secret = 0
+                AND a.status IN ('CLOSED', 'RESULT_CONFIRMED')
+              ORDER BY a.agenda_order ASC, u.name ASC`,
+        args: [assembly.id],
+      });
+      const namedVotersByAgenda = new Map<string, string[]>();
+      for (const row of namedVotersRes.rows) {
+        const agendaKey = String(row.agenda_id);
+        const voters = namedVotersByAgenda.get(agendaKey) ?? [];
+        voters.push(String(row.user_name));
+        namedVotersByAgenda.set(agendaKey, voters);
+      }
+      agendas = agendas.map((agenda) => ({
+        ...agenda,
+        named_voters: namedVotersByAgenda.get(String(agenda.id)) ?? [],
+      }));
 
       if (user) {
         const attRes = await db.execute({
@@ -446,13 +468,19 @@ export default async function AssemblyHubPage({
                         </div>
 
                         {/* 투표 버튼 */}
-                        {ag.status === "VOTING" && (
+                        {["VOTING", "CLOSED", "RESULT_CONFIRMED"].includes(
+                          ag.status,
+                        ) && (
                           <Link
                             href={`/assembly/vote?assemblyId=${assembly.id}&agendaId=${ag.id}`}
-                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shrink-0 transition-colors flex items-center gap-1.5 shadow-md"
+                            className={`px-3.5 py-2 ${
+                              ag.status === "VOTING"
+                                ? "bg-emerald-600 hover:bg-emerald-500"
+                                : "bg-blue-700 hover:bg-blue-600"
+                            } text-white text-xs font-bold rounded-xl shrink-0 transition-colors flex items-center gap-1.5 shadow-md`}
                           >
                             <Vote className="w-3.5 h-3.5" />
-                            표결하기
+                            {ag.status === "VOTING" ? "표결하기" : "결과 확인"}
                           </Link>
                         )}
                       </div>
@@ -486,6 +514,26 @@ export default async function AssemblyHubPage({
                 <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-200 font-mono whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto">
                   {assembly.minutes_text}
                 </div>
+
+                {agendas.some((agenda) => agenda.named_voters.length > 0) && (
+                  <div className="border-t border-slate-800 pt-4 space-y-3">
+                    <h4 className="text-xs font-bold text-slate-300">
+                      안건별 기명 투표자
+                    </h4>
+                    {agendas
+                      .filter((agenda) => agenda.named_voters.length > 0)
+                      .map((agenda) => (
+                        <div key={agenda.id} className="space-y-1">
+                          <p className="text-xs font-semibold text-white">
+                            {agenda.title}
+                          </p>
+                          <p className="text-xs text-slate-400 leading-relaxed">
+                            {agenda.named_voters.join(", ")}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                )}
 
                 <div className="text-[11px] text-slate-500 flex items-center justify-between">
                   <span>
