@@ -23,32 +23,28 @@ export async function GET() {
     let myFirms: any[] = [];
     if (sessionUser) {
       const firmsRes = await db.execute({
-        sql: `SELECT f.id, f.name, f.type, f.representative_id, fm.is_partner
+        sql: `SELECT f.id, f.name, f.type, f.representative_id, fm.is_partner,
+                     COALESCE(fm_stats.member_count, 0) AS member_count,
+                     COALESCE(fm_stats.partner_count, 0) AS partner_count
               FROM firm_members fm
               JOIN law_firms f ON f.id = fm.firm_id
+              LEFT JOIN (
+                SELECT firm_id, COUNT(*) AS member_count,
+                       SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_count
+                FROM firm_members GROUP BY firm_id
+              ) fm_stats ON fm_stats.firm_id = f.id
               WHERE fm.lawyer_id = ? AND f.status = 'APPROVED'`,
         args: [sessionUser.id],
       });
-      myFirms = await Promise.all(
-        (firmsRes.rows as any[]).map(async (firm) => {
-          const countRes = await db.execute({
-            sql: `SELECT 
-                    COUNT(*) AS total_cnt,
-                    SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_cnt
-                  FROM firm_members WHERE firm_id = ?`,
-            args: [firm.id],
-          });
-          const memberCount = Number(countRes.rows[0]?.total_cnt ?? 0);
-          const partnerCount = Number(countRes.rows[0]?.partner_cnt ?? 0);
-          const votingPower = Math.floor(partnerCount / 2);
-          return {
-            ...firm,
-            member_count: memberCount,
-            partner_count: partnerCount,
-            voting_power: votingPower,
-          };
-        }),
-      );
+      myFirms = (firmsRes.rows as any[]).map((firm) => {
+        const partnerCount = Number(firm.partner_count ?? 0);
+        return {
+          ...firm,
+          member_count: Number(firm.member_count ?? 0),
+          partner_count: partnerCount,
+          voting_power: Math.floor(partnerCount / 2),
+        };
+      });
     }
 
     return NextResponse.json({

@@ -610,10 +610,19 @@ export async function POST(req: Request) {
     }
 
     if (action === "EXPIRE_ABSENT_MEMBERS") {
-      const { assemblyId } = body;
+      const { assemblyId, userIds } = body;
       if (!assemblyId) {
         return NextResponse.json(
           { error: "총회 선택이 필요합니다." },
+          { status: 400 },
+        );
+      }
+      if (
+        !Array.isArray(userIds) ||
+        !userIds.every((userId) => typeof userId === "string")
+      ) {
+        return NextResponse.json(
+          { error: "불출석 회원 선택 정보가 올바르지 않습니다." },
           { status: 400 },
         );
       }
@@ -650,7 +659,10 @@ export async function POST(req: Request) {
                 )`,
         args: [assembly.held_at, assemblyId],
       });
-      const absentMembers = absentRes.rows;
+      const requestedIds = new Set<string>(userIds);
+      const absentMembers = absentRes.rows.filter((member) =>
+        requestedIds.has(String(member.id)),
+      );
       for (const member of absentMembers) {
         await db.execute({
           sql: "UPDATE users SET status = 'EXPIRED' WHERE id = ? AND status = 'ACTIVE'",

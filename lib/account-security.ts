@@ -41,6 +41,19 @@ export function ensureAccountSecuritySchema() {
           consumed_at TEXT DEFAULT NULL
         )
       `);
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+          token_hash TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          expires_at INTEGER NOT NULL,
+          consumed_at TEXT DEFAULT NULL
+        )
+      `);
+      await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id)",
+      );
       try {
         await db.execute(
           "ALTER TABLE account_totp ADD COLUMN setup_attempts INTEGER NOT NULL DEFAULT 0",

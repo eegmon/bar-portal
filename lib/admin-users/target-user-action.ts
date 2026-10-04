@@ -1,5 +1,10 @@
+import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
+import {
+  ensureAccountSecuritySchema,
+  hashChallengeToken,
+} from "@/lib/account-security";
 import { sendDiscordWebhook, syncUserDiscordRoles } from "@/lib/discord";
 import { parseUserPositions } from "@/lib/user-positions";
 import type { SessionUser } from "@/lib/types";
@@ -36,6 +41,45 @@ export async function handleTargetUserAction(body: any, admin: SessionUser) {
       { error: "최고 관리자(ADMIN) 계정은 최고 관리자만 관리할 수 있습니다." },
       { status: 403 },
     );
+  }
+
+  if (action === "ISSUE_PASSWORD_RESET") {
+    await ensureAccountSecuritySchema();
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = Math.floor(Date.now() / 1000) + 30 * 60;
+
+    await db.execute({
+      sql: `UPDATE password_reset_tokens
+            SET consumed_at = datetime('now')
+            WHERE user_id = ? AND consumed_at IS NULL`,
+      args: [userId],
+    });
+    await db.execute({
+      sql: `INSERT INTO password_reset_tokens (token_hash, user_id, created_by, expires_at)
+            VALUES (?, ?, ?, ?)`,
+      args: [hashChallengeToken(token), userId, admin.id, expiresAt],
+    });
+
+    try {
+      await sendDiscordWebhook("ADMIN", {
+        embeds: [
+          {
+            title: "[보안] 비밀번호 재설정 링크 발급",
+            description: `관리자 ${admin.name} 님이 ${targetUser.name} (${targetUser.login_id}) 회원의 재설정 링크를 발급했습니다.`,
+            color: 0xf59e0b,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+    } catch (error) {
+      console.warn("비밀번호 재설정 발급 알림 전송 실패:", error);
+    }
+
+    return NextResponse.json({
+      success: true,
+      resetPath: `/reset-password?token=${encodeURIComponent(token)}`,
+      expiresAt,
+    });
   }
 
   if (action === "REVIEW_BONUS") {

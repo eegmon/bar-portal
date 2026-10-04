@@ -29,9 +29,16 @@ export async function GET(req: Request) {
     let firms: any[] = [];
     if (q.trim()) {
       const res = await db.execute({
-        sql: `SELECT f.*, u.name AS rep_name
+          sql: `SELECT f.*, u.name AS rep_name,
+                 COALESCE(fm_stats.member_count, 0) AS member_count,
+                 COALESCE(fm_stats.partner_count, 0) AS partner_count
               FROM law_firms f
               LEFT JOIN users u ON f.representative_id = u.id
+              LEFT JOIN (
+                SELECT firm_id, COUNT(*) AS member_count,
+                       SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_count
+                FROM firm_members GROUP BY firm_id
+              ) fm_stats ON fm_stats.firm_id = f.id
               WHERE (f.name LIKE ? OR f.address LIKE ?)
                 AND (? = 'ALL' OR f.status = ?)
               ORDER BY f.created_at DESC`,
@@ -40,9 +47,16 @@ export async function GET(req: Request) {
       firms = res.rows as any[];
     } else {
       const res = await db.execute({
-        sql: `SELECT f.*, u.name AS rep_name
+        sql: `SELECT f.*, u.name AS rep_name,
+                     COALESCE(fm_stats.member_count, 0) AS member_count,
+                     COALESCE(fm_stats.partner_count, 0) AS partner_count
               FROM law_firms f
               LEFT JOIN users u ON f.representative_id = u.id
+              LEFT JOIN (
+                SELECT firm_id, COUNT(*) AS member_count,
+                       SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_count
+                FROM firm_members GROUP BY firm_id
+              ) fm_stats ON fm_stats.firm_id = f.id
               WHERE (? = 'ALL' OR f.status = ?)
               ORDER BY f.created_at DESC`,
         args: [statusFilter, statusFilter],
@@ -50,29 +64,15 @@ export async function GET(req: Request) {
       firms = res.rows as any[];
     }
 
-    // 각 법인의 구성원 수 및 구성원 변호사(파트너) 수 조회하여 의결권 산출 (2명당 1표, 1명 0표)
-    const firmsWithMemberCount = await Promise.all(
-      firms.map(async (firm) => {
-        const countRes = await db.execute({
-          sql: `SELECT 
-                  COUNT(*) AS total_cnt,
-                  SUM(CASE WHEN is_partner = 1 THEN 1 ELSE 0 END) AS partner_cnt
-                FROM firm_members WHERE firm_id = ?`,
-          args: [firm.id],
-        });
-        const memberCount = Number(countRes.rows[0]?.total_cnt ?? 0);
-        const partnerCount = Number(countRes.rows[0]?.partner_cnt ?? 0);
-        // 등록된 구성원 변호사 2명당 1표, 1명은 0표
-        const votingPower = Math.floor(partnerCount / 2);
-
-        return {
-          ...firm,
-          member_count: memberCount,
-          partner_count: partnerCount,
-          voting_power: votingPower,
-        };
-      }),
-    );
+    const firmsWithMemberCount = firms.map((firm) => {
+      const partnerCount = Number(firm.partner_count ?? 0);
+      return {
+        ...firm,
+        member_count: Number(firm.member_count ?? 0),
+        partner_count: partnerCount,
+        voting_power: Math.floor(partnerCount / 2),
+      };
+    });
 
     return NextResponse.json({ success: true, firms: firmsWithMemberCount });
   } catch (err: any) {

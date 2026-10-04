@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowUp,
@@ -14,9 +15,9 @@ import UserSearchCombobox from "@/components/UserSearchCombobox";
 interface AssemblyAttendancePanelProps {
   selectedAssembly: any;
   selectedAssemblyId: string;
-  absentMemberCount: number;
+  absentMembers: any[];
   isExpiringAbsentMembers: boolean;
-  onExpireAbsentMembers: (assembly: any, absentCount: number) => void;
+  onExpireAbsentMembers: (assembly: any, userIds: string[]) => void;
   users: any[];
   assemblies: any[];
   attendances: any[];
@@ -57,7 +58,7 @@ interface AssemblyAttendancePanelProps {
 export default function AssemblyAttendancePanel({
   selectedAssembly,
   selectedAssemblyId,
-  absentMemberCount,
+  absentMembers,
   isExpiringAbsentMembers,
   onExpireAbsentMembers,
   users,
@@ -92,6 +93,13 @@ export default function AssemblyAttendancePanel({
   votingRights,
   onRemoveVotingRight,
 }: AssemblyAttendancePanelProps) {
+  const absentMemberIds = absentMembers.map((member) => String(member.id));
+  const absentMemberKey = absentMemberIds.join(",");
+  const [selectedAbsentIds, setSelectedAbsentIds] = useState(absentMemberIds);
+  useEffect(() => {
+    setSelectedAbsentIds(absentMemberKey ? absentMemberKey.split(",") : []);
+  }, [selectedAssemblyId, absentMemberKey]);
+
   const activeLawyers = users.filter(
     (user) => user.role === "LAWYER" && user.status === "ACTIVE",
   );
@@ -102,39 +110,95 @@ export default function AssemblyAttendancePanel({
   return (
     <div className="space-y-4">
       {selectedAssembly && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-red-950/20 border border-red-800/40 rounded-xl">
-          <div className="space-y-1">
-            <div className="text-xs font-bold text-white flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              총회 불출석자 자격 만료
+        <div className="p-4 bg-red-950/20 border border-red-800/40 rounded-xl space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                총회 불출석자 자격 만료
+              </div>
+              <p className="text-[11px] text-slate-400">
+                총회 당시 등록된 회원 중 승인된 출석·위임 및 처리 대기 신청을
+                제외한 {absentMembers.length}명
+              </p>
             </div>
-            <p className="text-[11px] text-slate-400">
-              총회 당시 등록된 회원 중 승인된 출석·위임 및 처리 대기 신청을
-              제외한 {absentMemberCount}명
-            </p>
+            <button
+              onClick={() =>
+                onExpireAbsentMembers(selectedAssembly, selectedAbsentIds)
+              }
+              disabled={
+                selectedAssembly.status !== "CLOSED" ||
+                selectedAbsentIds.length === 0 ||
+                isExpiringAbsentMembers
+              }
+              title={
+                selectedAssembly.status !== "CLOSED"
+                  ? "총회 폐회 후 처리할 수 있습니다."
+                  : undefined
+              }
+              className="px-3 py-2 bg-red-700 hover:bg-red-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold rounded-lg transition-colors"
+            >
+              {isExpiringAbsentMembers
+                ? "처리 중..."
+                : selectedAssembly.status !== "CLOSED"
+                  ? "폐회 후 처리 가능"
+                  : `선택 ${selectedAbsentIds.length}명 자격 만료`}
+            </button>
           </div>
-          <button
-            onClick={() =>
-              onExpireAbsentMembers(selectedAssembly, absentMemberCount)
-            }
-            disabled={
-              selectedAssembly.status !== "CLOSED" ||
-              absentMemberCount === 0 ||
-              isExpiringAbsentMembers
-            }
-            title={
-              selectedAssembly.status !== "CLOSED"
-                ? "총회 폐회 후 처리할 수 있습니다."
-                : undefined
-            }
-            className="px-3 py-2 bg-red-700 hover:bg-red-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold rounded-lg transition-colors"
-          >
-            {isExpiringAbsentMembers
-              ? "처리 중..."
-              : selectedAssembly.status !== "CLOSED"
-                ? "폐회 후 처리 가능"
-                : `자격 만료 처리 (${absentMemberCount}명)`}
-          </button>
+          <div className="flex items-center justify-between gap-3 border-t border-red-900/40 pt-2">
+            <span className="text-[11px] text-slate-400">
+              선택 {selectedAbsentIds.length} / {absentMembers.length}명
+            </span>
+            <div className="flex gap-3 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setSelectedAbsentIds(absentMemberIds)}
+                className="text-red-300 hover:text-red-200"
+              >
+                전체 선택
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedAbsentIds([])}
+                className="text-slate-400 hover:text-white"
+              >
+                선택 해제
+              </button>
+            </div>
+          </div>
+          {absentMembers.length === 0 ? (
+            <p className="py-3 text-center text-xs text-slate-500">
+              불출석 처리 대상 회원이 없습니다.
+            </p>
+          ) : (
+            <div className="max-h-52 overflow-y-auto divide-y divide-red-900/30 rounded-lg border border-red-900/30">
+              {absentMembers.map((member) => (
+                <label
+                  key={member.id}
+                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-xs text-slate-200 hover:bg-red-950/30"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedAbsentIds.includes(String(member.id))}
+                    onChange={(event) =>
+                      setSelectedAbsentIds((current) =>
+                        event.target.checked
+                          ? [...current, String(member.id)]
+                          : current.filter((id) => id !== String(member.id)),
+                      )
+                    }
+                    className="h-3.5 w-3.5 accent-red-500"
+                  />
+                  <span>{member.name}</span>
+                  {member.login_id && (
+                    <span className="text-[10px] text-slate-500">
+                      {member.login_id}
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

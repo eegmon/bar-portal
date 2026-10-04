@@ -35,6 +35,7 @@ import {
   UserCheck,
   RefreshCw,
   Copy,
+  KeyRound,
   Clock,
   ChevronDown,
   ChevronRight,
@@ -129,6 +130,12 @@ export default function AdminClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [passwordResetLink, setPasswordResetLink] = useState<{
+    name: string;
+    url: string;
+  } | null>(null);
+  const [issuingPasswordResetId, setIssuingPasswordResetId] = useState("");
+  const [passwordResetLinkCopied, setPasswordResetLinkCopied] = useState(false);
 
   // 회원 직책/권한 편집 모달 상태
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -384,6 +391,48 @@ export default function AdminClient({
       );
     } catch (err: any) {
       alert(`오류: ${err.message}`);
+    }
+  };
+
+  const handleIssuePasswordReset = async (user: any) => {
+    if (
+      !confirm(
+        `${user.name} 회원의 비밀번호 재설정 링크를 발급할까요? 기존에 발급한 미사용 링크는 폐기됩니다.`,
+      )
+    ) {
+      return;
+    }
+    setIssuingPasswordResetId(user.id);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ISSUE_PASSWORD_RESET",
+          userId: user.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "링크 발급 실패");
+      setPasswordResetLink({
+        name: user.name,
+        url: `${window.location.origin}${data.resetPath}`,
+      });
+      setPasswordResetLinkCopied(false);
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIssuingPasswordResetId("");
+    }
+  };
+
+  const handleCopyPasswordResetLink = async () => {
+    if (!passwordResetLink) return;
+    try {
+      await navigator.clipboard.writeText(passwordResetLink.url);
+      setPasswordResetLinkCopied(true);
+    } catch {
+      alert("복사할 수 없습니다. 링크를 직접 선택해 복사해 주세요.");
     }
   };
 
@@ -1051,12 +1100,12 @@ export default function AdminClient({
 
   const handleExpireAbsentMembers = async (
     assembly: any,
-    absentCount: number,
+    userIds: string[],
   ) => {
-    if (assembly?.status !== "CLOSED" || absentCount < 1) return;
+    if (assembly?.status !== "CLOSED" || userIds.length < 1) return;
     if (
       !confirm(
-        `${assembly.title} 불출석 회원 ${absentCount}명의 자격을 만료할까요?\n\n승인된 출석·위임과 처리 대기 중인 신청은 제외됩니다. 이 작업은 되돌릴 수 없습니다.`,
+        `${assembly.title} 불출석 회원 ${userIds.length}명의 자격을 만료할까요?\n\n승인된 출석·위임과 처리 대기 중인 신청은 제외됩니다. 이 작업은 되돌릴 수 없습니다.`,
       )
     )
       return;
@@ -1068,6 +1117,7 @@ export default function AdminClient({
         body: JSON.stringify({
           action: "EXPIRE_ABSENT_MEMBERS",
           assemblyId: assembly.id,
+          userIds,
         }),
       });
       const data = await res.json();
@@ -2665,6 +2715,17 @@ ${agendaMinutes}
 
                         <td className="py-3 px-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleIssuePasswordReset(u)}
+                              disabled={issuingPasswordResetId === u.id}
+                              className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded text-xs font-semibold border border-amber-500/30 flex items-center gap-1 disabled:opacity-50"
+                              title="30분 유효한 1회용 비밀번호 재설정 링크 발급"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                              {issuingPasswordResetId === u.id
+                                ? "발급 중"
+                                : "비밀번호 초기화"}
+                            </button>
                             {isPending ? (
                               <>
                                 <button
@@ -2735,6 +2796,55 @@ ${agendaMinutes}
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {passwordResetLink && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="password-reset-title"
+                className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2
+                      id="password-reset-title"
+                      className="text-base font-bold text-white"
+                    >
+                      재설정 링크 발급 완료
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {passwordResetLink.name} 회원에게 전달하세요. 30분 후
+                      만료되며 한 번만 사용할 수 있습니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPasswordResetLink(null)}
+                    className="text-slate-400 hover:text-white"
+                    aria-label="닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+                <input
+                  readOnly
+                  value={passwordResetLink.url}
+                  onFocus={(event) => event.currentTarget.select()}
+                  className="mt-4 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200"
+                  aria-label="비밀번호 재설정 링크"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyPasswordResetLink}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded bg-amber-500 px-3 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400"
+                >
+                  <Copy className="h-4 w-4" />
+                  {passwordResetLinkCopied ? "복사 완료" : "링크 복사"}
+                </button>
+              </section>
             </div>
           )}
         </div>
@@ -3225,7 +3335,7 @@ ${agendaMinutes}
           const pendingAttendances = assAttendances.filter(
             (a) => a.approval_status === "PENDING",
           );
-          const absentMemberCount = users.filter((member) => {
+          const absentMembers = users.filter((member) => {
             if (member.role !== "LAWYER" || member.status !== "ACTIVE")
               return false;
             const heldAt = Date.parse(
@@ -3252,7 +3362,7 @@ ${agendaMinutes}
                     (Number(attendance.attended) === 1 ||
                       Number(attendance.is_proxy) === 1))),
             );
-          }).length;
+          });
 
           return (
             <div className="space-y-5">
@@ -3972,7 +4082,7 @@ ${agendaMinutes}
                 <AssemblyAttendancePanel
                   selectedAssembly={selectedAssembly}
                   selectedAssemblyId={selectedAssemblyId}
-                  absentMemberCount={absentMemberCount}
+                  absentMembers={absentMembers}
                   isExpiringAbsentMembers={isExpiringAbsentMembers}
                   onExpireAbsentMembers={handleExpireAbsentMembers}
                   users={users}
