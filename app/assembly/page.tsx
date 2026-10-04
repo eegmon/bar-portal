@@ -76,14 +76,6 @@ export default async function AssemblyHubPage({
   // 현재 표결 진행 중인 안건이 하나라도 있는지 (지각 출석 판단에 사용)
   const hasVotingAgenda = agendas.some((ag) => ag.status === "VOTING");
 
-  const canCheckIn =
-    user &&
-    (user.role === "LAWYER" || user.role === "ADMIN") &&
-    user.status === "ACTIVE" &&
-    isInSession &&
-    attendanceInfo?.approval_status !== "APPROVED" &&
-    attendanceInfo?.is_proxy !== 1;
-
   // 출석 승인 완료 (직접 출석 또는 위임 모두 포함)
   const alreadyAttended =
     attendanceInfo?.approval_status === "APPROVED" &&
@@ -97,6 +89,16 @@ export default async function AssemblyHubPage({
 
   // 지각 출석 의장 승인 대기
   const isPendingAttendance = attendanceInfo?.approval_status === "PENDING";
+
+  const canCheckIn =
+    user &&
+    (user.role === "LAWYER" || user.role === "ADMIN") &&
+    user.status === "ACTIVE" &&
+    isInSession &&
+    !alreadyAttended &&
+    !hasProxy &&
+    !isPendingAttendance &&
+    attendanceInfo?.is_proxy !== 1;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
