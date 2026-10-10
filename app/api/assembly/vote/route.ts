@@ -11,6 +11,7 @@ import {
 } from "@/lib/ranked-vote";
 import { countPluralityVotes } from "@/lib/plurality-vote";
 import { splitVotesIntoAnonymousBallots } from "@/lib/anonymous-ballots";
+import { formatChoiceLabel } from "@/lib/named-votes";
 
 const DEFAULT_CHOICES = ["찬성", "반대", "기권"];
 const ASSEMBLY_OFFICER_POSITIONS = [
@@ -124,7 +125,7 @@ export async function GET(req: Request) {
       String(agenda.status),
     );
     const namedVotesQuery =
-      !agenda.is_secret && isAdminView && isFinished
+      !agenda.is_secret && (isAdminView || isFinished)
         ? db
             .execute({
               sql: `SELECT b.user_id, u.name AS user_name, b.choice, b.votes_count
@@ -132,7 +133,6 @@ export async function GET(req: Request) {
                     LEFT JOIN users u ON u.id = b.user_id
                     WHERE b.agenda_id = ?
                       AND b.user_id IS NOT NULL
-                      AND b.choice NOT LIKE '__RANKING__%'
                     ORDER BY u.name ASC`,
               args: [agendaId],
             })
@@ -285,7 +285,7 @@ export async function GET(req: Request) {
       stats.namedVotes = namedVotesRes.rows.map((r) => ({
         userId: String(r.user_id ?? ""),
         userName: String(r.user_name ?? "알 수 없음"),
-        choice: String(r.choice),
+        choice: formatChoiceLabel(String(r.choice)),
         votes_count: Number(r.votes_count),
       }));
     }

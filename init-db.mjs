@@ -262,16 +262,22 @@ async function init() {
     )
   `);
 
-  // 전자 투표함 (익명 분리 저장)
+  // 전자 투표함 (무기명 투표 시 user_id 미저장, 기명 투표 시 user_id 저장)
   await db.execute(`
     CREATE TABLE IF NOT EXISTS ballot_box (
       id TEXT PRIMARY KEY,
       agenda_id TEXT REFERENCES agendas(id),
       choice TEXT NOT NULL, -- 찬성, 반대, 기권 or 후보자ID
       votes_count INTEGER NOT NULL DEFAULT 1, -- 분배/행사된 표 수
-      cast_at TEXT DEFAULT (datetime('now'))
+      cast_at TEXT DEFAULT (datetime('now')),
+      user_id TEXT REFERENCES users(id) -- 기명투표 시 투표자 ID
     )
   `);
+  try {
+    await db.execute("ALTER TABLE ballot_box ADD COLUMN user_id TEXT");
+  } catch {
+    // 이미 존재하는 경우 무시
+  }
   console.log("✓ assemblies, agendas, ballot_box (총회/투표) 테이블 생성 완료");
 
   // 5. 징계위원회 & 공시 (변호사법 제51조~제65조)

@@ -15,6 +15,11 @@ import {
 import db from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { countPluralityVotes } from "@/lib/plurality-vote";
+import {
+  processNamedVotesForAgenda,
+  type RawBallotRow,
+  type RawVoterLogRow,
+} from "@/lib/named-votes";
 import AttendButton from "./AttendButton";
 import AssemblyLiveRefresh from "./AssemblyLiveRefresh";
 
@@ -85,28 +90,71 @@ export default async function AssemblyHubPage({
           plurality_tied_choices: outcome?.tiedChoices ?? [],
         };
       });
-      const namedVotersRes = await db.execute({
-        sql: `SELECT DISTINCT vl.agenda_id, vl.user_id, u.name AS user_name
-              FROM voter_logs vl
-              JOIN agendas a ON a.id = vl.agenda_id
-              JOIN users u ON u.id = vl.user_id
-              WHERE a.assembly_id = ?
-                AND a.is_secret = 0
-                AND a.status IN ('CLOSED', 'RESULT_CONFIRMED')
-              ORDER BY a.agenda_order ASC, u.name ASC`,
-        args: [assembly.id],
-      });
-      const namedVotersByAgenda = new Map<string, string[]>();
-      for (const row of namedVotersRes.rows) {
-        const agendaKey = String(row.agenda_id);
-        const voters = namedVotersByAgenda.get(agendaKey) ?? [];
-        voters.push(String(row.user_name));
-        namedVotersByAgenda.set(agendaKey, voters);
+      try {
+        await db.execute("ALTER TABLE ballot_box ADD COLUMN user_id TEXT");
+      } catch {
+        // 이미 존재하는 경우 무시
       }
-      agendas = agendas.map((agenda) => ({
-        ...agenda,
-        named_voters: namedVotersByAgenda.get(String(agenda.id)) ?? [],
-      }));
+
+      const [namedBallotsRes, namedVotersRes] = await Promise.all([
+        db
+          .execute({
+            sql: `SELECT b.agenda_id, b.choice, b.votes_count, b.user_id, COALESCE(u.name, '알 수 없음') AS user_name
+                  FROM ballot_box b
+                  JOIN agendas a ON a.id = b.agenda_id
+                  LEFT JOIN users u ON u.id = b.user_id
+                  WHERE a.assembly_id = ?
+                    AND a.is_secret = 0
+                    AND a.status IN ('CLOSED', 'RESULT_CONFIRMED')
+                    AND b.user_id IS NOT NULL
+                  ORDER BY a.agenda_order ASC, u.name ASC`,
+            args: [assembly.id],
+          })
+          .catch(() => ({ rows: [] })),
+        db
+          .execute({
+            sql: `SELECT DISTINCT vl.agenda_id, vl.user_id, COALESCE(u.name, '알 수 없음') AS user_name
+                  FROM voter_logs vl
+                  JOIN agendas a ON a.id = vl.agenda_id
+                  JOIN users u ON u.id = vl.user_id
+                  WHERE a.assembly_id = ?
+                    AND a.is_secret = 0
+                    AND a.status IN ('CLOSED', 'RESULT_CONFIRMED')
+                  ORDER BY a.agenda_order ASC, u.name ASC`,
+            args: [assembly.id],
+          })
+          .catch(() => ({ rows: [] })),
+      ]);
+
+      const ballotsByAgenda = new Map<string, RawBallotRow[]>();
+      for (const row of namedBallotsRes.rows as unknown as RawBallotRow[]) {
+        const agendaKey = String(row.agenda_id);
+        const list = ballotsByAgenda.get(agendaKey) ?? [];
+        list.push(row);
+        ballotsByAgenda.set(agendaKey, list);
+      }
+
+      const voterLogsByAgenda = new Map<string, RawVoterLogRow[]>();
+      for (const row of namedVotersRes.rows as unknown as RawVoterLogRow[]) {
+        const agendaKey = String(row.agenda_id);
+        const list = voterLogsByAgenda.get(agendaKey) ?? [];
+        list.push(row);
+        voterLogsByAgenda.set(agendaKey, list);
+      }
+
+      agendas = agendas.map((agenda) => {
+        const agendaKey = String(agenda.id);
+        const ballots = ballotsByAgenda.get(agendaKey) ?? [];
+        const logs = voterLogsByAgenda.get(agendaKey) ?? [];
+        const processed = processNamedVotesForAgenda(ballots, logs);
+
+        return {
+          ...agenda,
+          named_choice_groups: processed.choiceGroups,
+          unrecorded_voters: processed.unrecordedVoters,
+          named_voters: processed.allVoters,
+        };
+      });
 
       if (user) {
         const attRes = await db.execute({
@@ -515,23 +563,143 @@ export default async function AssemblyHubPage({
                   {assembly.minutes_text}
                 </div>
 
-                {agendas.some((agenda) => agenda.named_voters.length > 0) && (
-                  <div className="border-t border-slate-800 pt-4 space-y-3">
-                    <h4 className="text-xs font-bold text-slate-300">
-                      안건별 기명 투표자
-                    </h4>
-                    {agendas
-                      .filter((agenda) => agenda.named_voters.length > 0)
-                      .map((agenda) => (
-                        <div key={agenda.id} className="space-y-1">
-                          <p className="text-xs font-semibold text-white">
-                            {agenda.title}
-                          </p>
-                          <p className="text-xs text-slate-400 leading-relaxed">
-                            {agenda.named_voters.join(", ")}
-                          </p>
-                        </div>
-                      ))}
+                {agendas.some(
+                  (agenda) =>
+                    (agenda.named_choice_groups &&
+                      agenda.named_choice_groups.length > 0) ||
+                    (agenda.named_voters && agenda.named_voters.length > 0),
+                ) && (
+                  <div className="border-t border-slate-800 pt-5 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <Vote className="w-3.5 h-3.5 text-blue-400" />
+                        안건별 기명 투표자 명단 (선택 내역)
+                      </h4>
+                      <span className="text-[11px] text-slate-500">
+                        * 회칙 제17조 및 제18조에 따라 기명표결의 선택 내역이 상시 공표됩니다.
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {agendas
+                        .filter(
+                          (agenda) =>
+                            (agenda.named_choice_groups &&
+                              agenda.named_choice_groups.length > 0) ||
+                            (agenda.named_voters &&
+                              agenda.named_voters.length > 0),
+                        )
+                        .map((agenda) => {
+                          const totalVoters =
+                            agenda.named_voters?.length || 0;
+                          const hasChoices =
+                            agenda.named_choice_groups &&
+                            agenda.named_choice_groups.length > 0;
+
+                          return (
+                            <div
+                              key={agenda.id}
+                              className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800/80 space-y-2.5"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/60 pb-2">
+                                <p className="text-xs font-bold text-white flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                                  {agenda.title}
+                                </p>
+                                <span className="text-[11px] text-slate-400 font-medium">
+                                  기명 참여 {totalVoters}명
+                                </span>
+                              </div>
+
+                              {hasChoices ? (
+                                <div className="space-y-1.5 pt-0.5">
+                                  {agenda.named_choice_groups.map(
+                                    (group: any) => {
+                                      const normChoice = String(
+                                        group.choice || "",
+                                      ).trim();
+                                      const isFor = [
+                                        "찬성",
+                                        "FOR",
+                                        "YES",
+                                        "가",
+                                        "승인",
+                                      ].includes(normChoice);
+                                      const isAgainst = [
+                                        "반대",
+                                        "AGAINST",
+                                        "NO",
+                                        "부",
+                                      ].includes(normChoice);
+                                      const isAbstain = [
+                                        "기권",
+                                        "ABSTAIN",
+                                      ].includes(normChoice);
+
+                                      const badgeClass = isFor
+                                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                        : isAgainst
+                                          ? "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                                          : isAbstain
+                                            ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                            : "bg-blue-500/15 text-blue-300 border-blue-500/30";
+
+                                      return (
+                                        <div
+                                          key={group.choice}
+                                          className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/50 flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-2.5"
+                                        >
+                                          <div className="flex items-center gap-1.5 shrink-0 min-w-[95px]">
+                                            <span
+                                              className={`px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass}`}
+                                            >
+                                              {group.choice}
+                                            </span>
+                                            <span className="text-[11px] font-semibold text-slate-400">
+                                              {group.totalVotes}표
+                                            </span>
+                                          </div>
+                                          <div className="text-xs text-slate-300 leading-relaxed break-keep">
+                                            {group.voters
+                                              .map(
+                                                (v: any) =>
+                                                  v.votesCount > 1
+                                                    ? `${v.name} (${v.votesCount}표)`
+                                                    : v.name,
+                                              )
+                                              .join(", ")}
+                                          </div>
+                                        </div>
+                                      );
+                                    },
+                                  )}
+
+                                  {agenda.unrecorded_voters &&
+                                    agenda.unrecorded_voters.length > 0 && (
+                                      <div className="p-2 rounded-lg bg-slate-900/40 border border-slate-800/40 flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-2.5">
+                                        <div className="flex items-center gap-1.5 shrink-0 min-w-[95px]">
+                                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                                            선택 미기록
+                                          </span>
+                                          <span className="text-[11px] font-medium text-slate-500">
+                                            {agenda.unrecorded_voters.length}명
+                                          </span>
+                                        </div>
+                                        <div className="text-xs text-slate-400 leading-relaxed break-keep">
+                                          {agenda.unrecorded_voters.join(", ")}
+                                        </div>
+                                      </div>
+                                    )}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-400 leading-relaxed px-1">
+                                  {agenda.named_voters.join(", ")}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 )}
 
