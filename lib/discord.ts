@@ -94,6 +94,7 @@ export async function getWebhookUrl(
 const DISCORD_MIN_INTERVAL_MS = 300;
 let lastDiscordCallAt = 0;
 let discordRequestQueue = Promise.resolve();
+let discordGlobalRateLimitUntil = 0;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -105,6 +106,14 @@ export async function discordFetch(
   maxRetries = 3,
 ): Promise<Response> {
   const request = discordRequestQueue.then(async () => {
+    while (Date.now() < discordGlobalRateLimitUntil) {
+      const remaining = discordGlobalRateLimitUntil - Date.now();
+      console.warn(
+        `[Discord Bot] 전역 레이트리밋 대기 중입니다. ${remaining}ms 후 재시도합니다.`,
+      );
+      await sleep(Math.min(remaining, 5000));
+    }
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const elapsed = Date.now() - lastDiscordCallAt;
       if (elapsed < DISCORD_MIN_INTERVAL_MS) {
@@ -137,13 +146,22 @@ export async function discordFetch(
         if (header) retryAfterSec = Number(header);
       }
 
-      // 전역 차단은 재시도가 차단 시간을 늘릴 수 있으므로 즉시 호출자에게 반환합니다.
-      if (isGlobalLimit || attempt >= maxRetries) return res;
-
       const waitMs = Math.min(
         Math.max((retryAfterSec || 1) * 1000 + 250, 1000),
         60000,
       );
+
+      // 전역 차단은 재시도 루프를 건너뛰고 다음 요청을 막는 쿨다운을 전역적으로 적용합니다.
+      if (isGlobalLimit) {
+        discordGlobalRateLimitUntil = Date.now() + waitMs;
+        console.warn(
+          `[Discord Bot] 전역 레이트리밋 차단 감지. ${waitMs}ms 동안 Discord API 호출을 잠금합니다.`,
+        );
+        return res;
+      }
+
+      if (attempt >= maxRetries) return res;
+
       console.warn(
         `[Discord Bot] 429 레이트리밋 감지, ${waitMs}ms 대기 후 재시도 (${attempt + 1}/${maxRetries})`,
       );

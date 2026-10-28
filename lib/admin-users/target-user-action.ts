@@ -11,8 +11,16 @@ import type { SessionUser } from "@/lib/types";
 
 export async function handleTargetUserAction(body: any, admin: SessionUser) {
   const isSuperAdmin = admin.role === "ADMIN";
-  const { userId, role, status, isTrainee, officeName, positions, action } =
-    body;
+  const {
+    userId,
+    role,
+    status,
+    isTrainee,
+    officeName,
+    positions,
+    discordId,
+    action,
+  } = body;
 
   if (!userId) {
     return NextResponse.json(
@@ -209,6 +217,8 @@ export async function handleTargetUserAction(body: any, admin: SessionUser) {
         ? officeName
         : String(targetUser.office_name || "");
     const newPositions = Array.isArray(positions) ? positions : userPositions;
+    const nextDiscordId =
+      discordId !== undefined ? String(discordId).trim() : targetUser.discord_id;
 
     if (newRole === "ADMIN" && !isSuperAdmin) {
       return NextResponse.json(
@@ -219,9 +229,22 @@ export async function handleTargetUserAction(body: any, admin: SessionUser) {
       );
     }
 
+    if (nextDiscordId && nextDiscordId !== targetUser.discord_id) {
+      const duplicateRes = await db.execute({
+        sql: "SELECT id FROM users WHERE discord_id = ? AND id != ?",
+        args: [nextDiscordId, userId],
+      });
+      if (duplicateRes.rows.length > 0) {
+        return NextResponse.json(
+          { error: "이미 사용 중인 디스코드 ID입니다." },
+          { status: 409 },
+        );
+      }
+    }
+
     await db.execute({
       sql: `UPDATE users
-            SET role = ?, status = ?, is_trainee = ?, office_name = ?, positions = ?
+            SET role = ?, status = ?, is_trainee = ?, office_name = ?, positions = ?, discord_id = ?
             WHERE id = ?`,
       args: [
         newRole,
@@ -229,11 +252,20 @@ export async function handleTargetUserAction(body: any, admin: SessionUser) {
         newIsTrainee,
         newOfficeName,
         JSON.stringify(newPositions),
+        nextDiscordId || "",
         userId,
       ],
     });
 
-    if (targetUser.discord_id) {
+    if (nextDiscordId) {
+      await syncUserDiscordRoles({
+        discordUserId: nextDiscordId,
+        role: newRole,
+        status: newStatus,
+        isTrainee: newIsTrainee,
+        positions: newPositions,
+      });
+    } else if (targetUser.discord_id) {
       await syncUserDiscordRoles({
         discordUserId: targetUser.discord_id as string,
         role: newRole,
@@ -247,7 +279,7 @@ export async function handleTargetUserAction(body: any, admin: SessionUser) {
       embeds: [
         {
           title: "👤 [회원 관리] 회원 정보 및 직책 갱신",
-          description: `관리자 **${admin.name}** 님이 **${targetUser.name}** 회원의 정보를 변경하였습니다.\n• 역할: ${targetUser.role} ➔ **${newRole}**\n• 상태: ${targetUser.status} ➔ **${newStatus}**\n• 직책: **${newPositions.join(", ") || "일반"}**`,
+          description: `관리자 **${admin.name}** 님이 **${targetUser.name}** 회원의 정보를 변경하였습니다.\n• 역할: ${targetUser.role} ➔ **${newRole}**\n• 상태: ${targetUser.status} ➔ **${newStatus}**\n• 디스코드: ${targetUser.discord_id || "미기재"} ➔ **${nextDiscordId || "미기재"}**\n• 직책: **${newPositions.join(", ") || "일반"}**`,
           color: 0x6366f1,
           timestamp: new Date().toISOString(),
         },
@@ -257,6 +289,32 @@ export async function handleTargetUserAction(body: any, admin: SessionUser) {
     return NextResponse.json({
       success: true,
       message: "회원 정보 및 직책이 성공적으로 갱신되었습니다.",
+    });
+  }
+
+  if (action === "DELETE_USER") {
+    if (!isSuperAdmin) {
+      return NextResponse.json(
+        { error: "계정 삭제는 최고 관리자만 수행할 수 있습니다." },
+        { status: 403 },
+      );
+    }
+
+    if (targetUser.role === "ADMIN") {
+      return NextResponse.json(
+        { error: "최고 관리자 계정은 삭제할 수 없습니다." },
+        { status: 400 },
+      );
+    }
+
+    await db.execute({
+      sql: "DELETE FROM users WHERE id = ?",
+      args: [userId],
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `${targetUser.name} 회원의 계정이 삭제되었습니다.`,
     });
   }
 

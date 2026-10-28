@@ -143,6 +143,7 @@ export default function AdminClient({
   const [editStatus, setEditStatus] = useState("");
   const [editIsTrainee, setEditIsTrainee] = useState(0);
   const [editOfficeName, setEditOfficeName] = useState("");
+  const [editDiscordId, setEditDiscordId] = useState("");
   const [editPositions, setEditPositions] = useState<string[]>([]);
   const [isSavingUser, setIsSavingUser] = useState(false);
 
@@ -394,6 +395,41 @@ export default function AdminClient({
     }
   };
 
+  const handleDeleteUser = async (user: any) => {
+    if (!isSuperAdmin) {
+      alert("계정 삭제는 최고 관리자만 수행할 수 있습니다.");
+      return;
+    }
+
+    if (user.role === "ADMIN") {
+      alert("최고 관리자 계정은 삭제할 수 없습니다.");
+      return;
+    }
+
+    if (
+      !confirm(
+        `⚠️ [계정 삭제]\n\n${user.name} (${user.login_id}) 회원의 계정을 영구 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없으며, 회원 데이터와 권한 정보가 함께 삭제됩니다.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "DELETE_USER", userId: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "계정 삭제 실패");
+
+      alert(data.message || "계정이 삭제되었습니다.");
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    }
+  };
+
   const handleIssuePasswordReset = async (user: any) => {
     if (
       !confirm(
@@ -443,6 +479,7 @@ export default function AdminClient({
     setEditStatus(user.status);
     setEditIsTrainee(user.is_trainee || 0);
     setEditOfficeName(user.office_name || "");
+    setEditDiscordId(user.discord_id || "");
     setEditPositions(Array.isArray(user.positions) ? user.positions : []);
   };
 
@@ -468,6 +505,7 @@ export default function AdminClient({
           status: editStatus,
           isTrainee: editIsTrainee,
           officeName: editOfficeName,
+          discordId: editDiscordId,
           positions: editPositions,
         }),
       });
@@ -484,6 +522,7 @@ export default function AdminClient({
                 status: editStatus,
                 is_trainee: editIsTrainee,
                 office_name: editOfficeName,
+                discord_id: editDiscordId,
                 positions: editPositions,
               }
             : u,
@@ -2763,6 +2802,15 @@ ${agendaMinutes}
                                     ? "동기화중"
                                     : "DC동기화"}
                                 </button>
+                                {isSuperAdmin && (
+                                  <button
+                                    onClick={() => handleDeleteUser(u)}
+                                    className="px-2.5 py-1 bg-red-600/80 hover:bg-red-500 text-white rounded text-xs font-semibold border border-red-500/50 flex items-center gap-1"
+                                    title="회원 계정 영구 삭제"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> 삭제
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
@@ -2927,6 +2975,21 @@ ${agendaMinutes}
 
                 <div>
                   <label className="block text-slate-400 mb-1">
+                    디스코드 ID
+                  </label>
+                  <input
+                    type="text"
+                    value={editDiscordId}
+                    onChange={(e) => setEditDiscordId(e.target.value)}
+                    placeholder="예: 123456789012345678"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 mb-1">
                     견습변호사 여부
                   </label>
                   <select
@@ -2937,6 +3000,15 @@ ${agendaMinutes}
                     <option value={0}>정규 변호사 (0)</option>
                     <option value={1}>견습 변호사 (1)</option>
                   </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => setEditDiscordId("")}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg border border-slate-700 px-3 py-2"
+                  >
+                    디스코드 ID 비우기
+                  </button>
                 </div>
               </div>
 

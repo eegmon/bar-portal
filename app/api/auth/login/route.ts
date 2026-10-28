@@ -10,7 +10,8 @@ import {
 } from "@/lib/account-security";
 import { checkRequestRateLimit } from "@/lib/request-rate-limit";
 
-const DISCORD_LOGIN_SYNC_TTL_MS = 5 * 60 * 1000;
+// 디스코드 전역 레이트리밋을 피하기 위해 로그인 시 동기화 간격을 넉넉히 둡니다.
+const DISCORD_LOGIN_SYNC_TTL_MS = 30 * 60 * 1000;
 const recentDiscordLoginSync = new Map<string, number>();
 
 export async function POST(req: Request) {
