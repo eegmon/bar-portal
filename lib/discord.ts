@@ -201,32 +201,56 @@ export async function getBotConfig() {
 }
 
 /**
+ * 디스코드 사용자 식별값을 정규화합니다.
+ * - 순수 숫자 snowflake ID
+ * - <@123...> / <@!123...> 멘션
+ * - username#0001 같은 디스criminator 포맷
+ * - 이름/닉네임 문자열
+ */
+export function normalizeDiscordUserReference(input: string): string | null {
+  if (!input) return null;
+
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const mentionMatch = trimmed.match(/^<@!?(\d{17,20})>$/);
+  if (mentionMatch) {
+    return mentionMatch[1];
+  }
+
+  if (/^\d{17,20}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const snowflakeMatch = trimmed.match(/\d{17,20}/);
+  if (snowflakeMatch) {
+    return snowflakeMatch[0];
+  }
+
+  return trimmed;
+}
+
+/**
  * 디스코드 유저 ID 해석 (숫자 ID, 멘션 태그, 또는 닉네임/사용자명 자동 검색)
  */
 export async function resolveDiscordUserId(
   discordInput: string,
 ): Promise<string | null> {
-  if (!discordInput) return null;
-  const trimmed = discordInput.trim();
+  const normalized = normalizeDiscordUserReference(discordInput);
+  if (!normalized) return null;
 
-  // 1. 순수 17~20자리 숫자 ID인 경우
-  if (/^\d{17,20}$/.test(trimmed)) {
-    return trimmed;
+  // 1. 순수 17~20자리 숫자 ID인 경우 바로 반환
+  if (/^\d{17,20}$/.test(normalized)) {
+    return normalized;
   }
 
-  // 2. <@123456789012345678> 멘션 포맷인 경우
-  const mentionMatch = trimmed.match(/\d{17,20}/);
-  if (mentionMatch) {
-    return mentionMatch[0];
-  }
-
-  // 3. 닉네임/사용자명 문자열인 경우 서버 멤버 검색 API로 ID 자동 조회
+  // 2. username#0001 또는 @닉네임 형태는 서버 멤버 검색으로 찾는다.
   const { token, guildId } = await getBotConfig();
   if (!token || !guildId) return null;
 
   try {
     const res = await discordFetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/search?query=${encodeURIComponent(trimmed)}&limit=1`,
+      `https://discord.com/api/v10/guilds/${guildId}/members/search?query=${encodeURIComponent(normalized)}&limit=1`,
       {
         headers: {
           Authorization: `Bot ${token}`,
