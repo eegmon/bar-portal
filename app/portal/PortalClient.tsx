@@ -217,6 +217,7 @@ export default function PortalClient({
   const [claimCode, setClaimCode] = useState("");
   const [isClaiming, setIsClaiming] = useState(false);
   const [isUnclaiming, setIsUnclaiming] = useState(false);
+  const [isApplyingMembership, setIsApplyingMembership] = useState(false);
   // 클레임 결과를 로컬에서 즉시 반영하기 위한 상태
   const [examClaims, setExamClaims] = useState<
     Record<string, { security_code: string; bonus_approved: number } | null>
@@ -391,6 +392,30 @@ export default function PortalClient({
     }
   };
 
+  const handleApplyRegularMember = async () => {
+    if (!confirm("정회원 등록을 신청하시겠습니까? 신청 후 관리자가 검토합니다.")) {
+      return;
+    }
+    setIsApplyingMembership(true);
+    try {
+      const res = await fetch("/api/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "APPLY_REGULAR_MEMBER",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "신청 처리에 실패했습니다.");
+      alert(`✅ ${data.message || "정회원 등록 신청이 접수되었습니다."}`);
+      window.location.reload();
+    } catch (err: any) {
+      alert(`오류: ${err.message}`);
+    } finally {
+      setIsApplyingMembership(false);
+    }
+  };
+
   const handleUnclaim = async (examId: string) => {
     if (!confirm("이 시험의 수험번호 등록을 취소하시겠습니까?")) return;
     setIsUnclaiming(true);
@@ -425,23 +450,43 @@ export default function PortalClient({
             <h2 className="text-xl font-bold text-white flex items-center gap-2 flex-wrap">
               {lawyerProfile?.name}
               <span className="text-[11px] px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded">
-                {lawyerProfile?.is_trainee ? "견습변호사" : "정회원 변호사"}
+                {lawyerProfile?.role === "LAWYER"
+                  ? lawyerProfile?.status === "PENDING"
+                    ? "정회원 등록 심사중"
+                    : lawyerProfile?.is_trainee
+                      ? "견습변호사"
+                      : "정회원 변호사"
+                  : lawyerProfile?.role === "CITIZEN"
+                    ? "일반시민"
+                    : lawyerProfile?.role || "회원"}
               </span>
             </h2>
             <p className="text-sm text-slate-400">
-              {officeName || "소속 법률사무소 미지정"}
+              {lawyerProfile?.role === "LAWYER" && lawyerProfile?.status === "ACTIVE"
+                ? officeName || "소속 법률사무소 미지정"
+                : lawyerProfile?.role === "CITIZEN"
+                  ? "정회원 등록을 신청해 법률사무소/변호사 활동을 시작할 수 있습니다."
+                  : "회원 상태를 확인하고 필요한 행정 업무를 진행할 수 있습니다."}
             </p>
             <div className="flex items-center gap-2 mt-1">
               <span
                 className={`text-[11px] px-2 py-0.5 rounded font-bold border ${
-                  lawyerProfile?.status === "ACTIVE"
+                  lawyerProfile?.role === "LAWYER" && lawyerProfile?.status === "ACTIVE"
                     ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-                    : "bg-red-500/10 text-red-300 border-red-500/30"
+                    : lawyerProfile?.role === "CITIZEN"
+                      ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                      : "bg-red-500/10 text-red-300 border-red-500/30"
                 }`}
               >
-                {lawyerProfile?.status === "ACTIVE"
-                  ? "✓ 정상 개업"
-                  : lawyerProfile?.status}
+                {lawyerProfile?.role === "LAWYER"
+                  ? lawyerProfile?.status === "ACTIVE"
+                    ? "✓ 정상 개업"
+                    : lawyerProfile?.status === "PENDING"
+                      ? "검토 중"
+                      : lawyerProfile?.status
+                  : lawyerProfile?.role === "CITIZEN"
+                    ? "✓ 일반회원"
+                    : lawyerProfile?.status || "회원"}
               </span>
               {bonusStatus === 1 && (
                 <span className="text-[11px] px-2 py-0.5 bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded font-bold">
@@ -451,6 +496,17 @@ export default function PortalClient({
             </div>
           </div>
         </div>
+
+        {lawyerProfile?.role === "CITIZEN" && (
+          <button
+            type="button"
+            onClick={handleApplyRegularMember}
+            disabled={isApplyingMembership || lawyerProfile?.status !== "ACTIVE"}
+            className="px-4 py-2 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-200 text-xs font-bold hover:bg-amber-500/15 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isApplyingMembership ? "신청 중..." : "정회원 등록 신청"}
+          </button>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           <span className="flex items-center gap-1">

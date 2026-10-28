@@ -59,17 +59,25 @@ export default async function LawyerPortalPage() {
     console.error("Active exams fetch error:", err);
   }
 
+  const isLawyerAccount = user.role === "LAWYER";
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full space-y-8">
       {/* 헤더 */}
       <div className="border-b border-slate-800 pb-6">
         <div className="flex items-center gap-2 text-amber-400 text-xs font-semibold mb-1">
           <Scale className="w-4 h-4" />
-          도스변호사협회 회원 전용 행정관
+          {isLawyerAccount
+            ? "도스변호사협회 회원 전용 행정관"
+            : "도스변호사협회 회원 포털"}
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">변호사 마이페이지</h1>
+        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+          {isLawyerAccount ? "변호사 마이페이지" : "마이페이지"}
+        </h1>
         <p className="text-slate-400 text-sm mt-1">
-          변호사 자격 유지 및 월별 재등록, 법률사무소 관리, 수임 사건 담당변호사 지정서를 관리합니다.
+          {isLawyerAccount
+            ? "변호사 자격 유지 및 월별 재등록, 법률사무소 관리, 수임 사건 담당변호사 지정서를 관리합니다."
+            : "회원 정보, 정회원 등록 신청, 기본 활동 정보를 확인하고 관리합니다."}
         </p>
       </div>
 

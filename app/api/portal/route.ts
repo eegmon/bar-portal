@@ -118,6 +118,26 @@ export async function POST(req: Request) {
       });
     }
 
+    // ── 일반회원 정회원 등록 신청 ──────────────────────────────────
+    if (action === "APPLY_REGULAR_MEMBER") {
+      if (user.role !== "CITIZEN") {
+        return NextResponse.json(
+          { error: "일반시민 계정에서만 정회원 등록 신청이 가능합니다." },
+          { status: 400 },
+        );
+      }
+
+      await db.execute({
+        sql: `UPDATE users SET role = 'LAWYER', status = 'PENDING', last_renewed_at = datetime('now') WHERE id = ?`,
+        args: [user.id],
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "정회원 등록 신청이 접수되었습니다. 관리자가 심사 후 승인 처리합니다.",
+      });
+    }
+
     // ── 법학과정 가산점 신청 ──────────────────────────────────────
     if (action === "APPLY_BONUS") {
       const { schoolName, evidence } = body;
