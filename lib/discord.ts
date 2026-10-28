@@ -266,27 +266,61 @@ export async function resolveDiscordUserId(
   const { token, guildId } = await getBotConfig();
   if (!token || !guildId) return null;
 
+  const searchQuery = normalized.replace(/^@/, "").trim();
+  const usernameWithoutDiscriminator = searchQuery.replace(/#\d{4}$/, "");
+
   try {
     const res = await discordFetch(
-      `https://discord.com/api/v10/guilds/${guildId}/members/search?query=${encodeURIComponent(normalized)}&limit=1`,
+      `https://discord.com/api/v10/guilds/${guildId}/members/search?query=${encodeURIComponent(usernameWithoutDiscriminator)}&limit=10`,
       {
         headers: {
           Authorization: `Bot ${token}`,
         },
       },
     );
-    if (res.ok) {
-      const members = await res.json();
-      if (
-        Array.isArray(members) &&
-        members.length > 0 &&
-        members[0]?.user?.id
-      ) {
+    if (!res.ok) {
+      const errorText = await res.text();
+      if (res.status === 429) {
+        throw new Error(
+          "Discord API 전역 레이트리밋에 걸렸습니다. 잠시 후 다시 시도해 주세요.",
+        );
+      }
+      console.warn(
+        `[Discord Bot] 멤버 검색 실패 (${res.status}): ${errorText}`,
+      );
+      return null;
+    }
+
+    const members = await res.json();
+    if (Array.isArray(members)) {
+      const exactMember = members.find((member) => {
+        const user = member?.user;
+        const candidates = [
+          member?.nick,
+          user?.global_name,
+          user?.username,
+          user?.username && user?.discriminator
+            ? `${user.username}#${user.discriminator}`
+            : null,
+        ]
+          .filter(Boolean)
+          .map((value) => String(value).trim().toLowerCase());
+
+        return candidates.includes(searchQuery.toLowerCase());
+      });
+
+      if (exactMember?.user?.id) {
+        return exactMember.user.id;
+      }
+
+      // Discord 검색 결과가 정확한 표시명만 반환하는 경우를 위한 보조 처리.
+      if (members.length === 1 && members[0]?.user?.id) {
         return members[0].user.id;
       }
     }
   } catch (err) {
-    console.warn("[Discord Bot] 유저 검색 오류:", err);
+    console.warn(`[Discord Bot] 유저 검색 오류 (${searchQuery}):`, err);
+    throw err;
   }
 
   return null;

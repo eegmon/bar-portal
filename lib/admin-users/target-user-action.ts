@@ -218,7 +218,9 @@ export async function handleTargetUserAction(body: any, admin: SessionUser) {
         : String(targetUser.office_name || "");
     const newPositions = Array.isArray(positions) ? positions : userPositions;
     const nextDiscordId =
-      discordId !== undefined ? String(discordId).trim() : targetUser.discord_id;
+      discordId !== undefined
+        ? String(discordId).trim()
+        : String(targetUser.discord_id || "").trim();
 
     if (newRole === "ADMIN" && !isSuperAdmin) {
       return NextResponse.json(
