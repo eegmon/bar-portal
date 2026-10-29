@@ -92,6 +92,7 @@ export async function getWebhookUrl(
  * 요청 사이에도 최소 간격을 둬서 전역 레이트리밋(Cloudflare 차단)을 예방합니다.
  */
 const DISCORD_MIN_INTERVAL_MS = 300;
+const DISCORD_UNKNOWN_GLOBAL_COOLDOWN_MS = 15 * 60 * 1000;
 let lastDiscordCallAt = 0;
 let discordRequestQueue = Promise.resolve();
 let discordGlobalRateLimitUntil = 0;
@@ -127,6 +128,7 @@ export async function discordFetch(
 
       let retryAfterSec: number | undefined;
       let isGlobalLimit = res.headers.get("x-ratelimit-global") === "true";
+      let isTemporaryApiBlock = false;
       try {
         const body = await res.clone().json();
         if (typeof body?.retry_after === "number")
@@ -138,6 +140,13 @@ export async function discordFetch(
         ) {
           isGlobalLimit = true;
         }
+        if (
+          typeof body?.message === "string" &&
+          body.message.includes("blocked from accessing our API temporarily")
+        ) {
+          isGlobalLimit = true;
+          isTemporaryApiBlock = true;
+        }
       } catch {
         // 응답 본문이 JSON이 아니면 헤더 값을 사용합니다.
       }
@@ -146,7 +155,13 @@ export async function discordFetch(
         if (header) retryAfterSec = Number(header);
       }
 
-      const waitMs = Math.max((retryAfterSec || 1) * 1000 + 250, 1000);
+      const waitMs = Math.max(
+        (retryAfterSec ??
+          (isGlobalLimit ? DISCORD_UNKNOWN_GLOBAL_COOLDOWN_MS / 1000 : 1)) *
+          1000 +
+          250,
+        1000,
+      );
 
       // 전역 제한도 현재 요청을 중단하지 않고 Discord가 지정한 시점에 재시도합니다.
       // 여러 요청이 동시에 429를 받은 경우에는 더 늦은 만료 시각을 유지합니다.
@@ -156,8 +171,11 @@ export async function discordFetch(
           Date.now() + waitMs,
         );
         console.warn(
-          `[Discord Bot] 전역 레이트리밋 차단 감지. ${waitMs}ms 동안 Discord API 호출을 잠금합니다.`,
+          `[Discord Bot] 전역 API 차단 감지. ${Math.ceil(waitMs / 1000)}초 동안 Discord API 호출을 잠급니다.`,
         );
+        // Discord가 retry_after를 주지 않는 임시 전역 차단은 짧게 재시도하면
+        // 차단을 연장할 수 있으므로 현재 요청을 즉시 반환합니다.
+        if (isTemporaryApiBlock || retryAfterSec === undefined) return res;
         if (attempt >= maxRetries) return res;
         continue;
       }
@@ -303,8 +321,13 @@ export async function resolveDiscordUserId(
     if (!res.ok) {
       const errorText = await res.text();
       if (res.status === 429) {
+        const isTemporaryBlock = errorText.includes(
+          "blocked from accessing our API temporarily",
+        );
         throw new Error(
-          "Discord API 전역 레이트리밋에 걸렸습니다. 잠시 후 다시 시도해 주세요.",
+          isTemporaryBlock
+            ? "Discord API 접근이 일시적으로 차단되었습니다. 전체 동기화를 중지하고 최소 15분 후 다시 시도해 주세요."
+            : "Discord API 전역 레이트리밋에 걸렸습니다. 잠시 후 다시 시도해 주세요.",
         );
       }
       console.warn(
