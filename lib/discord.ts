@@ -146,18 +146,20 @@ export async function discordFetch(
         if (header) retryAfterSec = Number(header);
       }
 
-      const waitMs = Math.min(
-        Math.max((retryAfterSec || 1) * 1000 + 250, 1000),
-        60000,
-      );
+      const waitMs = Math.max((retryAfterSec || 1) * 1000 + 250, 1000);
 
-      // 전역 차단은 재시도 루프를 건너뛰고 다음 요청을 막는 쿨다운을 전역적으로 적용합니다.
+      // 전역 제한도 현재 요청을 중단하지 않고 Discord가 지정한 시점에 재시도합니다.
+      // 여러 요청이 동시에 429를 받은 경우에는 더 늦은 만료 시각을 유지합니다.
       if (isGlobalLimit) {
-        discordGlobalRateLimitUntil = Date.now() + waitMs;
+        discordGlobalRateLimitUntil = Math.max(
+          discordGlobalRateLimitUntil,
+          Date.now() + waitMs,
+        );
         console.warn(
           `[Discord Bot] 전역 레이트리밋 차단 감지. ${waitMs}ms 동안 Discord API 호출을 잠금합니다.`,
         );
-        return res;
+        if (attempt >= maxRetries) return res;
+        continue;
       }
 
       if (attempt >= maxRetries) return res;
