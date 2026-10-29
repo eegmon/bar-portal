@@ -51,7 +51,7 @@ export async function getWebhookUrl(
 ): Promise<string> {
   const dbKey = `webhook_${type.toLowerCase()}`;
   const envKey = `DISCORD_WEBHOOK_${type.toUpperCase()}`;
-  let url = await getSettingValue(dbKey, envKey);
+  let url = (await getSettingValue(dbKey, envKey)).trim();
 
   // 1. LAWYER_APPROVAL 전용 웹훅이 없으면 NOTICE 웹훅으로 fallback
   if (!url && type === "LAWYER_APPROVAL") {
@@ -182,40 +182,60 @@ export async function discordFetch(
 export async function sendDiscordWebhook(
   type: WebhookType,
   payload: { content?: string; embeds?: DiscordEmbed[] },
-) {
+): Promise<{ success: boolean; status?: number }> {
   const url = await getWebhookUrl(type);
   if (!url) {
     console.warn(
       `[Discord Webhook] ${type} Webhook URL이 설정되지 않아 콘솔에만 출력합니다.`,
       payload,
     );
-    return;
+    return { success: false };
   }
 
   try {
-    await fetch(url, {
+    const response = await discordFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(
+        `[Discord Webhook Error] ${type} 전송 실패 (HTTP ${response.status}): ${errorText}`,
+      );
+      return { success: false, status: response.status };
+    }
+    return { success: true, status: response.status };
   } catch (err) {
     console.error(`[Discord Webhook Error] ${type} 전송 실패:`, err);
+    return { success: false };
   }
+}
+
+/**
+ * Discord 개발자 포털에서 복사한 원본 토큰과 `Bot ` 접두사가 붙은
+ * Authorization 형식 모두 허용합니다.
+ */
+export function normalizeDiscordBotToken(input: string): string {
+  return input.trim().replace(/^Bot\s+/i, "").trim();
 }
 
 /**
  * 디스코드 봇 설정 조회 (DB 또는 환경변수)
  */
 export async function getBotConfig() {
-  const token =
+  const rawToken =
     (await getSettingValue("discord_bot_token")) ||
     process.env.DISCORD_BOT_TOKEN ||
     "";
-  const guildId =
+  const rawGuildId =
     (await getSettingValue("discord_guild_id")) ||
     process.env.DISCORD_GUILD_ID ||
     "";
-  return { token, guildId };
+  return {
+    token: normalizeDiscordBotToken(rawToken),
+    guildId: rawGuildId.trim(),
+  };
 }
 
 /**

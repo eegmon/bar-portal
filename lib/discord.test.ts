@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDiscordUserReference } from "./discord";
+import {
+  normalizeDiscordBotToken,
+  normalizeDiscordUserReference,
+} from "./discord";
+
+describe("discord bot token normalization", () => {
+  it("accepts raw tokens and Authorization-style tokens", () => {
+    expect(normalizeDiscordBotToken("  token-value  ")).toBe("token-value");
+    expect(normalizeDiscordBotToken("Bot token-value")).toBe("token-value");
+    expect(normalizeDiscordBotToken("bot token-value")).toBe("token-value");
+  });
+});
 
 describe("discord user reference normalization", () => {
   it("returns numeric snowflake ids unchanged", () => {

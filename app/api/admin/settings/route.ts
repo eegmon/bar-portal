@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import db from "@/lib/db";
 import { getSessionUser, canManageSettings } from "@/lib/auth";
-import { sendDiscordWebhook } from "@/lib/discord";
+import { discordFetch, getWebhookUrl, sendDiscordWebhook } from "@/lib/discord";
 
 export async function GET() {
   try {
@@ -143,9 +143,8 @@ export async function POST(req: Request) {
       const type = (testType || "ADMIN") as any;
 
       // 직접 전달된 URL이 있으면 그것을 사용, 없으면 DB/환경변수에서 조회
-      let url: string = webhookUrl || "";
+      let url: string = String(webhookUrl || "").trim();
       if (!url) {
-        const { getWebhookUrl } = await import("@/lib/discord");
         url = await getWebhookUrl(type);
       }
       if (!url) {
@@ -155,7 +154,26 @@ export async function POST(req: Request) {
         );
       }
 
-      const testRes = await fetch(url, {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        return NextResponse.json(
+          { error: "유효한 Discord 웹훅 URL을 입력해주세요." },
+          { status: 400 },
+        );
+      }
+      const isDiscordHost =
+        parsedUrl.hostname === "discord.com" ||
+        parsedUrl.hostname.endsWith(".discord.com");
+      if (parsedUrl.protocol !== "https:" || !isDiscordHost) {
+        return NextResponse.json(
+          { error: "Discord의 HTTPS 웹훅 URL만 사용할 수 있습니다." },
+          { status: 400 },
+        );
+      }
+
+      const testRes = await discordFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
